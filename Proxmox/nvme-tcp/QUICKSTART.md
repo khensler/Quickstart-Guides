@@ -448,15 +448,7 @@ vgs
 pvs
 ```
 
-## Step 8: Activate VG on Other Nodes
-
-Run on **each additional node**:
-
-```bash
-pvscan --cache
-```
-
-## Step 9: Add LVM Storage to Proxmox (One Node)
+#### Add LVM Storage to Proxmox (One Node)
 
 Run on **one node only** (config syncs via cluster):
 
@@ -471,7 +463,16 @@ pvesm add lvm nvme-datastore \
 pvesm status
 ```
 
-## Verify Setup
+#### Activate VG on Other Nodes
+
+Run on **each additional node**:
+
+```bash
+pvscan --cache
+```
+
+
+#### Verify Setup (All Nodes)
 
 ```bash
 # Check NVMe connections
