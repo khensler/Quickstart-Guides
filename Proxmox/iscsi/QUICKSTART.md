@@ -89,7 +89,7 @@ DM-Multipath configuration is beyond the scope of this guide. For more informati
 # Find your multipath device
 multipath -ll
 
-Output:
+# Example output
 3624a93708eabcb40cc4241b202b61a7c dm-8 PURE,FlashArray
 size=5.0T features='1 queue_if_no_path' hwhandler='1 alua' wp=rw
 `-+- policy='service-time 0' prio=50 status=active
