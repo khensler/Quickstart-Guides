@@ -4,9 +4,9 @@ Generic guide for configuring NVMe over TCP storage on Proxmox VE using native C
 
 ## Prerequisites
 
-- Proxmox VE 8.x or 9.x
+- Proxmox VE 9.x or later
 - NVMe-TCP storage array with:
-  - Portal IP address(es) and port (default: 8009)
+  - Portal IP address(es) and port
   - Subsystem NQN
 - Dedicated network interfaces for storage traffic (recommended)
 - Network connectivity between Proxmox nodes and storage
@@ -17,16 +17,30 @@ For optimal performance and reliability, configure dedicated network interfaces 
 
 ### Option A: Dedicated Physical Interfaces (Recommended)
 
-Use separate physical NICs for storage traffic. No VLAN tagging, direct connection to storage network. Replace `ens1f0np0` and `ens1f1np1` with your actual interface names.  Replace `192.168.100.10` and `192.168.101.10` with your actual host IP addresses.
+Use separate physical NICs for storage traffic. No VLAN tagging, direct connection to storage network. Replace the interface names with your actual interface names.  Replace the IPs with your actual host IP addresses.
 
 #### GUI Configuration
 
-On each Proxmox node go to:  Datacenter -> Nodes -> <node> -> System -> Network
+Go to:  Datacenter -> \<node\> -> System -> Network. Select the interface and click Edit.  
 
-Select the interface and click Edit.  Set the IP address and MTU to 9000 (or 1500 if jumbo frames are not supported.  This configuration is in the advanced section).  Enable Autostart.  Click OK.
+![Proxmox GUI Network Configuration](./img/network-configuration-1.png)
+
+Set the IP address and MTU to 9000 (or 1500 if jumbo frames are not supported.  This configuration is in the advanced section).  Enable Autostart.  Click OK.
 Gateway configuration should not be necessary.  The interfaces should be on the same subnet as the storage endpoints.  If this is not the case manual routing will be necessary.
 
+![Interface Configuration](./img/network-configuration-2.png) 
+
+Repeat for each interface.
+
+Apply the configuration.
+
+Repeat for each node.
+
+![Apply Configuration](./img/network-configuration-6.png)
+
 #### CLI Configuration
+
+On each Proxmox node:
 
 Edit `/etc/network/interfaces`:
 
@@ -40,20 +54,55 @@ iface ens1f0np0 inet static
 # Storage interface 2 - dedicated physical NIC
 auto ens1f1np1
 iface ens1f1np1 inet static
-    address 192.168.101.10/24
+    address 192.168.100.11/24
     mtu 9000
 ```
 
+
 ### Option B: VLAN Interfaces on Physical NICs
 
-If you need to share physical NICs, use VLAN interfaces. Replace `ens1f0` and `ens1f1` with your actual interface names, `192.168.100.10` and `192.168.101.10` with your actual host IP addresses, and `100` with your actual VLAN ID(s):
+If you need to share physical NICs, use VLAN interfaces. This configuration can be applied directly to stand alone interfaces or to the phyiscal interfaces in a bond.  Replace the interface names with your actual interface names.  Replace the IPs with your actual host IP addresses, and `100` with your actual VLAN ID(s):
 
-#### Load 8021q module if necessary.  On Proxmox this is already enabled on Proxmox VE
+#### GUI Configuration
+
+Go to:  Datacenter -> \<node\> -> System -> Network. Select the interface and click Edit.
+
+![Proxmox GUI Network Configuration](./img/network-configuration-1.png)
+
+Enable Autostart if it is not already enabled.  Set the MTU to 9000 (or 1500 if jumbo frames are not supported).  If there is already an IP address assigned to the interface, leave it.  This can be configured on interfaces that are part of a bond as well (these should already be active).  Click OK.
+
+![Interface Configuration](./img/network-configuration-3.png) 
+
+Repeat for each interface.
+
+Create a Linux VLAN Interface.  Click on Create -> Linux VLAN
+
+![VLAN Interface Creation](./img/network-configuration-4.png) 
+
+Name the new vlan inteface in the format of <physical_interface>.<vlan_id> (ens1f0np0.100 in the example below).  This should match the name of the physical interface that the VLAN is being created on.  Notice the VLAN Tag feild is not editable but shows the VLAN ID from the interface name.  Set the IP address and MTU to 9000 (or 1500 if jumbo frames are not supported).  Enable Autostart.  Click Create.
+
+![VLAN Interface Configuration](./img/network-configuration-5.png) 
+
+Repeat for each physical interface and VLAN ID that needs to be configured.
+
+Apply the configuration
+
+Repeat for each node.
+
+![Apply Configuration](./img/network-configuration-6.png)
+
+#### CLI Configuration
+
+SSH to the Proxmox node and run the following commands:
+
+##### Load 8021q module if necessary.  On Proxmox this is already enabled on Proxmox VE
+
 ```bash
 # Load 8021q module for VLANs
 modprobe 8021q
 echo "8021q" >> /etc/modules-load.d/vlans.conf
 ```
+##### Configure VLAN interfaces
 
 Edit `/etc/network/interfaces`:
 
@@ -83,7 +132,7 @@ iface ens1f1.100 inet static
     mtu 9000
 ```
 
-### Apply Network Configuration
+##### Apply Network Configuration
 
 ```bash
 # Apply changes
@@ -100,15 +149,18 @@ ping -I ens1f1np1 <PORTAL_IP_1>
 ping -I ens1f1np1 <PORTAL_IP_2>
 ```
 
+Repeat on each node
+
 ### Network Design Notes
 
 - **Jumbo frames (MTU 9000)**: Recommended for storage traffic. Ensure switches and storage support jumbo frames end-to-end.
-- **Separate subnets**: Each storage path should be on a separate subnet for proper multipath isolation.
+- **Same Subnet**:  This configuration assumes the same subnet.  Multiple subnets may be used if needed.  
 - **No bonding**: Do not bond storage interfaces. NVMe native multipath handles redundancy.
+- **No Routing Of Storage Traffic**:  The interfaces should be on the same subnet as the storage endpoints.  If this is not the case manual routing will be necessary.
 
 ## Step 2: Install Dependencies (All Nodes)
 
-Run on **every Proxmox node**:
+Run on every Proxmox node:
 
 ```bash
 # Install nvme-cli
@@ -281,7 +333,7 @@ Enable and start the nvme-connect service:
 # Enable automatic connection on boot
 systemctl enable nvmf-autoconnect.service
 
-# Connect now (discovers and connects to all subsystems via all paths)
+# Connect all (discovers and connects to all subsystems via all paths.)
 nvme connect-all
 ```
 
@@ -315,7 +367,7 @@ cat > /etc/nvme/config.d/my-storage.conf << 'EOF'
 # Enable automatic connection
 systemctl enable nvmf-autoconnect.service
 
-# Connect now
+# Connect all
 nvme connect-all
 ```
 
@@ -341,6 +393,39 @@ nvme list
 
 ## Step 7: Create LVM Volume Group (One Node)
 
+### GUI
+
+Run on **on node only**:
+
+Go to: Datacenter -> \<Node\> -> Disks.  Make sure the NVMe device is visible.
+
+![NVMe Device Visible](./img/disk-configuration-1.png)
+
+If it is not click reload.
+
+Go to LVM and create a new volume group with the new device.
+
+![Create LVM Volume Group](./img/disk-configuration-2.png)
+
+Select the device and name the volume group.  Make sure to keep "Add Storage" checked and click "Create".
+
+![Create LVM Volume Group](./img/disk-configuration-3.png)
+
+The new volume group should now be visible in the storage list.  The shared configuration is not yet enabled and the storage is not yet available to the other nodes.
+
+Go to: Datacenter -> Storage.  Select the volume group and click "Edit".  Check the "Shared" box.  Enable the volume on other nodes by either selecting them in the Nodes drop down or by clearing the Nodes feild by clicking the "x" to the right of the field.  Click "OK".
+
+![Edit Storage](./img/disk-configuration-4.png)
+
+The storage should now be enabled on all nodse or the selected nodes.  If a node has a "?" overlay on the icon for the volume or the status says "unknown" on a node ssh to the node and run the following command:
+
+```bash
+pvscan --cache
+```
+
+This should update the nodes cache of LVM volumes and the storage should now be available.
+
+### CLI
 Run on **one node only**:
 
 ```bash
@@ -364,8 +449,6 @@ Run on **each additional node**:
 
 ```bash
 pvscan --cache
-vgscan
-vgchange -ay nvme-vg
 ```
 
 ## Step 9: Add LVM Storage to Proxmox (One Node)
