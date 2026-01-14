@@ -81,7 +81,7 @@ iscsiadm -m session
 
 ## Step 6: Configure Multipath
 
-DM-Multipath configuration is beyond the scope of this guide.  The example below is a basic configuration that should work in most environments.  For more information see: https://support.purestorage.com/bundle/m_linux/page/Solutions/Oracle/Oracle_on_FlashArray/library/common_content/c_recommended_dmmultipath_settings.html
+DM-Multipath configuration is beyond the scope of this guide. For more information see: https://support.purestorage.com/bundle/m_linux/page/Solutions/Oracle/Oracle_on_FlashArray/library/common_content/c_recommended_dmmultipath_settings.html
 
 ## Step 7: Create LVM
 
