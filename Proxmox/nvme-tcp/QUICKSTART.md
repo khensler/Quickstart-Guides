@@ -21,7 +21,7 @@ Use separate physical NICs for storage traffic. No VLAN tagging, direct connecti
 
 #### GUI Configuration
 
-Go to:  Datacenter -> \<node\> -> System -> Network. Select the interface and click Edit.  
+Go to:  Datacenter -> `<node>` -> System -> Network. Select the interface and click Edit.  
 
 ![Proxmox GUI Network Configuration](./img/network-configuration-1.png)
 
@@ -46,15 +46,15 @@ Edit `/etc/network/interfaces`:
 
 ```bash
 # Storage interface 1 - dedicated physical NIC
-auto ens1f0np0
-iface ens1f0np0 inet static
-    address 192.168.100.10/24
+auto <INTERFACE_NAME_1>
+iface <INTERFACE_NAME_1> inet static
+    address <PORTAL_IP_1>/<CIDR>
     mtu 9000
 
 # Storage interface 2 - dedicated physical NIC
-auto ens1f1np1
-iface ens1f1np1 inet static
-    address 192.168.100.11/24
+auto <INTERFACE_NAME_2>
+iface <INTERFACE_NAME_2> inet static
+    address <PORTAL_IP_2>/<CIDR>
     mtu 9000
 ```
 
@@ -65,7 +65,7 @@ If you need to share physical NICs, use VLAN interfaces. This configuration can 
 
 #### GUI Configuration
 
-Go to:  Datacenter -> \<node\> -> System -> Network. Select the interface and click Edit.
+Go to:  Datacenter -> `<node>` -> System -> Network. Select the interface and click Edit.
 
 ![Proxmox GUI Network Configuration](./img/network-configuration-1.png)
 
@@ -79,7 +79,7 @@ Create a Linux VLAN Interface.  Click on Create -> Linux VLAN
 
 ![VLAN Interface Creation](./img/network-configuration-4.png) 
 
-Name the new vlan inteface in the format of <physical_interface>.<vlan_id> (ens1f0np0.100 in the example below).  This should match the name of the physical interface that the VLAN is being created on.  Notice the VLAN Tag feild is not editable but shows the VLAN ID from the interface name.  Set the IP address and MTU to 9000 (or 1500 if jumbo frames are not supported).  Enable Autostart.  Click Create.
+Name the new vlan inteface in the format of `<physical_interface>.<vlan_id>` (`ens1f0np0.100` in the example below).  This should match the name of the physical interface that the VLAN is being created on.  Notice the VLAN Tag feild is not editable but shows the VLAN ID from the interface name.  Set the IP address and MTU to 9000 (or 1500 if jumbo frames are not supported).  Enable Autostart.  Click Create.
 
 ![VLAN Interface Configuration](./img/network-configuration-5.png) 
 
@@ -108,27 +108,27 @@ Edit `/etc/network/interfaces`:
 
 ```bash
 # Physical interface (no IP, just up)
-auto ens1f0
-iface ens1f0 inet manual
+auto <INTERFACE_NAME_1>
+iface <INTERFACE_NAME_1> inet manual
     mtu 9000
 
-# Storage VLAN 100 on ens1f0
-auto ens1f0.100
-iface ens1f0.100 inet static
-    address 192.168.100.10/24
-    vlan-raw-device ens1f0
+# Storage VLAN 100 on <INTERFACE_NAME_1>
+auto <INTERFACE_NAME_1>.<VLAN_ID>
+iface <INTERFACE_NAME_1>.<VLAN_ID> inet static
+    address <PORTAL_IP_1>/<CIDR>
+    vlan-raw-device <INTERFACE_NAME_1>
     mtu 9000
 
 # Physical interface 2 (no IP, just up)
-auto ens1f1
-iface ens1f1 inet manual
+auto <INTERFACE_NAME_2>
+iface <INTERFACE_NAME_2> inet manual
     mtu 9000
 
-# Storage VLAN 101 on ens1f1
-auto ens1f1.100
-iface ens1f1.100 inet static
-    address 192.168.100.11/24
-    vlan-raw-device ens1f1
+# Storage VLAN 101 on <INTERFACE_NAME_2>
+auto <INTERFACE_NAME_2>.<VLAN_ID>
+iface <INTERFACE_NAME_2>.<VLAN_ID> inet static
+    address <PORTAL_IP_2>/<CIDR>
+    vlan-raw-device <INTERFACE_NAME_2>
     mtu 9000
 ```
 
@@ -139,14 +139,14 @@ iface ens1f1.100 inet static
 ifreload -a
 
 # Verify interfaces are up
-ip addr show ens1f1.100
-ip addr show ens1f0.100
+ip addr show <INTERFACE_NAME_1>.<VLAN_ID>
+ip addr show <INTERFACE_NAME_2>.<VLAN_ID>
 
 # Test connectivity to storage portals
-ping -I ens1f0np0 <PORTAL_IP_1>
-ping -I ens1f0np0 <PORTAL_IP_2>
-ping -I ens1f1np1 <PORTAL_IP_1>
-ping -I ens1f1np1 <PORTAL_IP_2>
+ping -I <INTERFACE_NAME_1> <PORTAL_IP_1>
+ping -I <INTERFACE_NAME_1> <PORTAL_IP_2>
+ping -I <INTERFACE_NAME_2> <PORTAL_IP_1>
+ping -I <INTERFACE_NAME_2> <PORTAL_IP_2>
 ```
 
 Repeat on each node
@@ -155,7 +155,7 @@ Repeat on each node
 
 - **Jumbo frames (MTU 9000)**: Recommended for storage traffic. Ensure switches and storage support jumbo frames end-to-end.
 - **Same Subnet**:  This configuration assumes the same subnet.  Multiple subnets may be used if needed.  
-- **No bonding**: Do not bond storage interfaces. NVMe native multipath handles redundancy.
+- **No bonding**: Do not use a bond interface for storage. If the interfaces are part of a bond the inerface name or raw device setting will apply the configuration to the specific interface.  
 - **No Routing Of Storage Traffic**:  The interfaces should be on the same subnet as the storage endpoints.  If this is not the case manual routing will be necessary.
 
 ## Step 2: Install Dependencies (All Nodes)
@@ -178,9 +178,6 @@ nvme
 nvme-tcp
 nvme-core
 EOF
-
-# Enable NVMe native multipath
-echo 'Y' > /sys/module/nvme_core/parameters/multipath
 
 # Make multipath persistent across reboots
 echo 'options nvme_core multipath=Y' > /etc/modprobe.d/nvme-tcp.conf
@@ -205,53 +202,55 @@ cat /etc/nvme/hostnqn
 
 ## Step 4: Discover Targets (Optional)
 
+Replace the `<PORTAL_IP_X>` with your actual portal IP addresses.  Replace `<INTERFACE_NAME>` with your actual interface name.  Replace `<INTERFACE_IP>` with the IP address of the interface. 
+
 ```bash
 # Discover available NVMe subsystems via specific interface
 nvme discover -t tcp \
     -a <PORTAL_IP_1> \
     -s 8009 \
-    --host-iface=ens1f0np0 \
-    --host-traddr=192.168.100.10
+    --host-iface=<INTERFACE_NAME > \
+    --host-traddr=<INTERFACE_IP>
 ```
 
 ## Step 5: Connect to NVMe-TCP Target (All Nodes)
 
 Run on **every Proxmox node**. Each interface connects to ALL portals for maximum path redundancy.
-With 2 interfaces and 4 portals, you get 8 paths total.  Replace `<PORTAL_IP_X>` with your actual portal IP addresses, and `<SUBSYSTEM_NQN>` with your actual subsystem NQN.  Replace ens1f0np0 and ens1f1np1 with your actual interface names.  Replace 192.168.100.10 and 192.168.100.11 with your actual host IP addresses.  Replace 4420 with your actual port if different.  The example below assumes you have 4 portals.  If you have more or less, adjust accordingly.
+With 2 interfaces and 4 portals, you get 8 paths total.  Replace `<PORTAL_IP_X>` with your actual portal IP addresses, and `<SUBSYSTEM_NQN>` with your actual subsystem NQN.  Replace `<INTERFACE_NAME_1>` and `<INTERFACE_NAME_2>` with your actual interface names.  Replace `<PORTAL_IP_1>` and `<PORTAL_IP_2>` with your actual host IP addresses.  Replace 4420 with your actual port if different.  The example below assumes you have 4 portals.  If you have more or less, adjust accordingly.
 
 ```bash
 # Interface 1 -> All Portals
 nvme connect -t tcp -a <PORTAL_IP_1> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=ens1f0np0 --host-traddr=192.168.100.10 \
+    --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> \
     --ctrl-loss-tmo=1800 --reconnect-delay=10
 
 nvme connect -t tcp -a <PORTAL_IP_2> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=ens1f0np0 --host-traddr=192.168.100.10 \
+    --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> \
     --ctrl-loss-tmo=1800 --reconnect-delay=10
 
 nvme connect -t tcp -a <PORTAL_IP_3> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=ens1f0np0 --host-traddr=192.168.100.10 \
+    --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> \
     --ctrl-loss-tmo=1800 --reconnect-delay=10
 
 nvme connect -t tcp -a <PORTAL_IP_4> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=ens1f0np0 --host-traddr=192.168.100.10 \
+    --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> \
     --ctrl-loss-tmo=1800 --reconnect-delay=10
 
 # Interface 2 -> All Portals
 nvme connect -t tcp -a <PORTAL_IP_1> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=ens1f1np1 --host-traddr=192.168.100.11 \
+    --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> \
     --ctrl-loss-tmo=1800 --reconnect-delay=10
 
 nvme connect -t tcp -a <PORTAL_IP_2> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=ens1f1np1 --host-traddr=192.168.100.11 \
+    --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> \
     --ctrl-loss-tmo=1800 --reconnect-delay=10
 
 nvme connect -t tcp -a <PORTAL_IP_3> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=ens1f1np1 --host-traddr=192.168.100.11 \
+    --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> \
     --ctrl-loss-tmo=1800 --reconnect-delay=10
 
 nvme connect -t tcp -a <PORTAL_IP_4> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=ens1f1np1 --host-traddr=192.168.100.11 \
+    --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> \
     --ctrl-loss-tmo=1800 --reconnect-delay=10
 ```
 
@@ -314,16 +313,16 @@ cat > /etc/nvme/discovery.conf << 'EOF'
 # Format: --transport=tcp --traddr=<portal> --trsvcid=<port> --host-iface=<iface> --host-traddr=<host-ip>
 
 # Interface 1 -> All Portals
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=ens1f0np0 --host-traddr=192.168.100.10
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=ens1f0np0 --host-traddr=192.168.100.10
---transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=ens1f0np0 --host-traddr=192.168.100.10
---transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=ens1f0np0 --host-traddr=192.168.100.10
+--transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1>
+--transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1>
+--transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1>
+--transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1>
 
 # Interface 2 -> All Portals
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=ens1f1np1 --host-traddr=192.168.100.11
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=ens1f1np1 --host-traddr=192.168.100.11
---transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=ens1f1np1 --host-traddr=192.168.100.11
---transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=ens1f1np1 --host-traddr=192.168.100.11
+--transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2>
+--transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2>
+--transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2>
+--transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2>
 EOF
 ```
 
@@ -352,16 +351,16 @@ cat > /etc/nvme/config.d/my-storage.conf << 'EOF'
 # 8 paths: 2 interfaces x 4 portals
 
 # Interface 1 -> All Portals
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=ens1f0np0 --host-traddr=192.168.100.10 --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=ens1f0np0 --host-traddr=192.168.100.10 --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=ens1f0np0 --host-traddr=192.168.100.10 --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=ens1f0np0 --host-traddr=192.168.100.10 --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
 
 # Interface 2 -> All Portals
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=ens1f1np1 --host-traddr=192.168.100.11 --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=ens1f1np1 --host-traddr=192.168.100.11 --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=ens1f1np1 --host-traddr=192.168.100.11 --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=8009 --host-iface=ens1f1np1 --host-traddr=192.168.100.11 --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=8009 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
 4420
 
 # Enable automatic connection
@@ -397,7 +396,7 @@ nvme list
 
 Run on **on node only**:
 
-Go to: Datacenter -> \<Node\> -> Disks.  Make sure the NVMe device is visible.
+Go to: Datacenter -> `<Node>` -> Disks.  Make sure the NVMe device is visible.
 
 ![NVMe Device Visible](./img/disk-configuration-1.png)
 
@@ -417,11 +416,17 @@ Go to: Datacenter -> Storage.  Select the volume group and click "Edit".  Check 
 
 ![Edit Storage](./img/disk-configuration-4.png)
 
-The storage should now be enabled on all nodse or the selected nodes.  If a node has a "?" overlay on the icon for the volume or the status says "unknown" on a node ssh to the node and run the following command:
+The storage should now be enabled on all nodse or the selected nodes.  If a node has a "?" overlay on the icon for the volume or the status says "unknown" on a node:
+
+![Storage Unknown](./img/disk-configuration-5.png)
+
+SSH to the node and run the following command:
 
 ```bash
 pvscan --cache
 ```
+
+Repeat for all nodes that have this status.
 
 This should update the nodes cache of LVM volumes and the storage should now be available.
 
