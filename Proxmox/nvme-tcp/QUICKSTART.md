@@ -511,8 +511,3 @@ nvme disconnect -n <NQN>
 # Or disconnect all
 nvme disconnect-all
 ```
-
----
-
-For the automated plugin version, see [README.md](README.md).
-
