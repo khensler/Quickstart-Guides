@@ -79,7 +79,7 @@ Create a Linux VLAN Interface.  Click on Create -> Linux VLAN
 
 ![VLAN Interface Creation](./img/network-configuration-4.png) 
 
-Name the new vlan inteface in the format of `<physical_interface>.<vlan_id>` (`ens1f0np0.100` in the example below).  This should match the name of the physical interface that the VLAN is being created on.  Notice the VLAN Tag feild is not editable but shows the VLAN ID from the interface name.  Set the IP address and MTU to 9000 (or 1500 if jumbo frames are not supported).  Enable Autostart.  Click Create.
+Name the new vlan inteface in the format of `<physical_interface>.<vlan_id>` (`ens1f0np0.100` in the example below).  This should match the name of the physical interface that the VLAN is being created on.  Notice the VLAN Tag field is not editable but shows the VLAN ID from the interface name.  Set the IP address and MTU to 9000 (or 1500 if jumbo frames are not supported).  Enable Autostart.  Click Create.
 
 ![VLAN Interface Configuration](./img/network-configuration-5.png) 
 
@@ -412,7 +412,7 @@ Select the device and name the volume group.  Make sure to keep "Add Storage" ch
 
 The new volume group should now be visible in the storage list.  The shared configuration is not yet enabled and the storage is not yet available to the other nodes.
 
-Go to: Datacenter -> Storage.  Select the volume group and click "Edit".  Check the "Shared" box.  Enable the volume on other nodes by either selecting them in the Nodes drop down or by clearing the Nodes feild by clicking the "x" to the right of the field.  Click "OK".
+Go to: Datacenter -> Storage.  Select the volume group and click "Edit".  Check the "Shared" box.  Enable the volume on other nodes by either selecting them in the Nodes drop down or by clearing the Nodes field by clicking the "x" to the right of the field.  Click "OK".
 
 ![Edit Storage](./img/disk-configuration-4.png)
 
