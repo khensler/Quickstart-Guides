@@ -25,8 +25,8 @@ Go to:  Datacenter -> `<node>` -> System -> Network. Select the interface and cl
 
 ![Proxmox GUI Network Configuration](./img/network-configuration-1.png)
 
-Set the IP address and MTU to 9000 (or 1500 if jumbo frames are not supported.  This configuration is in the advanced section).  Enable Autostart.  Click OK.
-Gateway configuration should not be necessary.  The interfaces should be on the same subnet as the storage endpoints.  If this is not the case manual routing will be necessary.
+Set the IP address and MTU to 9000 (or 1500 if jumbo frames not configured on your network.  This configuration is in the advanced section).  Enable Autostart.  Click OK.
+Gateway configuration should not be necessary.  It is recommended that the interfaces are on the same subnet as the storage endpoints.  If this is not the case manual routing will be necessary.
 
 ![Interface Configuration](./img/network-configuration-2.png) 
 
@@ -69,7 +69,7 @@ Go to:  Datacenter -> `<node>` -> System -> Network. Select the interface and cl
 
 ![Proxmox GUI Network Configuration](./img/network-configuration-1.png)
 
-Enable Autostart if it is not already enabled.  Set the MTU to 9000 (or 1500 if jumbo frames are not supported).  If there is already an IP address assigned to the interface, leave it.  This can be configured on interfaces that are part of a bond as well (these should already be active).  Click OK.
+Enable Autostart if it is not already enabled.  Set the MTU to 9000 (or 1500 if jumbo frames are not configured on your network).  If there is already an IP address assigned to the interface, leave it.  This can be configured on interfaces that are part of a bond as well (these should already be active).  Click OK.
 
 ![Interface Configuration](./img/network-configuration-3.png) 
 
