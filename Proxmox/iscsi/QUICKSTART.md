@@ -103,8 +103,8 @@ In the example above the multipath device is `3624a93708eabcb40cc4241b202b61a7c`
 
 ```bash
 # Create PV and VG
-pvcreate /dev/3624a93708eabcb40cc4241b202b61a7c
-vgcreate vg_iscsi /dev/3624a93708eabcb40cc4241b202b61a7c
+pvcreate /dev/mapper/3624a93708eabcb40cc4241b202b61a7c
+vgcreate vg_iscsi /dev/mapper/3624a93708eabcb40cc4241b202b61a7c
 
 # Verify
 vgs
