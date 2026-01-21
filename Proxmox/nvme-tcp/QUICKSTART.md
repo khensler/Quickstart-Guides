@@ -313,16 +313,16 @@ cat > /etc/nvme/discovery.conf << 'EOF'
 # Format: --transport=tcp --traddr=<portal> --trsvcid=<port> --host-iface=<iface> --host-traddr=<host-ip>
 
 # Interface 1 -> All Portals
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1>
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1>
---transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1>
---transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1>
+--transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<INTERFACE_IP_1>
+--transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<INTERFACE_IP_1>
+--transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<INTERFACE_IP_1>
+--transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<INTERFACE_IP_1>
 
 # Interface 2 -> All Portals
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2>
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2>
---transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2>
---transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2>
+--transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2>
+--transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2>
+--transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2>
+--transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2>
 EOF
 ```
 
@@ -351,16 +351,16 @@ cat > /etc/nvme/config.d/my-storage.conf << 'EOF'
 # 8 paths: 2 interfaces x 4 portals
 
 # Interface 1 -> All Portals
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<PORTAL_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<INTERFACE_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<INTERFACE_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<INTERFACE_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<INTERFACE_IP_1> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
 
 # Interface 2 -> All Portals
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=8009 --host-iface=<INTERFACE_NAME_2> --host-traddr=<PORTAL_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+--transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=8009 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
 4420
 
 # Enable automatic connection
