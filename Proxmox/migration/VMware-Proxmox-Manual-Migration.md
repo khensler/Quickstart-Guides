@@ -693,6 +693,40 @@ After successful migration, you should be able to use the Proxmox GUI to:
 
 ---
 
+## Post-Migration Steps
+
+Additional steps to take after migration to fully optimize the VM.  These changes require installation of drivers, configuration changes, and a reboot of the VM.
+
+### 1. Remove VMware Tools
+
+VMware Tools can cause issues with Proxmox.  It is recommended to remove VMware Tools and reboot the VM.
+
+### 2. Install virtio drivers and qemu-guest-agent
+
+The virtio drivers are much more efficient than the emulated devices.  The qemu-guest-agent is required for Proxmox to be able to manage the VM (shutdown, reboot, etc.) and for the guest to be able to mount ISOs and have proper time sync.
+
+#### 2.1 virtio drivers
+
+Download the virtio drivers from the Proxmox host to a local directory on the guest.  The drivers are located in /usr/share/virtio-win/virtio-win.iso on the Proxmox host.  Mount the ISO and install the drivers.  A reboot may be required. 
+
+#### 2.2 qemu-guest-agent
+
+The qemu-guest-agent is available in the package manager of most Linux distributions and can be downloaded from the Proxmox host.  The package is called qemu-guest-agent.  Once installed, the service should be enabled and started.  The VM will need to be rebooted for the agent to be available.  While rebooting the VM should be configured in Proxmox to enable the guest agent.
+
+### 3. Change the SCSI controller to virtio-scsi-single
+
+The pvscsi controller can be used but virtio-scsi-single is recommended for Linux VMs.  Windows VMs can use the megasas controller.
+
+### 4. Change the network adapter to virtio
+
+The vmxnet3 adapter can be used but virtio is recommended for both Windows and Linux VMs.
+
+### 5. Enable HA for the VM
+
+HA should be enabled for the VM after the migration as Proxmox does not do this by default.  This can be done in the Proxmox GUI or CLI.  The VM should be configured in Proxmox to enable HA.
+
+---
+
 ## Troubleshooting
 
 ### Device has open count > 0 after mirror
