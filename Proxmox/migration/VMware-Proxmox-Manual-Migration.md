@@ -689,7 +689,7 @@ lvs | grep vm-${VMID}
 After successful migration, you should be able to use the Proxmox GUI to:
 1. Move the VM between nodes
 2. Move disks between storage pools
-3. Take snapshots
+3. Take snapshots (if avilable)
 
 ---
 
