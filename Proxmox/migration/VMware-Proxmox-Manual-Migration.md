@@ -373,7 +373,7 @@ At this point, the VM is running from the raw multipath devices. The next step m
 
 ## Step 9: Live Migrate Disks to Proxmox Storage
 
-This step performs a live block copy from the raw /dev/mapper device to LVM-backed Proxmox storage using QEMU's QMP interface.
+This step performs a live block copy from the raw /dev/mapper device to LVM-backed Proxmox storage using QEMU's QMP interface.  The Proxmox GUI/API is not able to preform this operation due to the direct mapping of the storage in the VM config.  An error will occur if attempted stating the system is unable to parse the volume ID as Proxmox expects the volume ID to be in the format of `storage:vm-<vmid>-disk-<N>`.
 
 ### 9.1 Identify Target Storage VG
 
@@ -399,7 +399,7 @@ SIZE_MB=$((107374182400 / 1024 / 1024))
 
 ```bash
 # This is the targer VG for the destination VM disk
-VGNAME="proxmox-cluster-01-fc-pool-01"
+VGNAME="proxmox-cluster-pool"
 LV_NAME="vm-${VMID}-disk-0"
 
 lvcreate -L ${SIZE_MB}M -n ${LV_NAME} ${VGNAME} -y -Wy
@@ -427,7 +427,7 @@ QMP requires a persistent session - all commands must be sent within the same co
 # Replace these example values with your actual values
 VMID=108                                      # Your VM ID from Step 7
 WWN="3624a93708eabcb40cc4241b208501082"       # Your actual WWN from Step 3
-VGNAME="proxmox-cluster-01-fc-pool-01"        # Your target LVM volume group
+VGNAME="proxmox-cluster-pool"        # Your target LVM volume group
 LV_NAME="vm-${VMID}-disk-0"
 LV_PATH="/dev/${VGNAME}/${LV_NAME}"
 QMP_SOCK="/run/qemu-server/${VMID}.qmp"
@@ -558,7 +558,7 @@ After the mirror completes, update the VM config to reference the LVM storage in
 nano /etc/pve/qemu-server/${VMID}.conf
 
 # Change the scsi0 line from (example WWN shown):
-#   scsi0: /dev/mapper/3624a93708eabcb40cc4241b208501082,size=100G
+#   scsi0: /dev/mapper/3624a93708eabcb40cc4241b208501082
 # To (use your storage name and LV name):
 #   scsi0: iscsi:vm-108-disk-0,size=100G
 ```
