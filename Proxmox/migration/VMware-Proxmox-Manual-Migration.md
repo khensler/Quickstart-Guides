@@ -1,4 +1,4 @@
-# Manual Pure vVOL VMware to Proxmox Migration Guide
+# Manual Pure vVol VMware to Proxmox Migration Guide
 
 This guide walks through the complete manual process to migrate a VM from VMware vCenter to Proxmox VE using Pure Storage vVols.
 
@@ -14,7 +14,7 @@ This guide walks through the complete manual process to migrate a VM from VMware
 Ensure all Proxmox nodes are configured in a Pure Storage host group with proper FC/iSCSI initiators.
 
 ### Proxmox Multipath Configuration
-Ensure the dm-mulitpath is installed and configured.  multipathd should be running and configured to auto-discover and add Pure Storage LUNs (blacklisting all devices except for Pure Storage LUNs and `find_multipaths = off` is recommended).  This guide uses /dev/mapper devices for the cloned LUNs.  This guide does not cover setting up multipath for general use.  That should be done following the Proxmox and Pure Storage documentation.
+Ensure dm-multipath is installed and configured. Multipathd should be running and configured to auto-discover and add Pure Storage LUNs (blacklisting all devices except for Pure Storage LUNs and `find_multipaths = off` is recommended). This guide uses /dev/mapper devices for the cloned LUNs. This guide does not cover setting up multipath for general use. That should be done following the Proxmox and Pure Storage documentation.
 
 ### Required Packages on Proxmox Nodes
 ```bash
@@ -79,7 +79,7 @@ For each vVol disk:
 3. Click the volume, then click **Copy**
 4. Enter a new name: `proxmox-<vm-name>-disk-<N>` (e.g., `proxmox-myvm-disk-0`)
 5. Click **Copy**
-6. Repeate this for any additional data volumes
+6. Repeat this for any additional data volumes
 
 ### 3.2 Using purecli
 
@@ -93,7 +93,7 @@ purevol copy "vvol-myvm-abc123-virtualDisk-0" "proxmox-myvm-disk-0"
 # Get the serial of the new volume
 purevol list proxmox-myvm-disk-0 --csv
 
-# Repeat for each Datavolume
+# Repeat for each data volume
 ```
 
 ### 3.3 Record Clone Information
@@ -238,7 +238,7 @@ ls /dev/mapper/ | grep 3624a9370
 
 # Should see device WITHOUT partition suffixes (due to kpartx blocking):
 # Example: 3624a93708eabcb40cc4241b208501082
-# NOT:     3624a93708eabcb40cc4241b208501082-part1
+# NOT: 3624a93708eabcb40cc4241b208501082-part1
 ```
 
 ### 6.2 Verify No LVM VGs Activated
@@ -267,12 +267,12 @@ pvesh get /cluster/nextid
 ```bash
 # Create VM with basic settings
 # Replace these example values with your actual values
-VMID=108                                      # From Step 7.1
-VM_NAME="myvm"                                # Your VM name
-NODE="proxmox-02"                             # Target Proxmox node
-NETWORK="vmbr0"                               # Your network bridge
-WWN="3624a93708eabcb40cc4241b208501082"       # Your actual WWN from Step 3
-SCSIHW="pvscsi"                               # See Step 7.2.1 for mapping
+VMID=108 # From Step 7.1
+VM_NAME="myvm" # Your VM name
+NODE="proxmox-02" # Target Proxmox node
+NETWORK="vmbr0" # Your network bridge
+WWN="3624a93708eabcb40cc4241b208501082" # Your actual WWN from Step 3
+SCSIHW="pvscsi" # See Step 7.2.1 for mapping
 
 # Create VM
 # --ostype values: l26 = Linux 2.6+, win10 = Windows 10/Server 2016+, win11 = Windows 11/Server 2022
@@ -311,7 +311,7 @@ The `--scsihw` parameter specifies the SCSI controller type. **Match this to you
 govc device.info -vm "VM_NAME" | grep -A5 "SCSI controller"
 
 # Or in vCenter UI:
-# VM → Edit Settings → Virtual Hardware → SCSI Controller → Type
+# VM -> Edit Settings -> Virtual Hardware -> SCSI Controller -> Type
 ```
 
 **What happens if you use the wrong controller?**
@@ -324,7 +324,7 @@ govc device.info -vm "VM_NAME" | grep -A5 "SCSI controller"
 
 | Proxmox `scsihw` | Description | Use Case |
 |------------------|-------------|----------|
-| `pvscsi` | VMware Paravirtual SCSI | VMware migrations (most common.  Can be used for migrations but should be changed to virtio-scsi-single after migration) |
+| `pvscsi` | VMware Paravirtual SCSI | VMware migrations (most common. Can be used for migrations but should be changed to virtio-scsi-single after migration) |
 | `virtio-scsi-single` | VirtIO SCSI (single queue per disk) | New Linux VMs with virtio drivers. Recommended for general use. |
 | `virtio-scsi-pci` | VirtIO SCSI (multi-queue) | Linux VMs |
 | `megasas` | LSI MegaRAID SAS | Windows servers, LSI SAS migrations |
@@ -343,8 +343,8 @@ qm set $VMID --efidisk0 local-lvm:1,efitype=4m,pre-enrolled-keys=0
 ### 7.4 Preserve MAC Address (Optional but Recommended)
 
 ```bash
-# Set MAC address from source VM.  Replace the example MAC with your actual MAC from the source VM.
-# Replace the example network adapter type with the actual type from the source VM or the desired type for the new VM.  The example uses vmxnet3.  Other common types are e1000 and virtio.
+# Set MAC address from source VM. Replace the example MAC with your actual MAC from the source VM.
+# Replace the example network adapter type with the actual type from the source VM or the desired type for the new VM. The example uses vmxnet3. Other common types are e1000 and virtio.
 qm set $VMID --net0 "vmxnet3,bridge=${NETWORK},macaddr=00:50:56:93:a0:00"
 ```
 
@@ -373,7 +373,7 @@ At this point, the VM is running from the raw multipath devices. The next step m
 
 ## Step 9: Live Migrate Disks to Proxmox Storage
 
-This step performs a live block copy from the raw /dev/mapper device to LVM-backed Proxmox storage using QEMU's QMP interface.  The Proxmox GUI/API is not able to preform this operation due to the direct mapping of the storage in the VM config.  An error will occur if attempted stating the system is unable to parse the volume ID as Proxmox expects the volume ID to be in the format of `storage:vm-<vmid>-disk-<N>`.
+This step performs a live block copy from the raw /dev/mapper device to LVM-backed Proxmox storage using QEMU's QMP interface. The Proxmox GUI/API is not able to perform this operation due to the direct mapping of the storage in the VM config. An error will occur if attempted stating the system is unable to parse the volume ID as Proxmox expects the volume ID to be in the format of `storage:vm-<vmid>-disk-<N>`.
 
 ### 9.1 Identify Target Storage VG
 
@@ -398,7 +398,7 @@ SIZE_MB=$((107374182400 / 1024 / 1024))
 ### 9.3 Create Target LV
 
 ```bash
-# This is the targer VG for the destination VM disk
+# This is the target VG for the destination VM disk
 VGNAME="proxmox-cluster-pool"
 LV_NAME="vm-${VMID}-disk-0"
 
@@ -425,9 +425,9 @@ QMP requires a persistent session - all commands must be sent within the same co
 
 ```bash
 # Replace these example values with your actual values
-VMID=108                                      # Your VM ID from Step 7
-WWN="3624a93708eabcb40cc4241b208501082"       # Your actual WWN from Step 3
-VGNAME="proxmox-cluster-pool"        # Your target LVM volume group
+VMID=108 # Your VM ID from Step 7
+WWN="3624a93708eabcb40cc4241b208501082" # Your actual WWN from Step 3
+VGNAME="proxmox-cluster-pool" # Your target LVM volume group
 LV_NAME="vm-${VMID}-disk-0"
 LV_PATH="/dev/${VGNAME}/${LV_NAME}"
 QMP_SOCK="/run/qemu-server/${VMID}.qmp"
@@ -558,9 +558,9 @@ After the mirror completes, update the VM config to reference the LVM storage in
 nano /etc/pve/qemu-server/${VMID}.conf
 
 # Change the scsi0 line from (example WWN shown):
-#   scsi0: /dev/mapper/3624a93708eabcb40cc4241b208501082
+# scsi0: /dev/mapper/3624a93708eabcb40cc4241b208501082
 # To (use your storage name and LV name):
-#   scsi0: iscsi:vm-108-disk-0,size=100G
+# scsi0: iscsi:vm-108-disk-0,size=100G
 ```
 
 Where `iscsi` is your Proxmox storage name and `vm-108-disk-0` is the LV name you created in Step 9.3.
@@ -600,7 +600,7 @@ vgchange -an <vg-name>
 multipath -f ${WWN}
 
 # Verify device is gone
-ls /dev/mapper/ | grep ${WWN}  # Should return nothing
+ls /dev/mapper/ | grep ${WWN} # Should return nothing
 ```
 
 ### 10.3 Detach Volume from Host Group on Pure Storage
@@ -689,41 +689,41 @@ lvs | grep vm-${VMID}
 After successful migration, you should be able to use the Proxmox GUI to:
 1. Move the VM between nodes
 2. Move disks between storage pools
-3. Take snapshots (if avilable)
+3. Take snapshots (if available)
 
 ---
 
 ## Post-Migration Steps
 
-Additional steps to take after migration to fully optimize the VM.  These changes require installation of drivers, configuration changes, and a reboot of the VM.
+Additional steps to take after migration to fully optimize the VM. These changes require installation of drivers, configuration changes, and a reboot of the VM.
 
 ### 1. Remove VMware Tools
 
-VMware Tools can cause issues with Proxmox.  It is recommended to remove VMware Tools and reboot the VM.
+VMware Tools can cause issues with Proxmox. It is recommended to remove VMware Tools and reboot the VM.
 
 ### 2. Install virtio drivers and qemu-guest-agent
 
-The virtio drivers are much more efficient than the emulated devices.  The qemu-guest-agent is required for Proxmox to be able to manage the VM (shutdown, reboot, etc.) and for the guest to be able to mount ISOs and have proper time sync.
+The virtio drivers are much more efficient than the emulated devices. The qemu-guest-agent is required for Proxmox to be able to manage the VM (shutdown, reboot, etc.) and for the guest to be able to mount ISOs and have proper time sync.
 
 #### 2.1 virtio drivers
 
-Download the virtio drivers from the Proxmox host to a local directory on the guest.  The drivers are located in /usr/share/virtio-win/virtio-win.iso on the Proxmox host.  Mount the ISO and install the drivers.  A reboot may be required. 
+Download the virtio drivers from the Proxmox host to a local directory on the guest. The drivers are located in /usr/share/virtio-win/virtio-win.iso on the Proxmox host. Mount the ISO and install the drivers. A reboot may be required.
 
 #### 2.2 qemu-guest-agent
 
-The qemu-guest-agent is available in the package manager of most Linux distributions and can be downloaded from the Proxmox host.  The package is called qemu-guest-agent.  Once installed, the service should be enabled and started.  The VM will need to be rebooted for the agent to be available.  While rebooting the VM should be configured in Proxmox to enable the guest agent.
+The qemu-guest-agent is available in the package manager of most Linux distributions and can be downloaded from the Proxmox host. The package is called qemu-guest-agent. Once installed, the service should be enabled and started. The VM will need to be rebooted for the agent to be available. While rebooting, configure Proxmox to enable the guest agent.
 
 ### 3. Change the SCSI controller to virtio-scsi-single
 
-The pvscsi controller can be used but virtio-scsi-single is recommended for Linux VMs.  Windows VMs can use the megasas controller.
+The pvscsi controller can be used, but virtio-scsi-single is recommended for Linux VMs. Windows VMs can use the megasas controller.
 
 ### 4. Change the network adapter to virtio
 
-The vmxnet3 adapter can be used but virtio is recommended for both Windows and Linux VMs.
+The vmxnet3 adapter can be used, but virtio is recommended for both Windows and Linux VMs.
 
 ### 5. Enable HA for the VM
 
-HA should be enabled for the VM after the migration as Proxmox does not do this by default.  This can be done in the Proxmox GUI or CLI.  The VM should be configured in Proxmox to enable HA.
+HA should be enabled for the VM after the migration, as Proxmox does not do this by default. This can be done in the Proxmox GUI or CLI. The VM should be configured in Proxmox to enable HA.
 
 ---
 
@@ -742,7 +742,7 @@ dmsetup ls | grep ${WWN}
 kpartx -d /dev/mapper/${WWN}
 
 # If LVM VGs are active:
-vgs  # identify VG
+vgs # identify VG
 vgchange -an <vg-name>
 ```
 
@@ -786,10 +786,10 @@ ls /run/qemu-server/${VMID}.qmp
 
 Example (replace with your actual serial from Pure Storage):
 ```
-Pure Volume Serial: 8EABCB40CC4241B208501082           <- Get this from Pure Storage GUI or purecli
-Pure NAA prefix:    3624a9370                          <- Always this prefix for Pure Storage
-WWN:                3624a93708eabcb40cc4241b208501082  <- prefix + lowercase(serial)
-Multipath device:   /dev/mapper/3624a93708eabcb40cc4241b208501082
+Pure Volume Serial: 8EABCB40CC4241B208501082 <- Get this from Pure Storage GUI or purecli
+Pure NAA prefix: 3624a9370 <- Always this prefix for Pure Storage
+WWN: 3624a93708eabcb40cc4241b208501082 <- prefix + lowercase(serial)
+Multipath device: /dev/mapper/3624a93708eabcb40cc4241b208501082
 ```
 
 ## Quick Reference: purecli Commands
