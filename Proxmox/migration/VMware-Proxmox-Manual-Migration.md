@@ -1,6 +1,6 @@
-# Manual Pure vVol VMware to Proxmox Migration Guide
+# Manual Pure vVOL VMware to Proxmox Migration Guide
 
-This guide walks through the complete manual process to migrate a VM from VMware vCenter to Proxmox VE using Pure Storage vVols.
+This guide walks through the complete manual process to migrate a VM from VMware vCenter to Proxmox VE using Pure Storage vVols. The migration will be to a LVM Thick volume.
 
 ## Prerequisites
 
@@ -238,7 +238,7 @@ ls /dev/mapper/ | grep 3624a9370
 
 # Should see device WITHOUT partition suffixes (due to kpartx blocking):
 # Example: 3624a93708eabcb40cc4241b208501082
-# NOT: 3624a93708eabcb40cc4241b208501082-part1
+# NOT:     3624a93708eabcb40cc4241b208501082-part1
 ```
 
 ### 6.2 Verify No LVM VGs Activated
@@ -267,12 +267,12 @@ pvesh get /cluster/nextid
 ```bash
 # Create VM with basic settings
 # Replace these example values with your actual values
-VMID=108 # From Step 7.1
-VM_NAME="myvm" # Your VM name
-NODE="proxmox-02" # Target Proxmox node
-NETWORK="vmbr0" # Your network bridge
-WWN="3624a93708eabcb40cc4241b208501082" # Your actual WWN from Step 3
-SCSIHW="pvscsi" # See Step 7.2.1 for mapping
+VMID=108                                      # From Step 7.1
+VM_NAME="myvm"                                # Your VM name
+NODE="proxmox-02"                             # Target Proxmox node
+NETWORK="vmbr0"                               # Your network bridge
+WWN="3624a93708eabcb40cc4241b208501082"       # Your actual WWN from Step 3
+SCSIHW="pvscsi"                               # See Step 7.2.1 for mapping
 
 # Create VM
 # --ostype values: l26 = Linux 2.6+, win10 = Windows 10/Server 2016+, win11 = Windows 11/Server 2022
@@ -425,9 +425,9 @@ QMP requires a persistent session - all commands must be sent within the same co
 
 ```bash
 # Replace these example values with your actual values
-VMID=108 # Your VM ID from Step 7
-WWN="3624a93708eabcb40cc4241b208501082" # Your actual WWN from Step 3
-VGNAME="proxmox-cluster-pool" # Your target LVM volume group
+VMID=108                                      # Your VM ID from Step 7
+WWN="3624a93708eabcb40cc4241b208501082"       # Your actual WWN from Step 3
+VGNAME="proxmox-cluster-pool"        # Your target LVM volume group
 LV_NAME="vm-${VMID}-disk-0"
 LV_PATH="/dev/${VGNAME}/${LV_NAME}"
 QMP_SOCK="/run/qemu-server/${VMID}.qmp"
@@ -438,7 +438,7 @@ QMP_SOCK="/run/qemu-server/${VMID}.qmp"
 Start an interactive session that stays open:
 
 ```bash
-socat READLINE UNIX-CONNECT:${QMP_SOCK}
+socat - UNIX-CONNECT:${QMP_SOCK}
 ```
 
 You'll see a greeting message like:
@@ -458,41 +458,139 @@ Type this command (required before any other commands):
 
 Expected response: `{"return": {}}`
 
-#### 9.5.4 Find the Source Block Node
+#### 9.5.4 Query Named Block Nodes
 
-Query the block nodes to find the raw device node name:
+Query the block device structure to identify the node names needed for the mirror operation.
 
 ```json
 {"execute": "query-named-block-nodes"}
 ```
 
-In the output, look for the node containing your WWN in the filename. Find the `node-name` of the node with `"filename": "/dev/mapper/3624a9370..."`.
+**Understanding the Output:**
 
-Example (the node-name is a hash, not "drive-scsi0"):
+QEMU creates a multi-layer block device stack. You'll see multiple entries for the same physical device with **3 layers**:
+
 ```
-"node-name": "fe64ee2819267ee98551e31350d0c09"
-"filename": "/dev/mapper/3624a93708eabcb40cc4241b208501082"
+Layer 1 (Top):    drive-scsi0          [throttle driver]  <- Use for "device" parameter
+                       |
+Layer 2 (Middle): ffa5d4038f11ff...    [raw driver]       <- Use for "replaces" parameter
+                       |
+Layer 3 (Bottom): efa5d4038f11ff...    [host_device driver] -> /dev/mapper/3624a9370...
 ```
 
-Note this node-name - you'll need it for the `replaces` parameter and final cleanup.
+**Identify the three node names:**
+
+1. **Top throttle node** - Look for:
+   - `"node-name": "drive-scsi0"` (or `drive-virtio0`, `drive-sata0`, etc.)
+   - `"drv": "throttle"`
+   - `"backing_file_depth": 1`
+   - Has a `"children"` array
+
+2. **Child below throttle (raw driver)** - Look in the throttle node's `children` array:
+   - Find the entry with `"child": "file"`
+   - Note the `"node-name"` (will be a hash like `ffa5d4038f11ff4c1cbb20961716981`)
+   - This node will have `"drv": "raw"`
+
+3. **Bottom host_device node** - Look for:
+   - `"drv": "host_device"`
+   - `"file": "/dev/mapper/3624a9370..."` (your source device)
+   - `"children": []` (empty array)
+   - Note the `"node-name"` (will be a hash like `efa5d4038f11ff4c1cbb20961716981`)
+
+**Example from output:**
+
+Top throttle node:
+```json
+{
+  "node-name": "drive-scsi0",
+  "drv": "throttle",
+  "backing_file_depth": 1,
+  "children": [
+    {
+      "node-name": "ffa5d4038f11ff4c1cbb20961716981",
+      "child": "file"
+    }
+  ],
+  ...
+}
+```
+
+Child below throttle (raw driver):
+```json
+{
+  "node-name": "ffa5d4038f11ff4c1cbb20961716981",
+  "drv": "raw",
+  "backing_file_depth": 0,
+  "children": [
+    {
+      "node-name": "efa5d4038f11ff4c1cbb20961716981",
+      "child": "file"
+    }
+  ],
+  "file": "/dev/mapper/3624a93708eabcb40cc4241b208501082"
+}
+```
+
+Bottom host_device node:
+```json
+{
+  "node-name": "efa5d4038f11ff4c1cbb20961716981",
+  "drv": "host_device",
+  "backing_file_depth": 0,
+  "children": [],
+  "file": "/dev/mapper/3624a93708eabcb40cc4241b208501082"
+}
+```
+
+**Write down these three node names - you'll need them in the following steps.**
+
+**Common top-level device names:**
+
+| VM Disk Type | Top-Level Node Name |
+|--------------|---------------------|
+| VirtIO-SCSI disk 0 | `drive-scsi0` |
+| VirtIO-SCSI disk 1 | `drive-scsi1` |
+| VirtIO-BLK disk 0 | `drive-virtio0` |
+| SATA disk 0 | `drive-sata0` |
+| IDE disk 0 | `drive-ide0` |
 
 #### 9.5.5 Add Target Block Device
 
-Replace `LV_PATH` with your actual path:
+Add the target LVM volume as a block device node.
+
+**Replace the filename with your actual LVM path:**
 
 ```json
-{"execute": "blockdev-add", "arguments": {"driver": "raw", "node-name": "mirror-target-scsi0", "file": {"driver": "host_device", "filename": "/dev/proxmox-cluster-01-fc-pool-01/vm-108-disk-0"}}}
+{"execute": "blockdev-add", "arguments": {"driver": "raw", "node-name": "mirror-target-scsi0", "file": {"driver": "host_device", "filename": "/dev/proxmox-cluster-pool/vm-108-disk-0"}}}
 ```
+
+**Parameters explained:**
+- `"driver": "raw"` - No format, just raw block device
+- `"node-name": "mirror-target-scsi0"` - Temporary name for the target (must match disk number, e.g., `mirror-target-scsi0`, `mirror-target-scsi1`)
+- `"filename"` - Path to your LVM logical volume (from step 9.3)
 
 Expected response: `{"return": {}}`
 
 #### 9.5.6 Start the Block Mirror
 
-Replace `SOURCE_NODE` with the node-name from step 9.5.4:
+Start the live block mirror operation using the node names from step 9.5.4.
+
+**You need TWO node names from step 9.5.4:**
+1. **Top throttle node** (e.g., `drive-scsi0`) - for the `device` parameter
+2. **Child below throttle** (e.g., `ffa5d4038f11ff...`) - for the `replaces` parameter
 
 ```json
-{"execute": "blockdev-mirror", "arguments": {"job-id": "mirror-scsi0", "device": "drive-scsi0", "target": "mirror-target-scsi0", "sync": "full", "replaces": "fe64ee2819267ee98551e31350d0c09"}}
+{"execute": "blockdev-mirror", "arguments": {"job-id": "mirror-scsi0", "device": "drive-scsi0", "target": "mirror-target-scsi0", "sync": "full", "replaces": "ffa5d4038f11ff4c1cbb20961716981"}}
 ```
+
+**Parameters explained:**
+- `"job-id": "mirror-scsi0"` - Unique identifier for this mirror job (you choose this)
+- `"device": "drive-scsi0"` - **Top throttle node** from step 9.5.4
+- `"target": "mirror-target-scsi0"` - Node name you created in step 9.5.5
+- `"sync": "full"` - Copy all data (full synchronization)
+- `"replaces": "ffa5d4038f11ff..."` - **Child below throttle (raw driver)** from step 9.5.4
+
+**Critical:** The `replaces` parameter must be the **child node below the throttle** (the one with `"drv": "raw"`), NOT the bottom host_device node.
 
 Expected response: `{"return": {}}`
 
@@ -514,40 +612,76 @@ Output shows progress:
 
 #### 9.5.8 Complete the Mirror (when ready=true)
 
+When the mirror job shows `"ready": true`, complete the switchover:
+
 ```json
 {"execute": "block-job-complete", "arguments": {"device": "mirror-scsi0"}}
 ```
 
+**Parameters explained:**
+- `"device": "mirror-scsi0"` - The job-id from step 9.5.6
+
+Expected response: `{"return": {}}`
+
 Wait a few seconds for the job to finish.
 
-#### 9.5.9 Release the Source Device
+#### 9.5.9 Verify Job Completed
 
-Delete the orphaned source node to release the multipath device (use the node-name from step 9.5.4):
-
-```json
-{"execute": "blockdev-del", "arguments": {"node-name": "fe64ee2819267ee98551e31350d0c09"}}
-```
-
-#### 9.5.10 Verify and Exit
-
-Verify no jobs are running:
+Verify the mirror job has completed:
 
 ```json
 {"execute": "query-block-jobs"}
 ```
 
-Should return: `{"return": []}`
+Should return: `{"return": []}` (empty array means no jobs running).
 
-Exit the socat session with `Ctrl+C`.
+**The VM is now using the target device (LVM volume).**
 
-#### 9.5.11 Verify Device Released
+#### 9.5.10 Verify Source Nodes Were Replaced (Optional)
 
-In a separate terminal:
+You can optionally verify that the `replaces` parameter worked correctly by querying the block nodes again:
+
+```json
+{"execute": "query-named-block-nodes"}
+```
+
+Look for the `drive-scsi0` node. You should see:
+- The `children` array now points to `mirror-target-scsi0` instead of the old source node
+- The `file` field shows the target device path (e.g., `/dev/nvme-tcp/vm-105-disk-0`)
+- The old source nodes (e.g., `ffa5d4038f11ff...` and `efa5d4038f11ff...`) no longer exist
+
+**Example of successful replacement:**
+```json
+{
+  "node-name": "drive-scsi0",
+  "drv": "throttle",
+  "children": [{"node-name": "mirror-target-scsi0", "child": "file"}],
+  "file": "json:{...\"filename\": \"/dev/nvme-tcp/vm-105-disk-0\"...}"
+}
+```
+
+**What the `replaces` parameter did:**
+- Automatically swapped the source node with the target node in the block device graph
+- Deleted the old source nodes (`ffa5d4038f11ff...` and `efa5d4038f11ff...`)
+- Released file descriptors on the old source device
+- The throttle node now points directly to the target device
+
+#### 9.5.11 Exit QMP Session
+
+Exit the socat session:
+
+Press `Ctrl+C`
+
+#### 9.5.12 Verify Device Released
+
+In a separate terminal (outside the QMP session):
 
 ```bash
 # Verify device is released - should show Open count: 0
 dmsetup info ${WWN} | grep "Open count"
 ```
+
+If the open count is 0, the source device has been successfully released and the VM is now running entirely on the target LVM volume.
 
 ### 9.6 Update VM Configuration
 
@@ -558,9 +692,9 @@ After the mirror completes, update the VM config to reference the LVM storage in
 nano /etc/pve/qemu-server/${VMID}.conf
 
 # Change the scsi0 line from (example WWN shown):
-# scsi0: /dev/mapper/3624a93708eabcb40cc4241b208501082
+#   scsi0: /dev/mapper/3624a93708eabcb40cc4241b208501082
 # To (use your storage name and LV name):
-# scsi0: iscsi:vm-108-disk-0,size=100G
+#   scsi0: iscsi:vm-108-disk-0,size=100G
 ```
 
 Where `iscsi` is your Proxmox storage name and `vm-108-disk-0` is the LV name you created in Step 9.3.
@@ -600,7 +734,7 @@ vgchange -an <vg-name>
 multipath -f ${WWN}
 
 # Verify device is gone
-ls /dev/mapper/ | grep ${WWN} # Should return nothing
+ls /dev/mapper/ | grep ${WWN}  # Should return nothing
 ```
 
 ### 10.3 Detach Volume from Host Group on Pure Storage
@@ -742,7 +876,7 @@ dmsetup ls | grep ${WWN}
 kpartx -d /dev/mapper/${WWN}
 
 # If LVM VGs are active:
-vgs # identify VG
+vgs  # identify VG
 vgchange -an <vg-name>
 ```
 
@@ -786,10 +920,10 @@ ls /run/qemu-server/${VMID}.qmp
 
 Example (replace with your actual serial from Pure Storage):
 ```
-Pure Volume Serial: 8EABCB40CC4241B208501082 <- Get this from Pure Storage GUI or purecli
-Pure NAA prefix: 3624a9370 <- Always this prefix for Pure Storage
-WWN: 3624a93708eabcb40cc4241b208501082 <- prefix + lowercase(serial)
-Multipath device: /dev/mapper/3624a93708eabcb40cc4241b208501082
+Pure Volume Serial: 8EABCB40CC4241B208501082           <- Get this from Pure Storage GUI or purecli
+Pure NAA prefix:    3624a9370                          <- Always this prefix for Pure Storage
+WWN:                3624a93708eabcb40cc4241b208501082  <- prefix + lowercase(serial)
+Multipath device:   /dev/mapper/3624a93708eabcb40cc4241b208501082
 ```
 
 ## Quick Reference: purecli Commands
