@@ -442,16 +442,16 @@ flowchart-elk
     PORTAL3 --> SUBSYS
     PORTAL4 --> SUBSYS
 
-    style HOST fill:#2374ab
-    style SUBSYS fill:#27ae60,color:#000000
-    style P1 fill:#95a5a6
-    style P2 fill:#95a5a6
-    style P3 fill:#95a5a6
-    style P4 fill:#95a5a6
-    style P5 fill:#95a5a6
-    style P6 fill:#95a5a6
-    style P7 fill:#95a5a6
-    style P8 fill:#95a5a6
+    style HOST fill:#CFFFFE,color:#000000
+    style SUBSYS fill:#FE5000,color:#000000
+    style P1 fill:#F76F87,color:#000000
+    style P2 fill:#F76F87,color:#000000
+    style P3 fill:#F76F87,color:#000000
+    style P4 fill:#F76F87,color:#000000
+    style P5 fill:#F76F87,color:#000000
+    style P6 fill:#F76F87,color:#000000
+    style P7 fill:#F76F87,color:#000000
+    style P8 fill:#F76F87,color:#000000
 ```
 
 **Key Concepts:**
@@ -547,18 +547,18 @@ graph TB
     PATH8 -.-> STORAGE
 
     style APP fill:#CFFFFE,color:#fff
-    style DRIVER fill:#34495e,color:#fff
+    style DRIVER fill:#FAF7F1,color:#000000
     style CHECK fill:#9b59b6,color:#fff
     style SELECT fill:#27ae60,color:#fff
-    style PATH1 fill:#FE5000,color:#fff
-    style PATH2 fill:#f39c12,color:#fff
-    style PATH3 fill:#c0392b,color:#fff
-    style PATH4 fill:#27ae60,color:#fff
-    style PATH5 fill:#f39c12,color:#fff
-    style PATH6 fill:#FE5000,color:#fff
-    style PATH7 fill:#f39c12,color:#fff
-    style PATH8 fill:#f39c12,color:#fff
-    style STORAGE fill:#2c3e50,color:#fff
+    style PATH1 fill:#FBD170,color:#000000
+    style PATH2 fill:#FDDF8D,color:#000000
+    style PATH3 fill:#F9BC42,color:#000000
+    style PATH4 fill:#E8DABF,color:#000000
+    style PATH5 fill:#FDDF8D,color:#000000
+    style PATH6 fill:#FBD170,color:#000000
+    style PATH7 fill:#FDDF8D,color:#000000
+    style PATH8 fill:#FDDF8D,color:#000000
+    style STORAGE fill:#FE5000,color:#fff
 ```
 
 **Example Scenario:**
