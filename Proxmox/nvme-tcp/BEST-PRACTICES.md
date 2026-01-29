@@ -243,12 +243,12 @@ flowchart-elk
 
     SW1 --- SW2
 
-    style STORAGE1 fill:#FE5000,,color:#000000
-    style STORAGE2 fill:#FE5000,,color:#000000
+    style STORAGE1 fill:#FE5000,color:#000000
+    style STORAGE2 fill:#FE5000,color:#000000
     style NIC1 fill:#95a5a6,color:#fff
     style NIC2 fill:#95a5a6,color:#fff
     style BOND fill:#34495e,color:#fff
-    style MGMT fill:#CFFFFE,,color:#000000
+    style MGMT fill:#CFFFFE,color:#000000
     style BRIDGE fill:#2ecc71,color:#fff
     style P1 fill:#FE5000,color:#fff
     style P2 fill:#FE5000,color:#fff
