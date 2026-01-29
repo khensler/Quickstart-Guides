@@ -68,12 +68,12 @@ flowchart-elk
     CTRL1 --- NVME
     CTRL2 --- NVME
     
-    style PVE1 fill:#2374ab
-    style PVE2 fill:#2374ab
-    style PVE3 fill:#2374ab
-    style CTRL1 fill:#e67e22
-    style CTRL2 fill:#e67e22
-    style NVME fill:#27ae60
+    style PVE1 fill:#F04A79,color:#000000
+    style PVE2 fill:#F04A79,color:#000000
+    style PVE3 fill:#F04A79,color:#000000
+    style CTRL1 fill:#FE5000,color:#000000
+    style CTRL2 fill:#FE5000,color:#000000
+    style NVME fill:#27ae60,color:#000000
 ```
 
 ---
@@ -146,12 +146,12 @@ flowchart-elk LR
     SW2 --- P3
     SW2 --- P4
 
-    style NIC1 fill:#3498db
-    style NIC2 fill:#3498db
-    style P1 fill:#e67e22
-    style P2 fill:#e67e22
-    style P3 fill:#e67e22
-    style P4 fill:#e67e22
+    style NIC1 fill:#CFFFFE,color:#000000
+    style NIC2 fill:#CFFFFE,color:#000000
+    style P1 fill:#FE5000,color:#000000
+    style P2 fill:#FE5000,color:#000000
+    style P3 fill:#FE5000,color:#000000
+    style P4 fill:#FE5000,color:#000000
 ```
 
 **Configuration Example:**
@@ -243,17 +243,17 @@ flowchart-elk
 
     SW1 --- SW2
 
-    style STORAGE1 fill:#e67e22,color:#fff
-    style STORAGE2 fill:#e67e22,color:#fff
+    style STORAGE1 fill:#FE5000,,color:#000000
+    style STORAGE2 fill:#FE5000,,color:#000000
     style NIC1 fill:#95a5a6,color:#fff
     style NIC2 fill:#95a5a6,color:#fff
     style BOND fill:#34495e,color:#fff
-    style MGMT fill:#3498db,color:#fff
+    style MGMT fill:#CFFFFE,,color:#000000
     style BRIDGE fill:#2ecc71,color:#fff
-    style P1 fill:#e67e22,color:#fff
-    style P2 fill:#e67e22,color:#fff
-    style P3 fill:#e67e22,color:#fff
-    style P4 fill:#e67e22,color:#fff
+    style P1 fill:#FE5000,color:#fff
+    style P2 fill:#FE5000,color:#fff
+    style P3 fill:#FE5000,color:#fff
+    style P4 fill:#FE5000,color:#fff
     style SW1 fill:#34495e,color:#fff
     style SW2 fill:#34495e,color:#fff
 ```
@@ -443,7 +443,7 @@ flowchart-elk
     PORTAL4 --> SUBSYS
 
     style HOST fill:#2374ab
-    style SUBSYS fill:#27ae60
+    style SUBSYS fill:#27ae60,color:#000000
     style P1 fill:#95a5a6
     style P2 fill:#95a5a6
     style P3 fill:#95a5a6
@@ -546,16 +546,16 @@ graph TB
     PATH7 -.-> STORAGE
     PATH8 -.-> STORAGE
 
-    style APP fill:#3498db,color:#fff
+    style APP fill:#CFFFFE,color:#fff
     style DRIVER fill:#34495e,color:#fff
     style CHECK fill:#9b59b6,color:#fff
     style SELECT fill:#27ae60,color:#fff
-    style PATH1 fill:#e67e22,color:#fff
+    style PATH1 fill:#FE5000,color:#fff
     style PATH2 fill:#f39c12,color:#fff
     style PATH3 fill:#c0392b,color:#fff
     style PATH4 fill:#27ae60,color:#fff
     style PATH5 fill:#f39c12,color:#fff
-    style PATH6 fill:#e67e22,color:#fff
+    style PATH6 fill:#FE5000,color:#fff
     style PATH7 fill:#f39c12,color:#fff
     style PATH8 fill:#f39c12,color:#fff
     style STORAGE fill:#2c3e50,color:#fff
@@ -1457,7 +1457,7 @@ graph TB
     NODE ---|Storage NIC 1 & 2| STORAGE
 
     style STORAGE fill:#e74c3c
-    style MGMT fill:#3498db
+    style MGMT fill:#CFFFFE
     style VM fill:#2ecc71
 ```
 
@@ -1770,7 +1770,7 @@ graph TD
     RESOLVED -->|Yes| END[Complete]
     RESOLVED -->|No| ESCALATE[Escalate to<br/>Vendor Support]
 
-    style START fill:#3498db
+    style START fill:#CFFFFE
     style END fill:#27ae60
     style ESCALATE fill:#e74c3c
 ```
