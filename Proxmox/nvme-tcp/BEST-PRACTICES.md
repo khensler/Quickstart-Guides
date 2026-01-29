@@ -546,7 +546,7 @@ graph TB
     PATH7 -.-> STORAGE
     PATH8 -.-> STORAGE
 
-    style APP fill:#CFFFFE,color:#fff
+    style APP fill:#CFFFFE,color:#000000
     style DRIVER fill:#FAF7F1,color:#000000
     style CHECK fill:#9b59b6,color:#fff
     style SELECT fill:#27ae60,color:#fff
