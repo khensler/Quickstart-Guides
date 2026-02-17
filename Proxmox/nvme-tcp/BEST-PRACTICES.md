@@ -1,5 +1,33 @@
 # NVMe-TCP on Proxmox VE - Best Practices Guide
 
+> **Distribution-Specific Guides:** For detailed best practices tailored to specific Linux distributions, see:
+> - [RHEL/Rocky/AlmaLinux Best Practices](../../distributions/rhel/nvme-tcp/BEST-PRACTICES.md)
+> - [Debian/Ubuntu Best Practices](../../distributions/debian/nvme-tcp/BEST-PRACTICES.md)
+> - [SUSE/openSUSE Best Practices](../../distributions/suse/nvme-tcp/BEST-PRACTICES.md)
+> - [Oracle Linux Best Practices](../../distributions/oracle/nvme-tcp/BEST-PRACTICES.md)
+
+---
+
+## ⚠️ Important Disclaimers
+
+> **Vendor Documentation Priority:**
+> - This guide is **specific to Pure Storage configurations** and should be used in conjunction with official vendor documentation
+> - Always consult and follow **Proxmox VE official documentation** for complete system configuration
+> - In case of any conflicts between this guide and vendor documentation, **vendor documentation takes precedence**
+>
+> **Testing Requirements:**
+> - All configurations and recommendations in this guide are **for reference only**
+> - **Test thoroughly in a lab environment** before implementing in production
+> - Validate all settings with your specific hardware, software versions, and workload requirements
+> - Performance and compatibility may vary based on your environment
+>
+> **Support:**
+> - For Pure Storage-specific issues, contact Pure Storage Support
+> - For Proxmox VE issues, consult Proxmox documentation or community forums
+> - This guide is provided as-is without warranty
+
+---
+
 ## Table of Contents
 - [Architecture Overview](#architecture-overview)
 - [Network Design](#network-design)
@@ -68,17 +96,19 @@ flowchart-elk
     CTRL1 --- NVME
     CTRL2 --- NVME
     
-    style PVE1 fill:#2374ab
-    style PVE2 fill:#2374ab
-    style PVE3 fill:#2374ab
-    style CTRL1 fill:#e67e22
-    style CTRL2 fill:#e67e22
-    style NVME fill:#27ae60
+    style PVE1 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style PVE2 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style PVE3 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style CTRL1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style CTRL2 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style NVME fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ---
 
 ## Network Design
+
+> **Note:** For comprehensive network architecture concepts and design patterns, see [Network Concepts](../common/includes/network-concepts.md).
 
 ### Network Architecture Principles
 
@@ -146,12 +176,12 @@ flowchart-elk LR
     SW2 --- P3
     SW2 --- P4
 
-    style NIC1 fill:#3498db
-    style NIC2 fill:#3498db
-    style P1 fill:#e67e22
-    style P2 fill:#e67e22
-    style P3 fill:#e67e22
-    style P4 fill:#e67e22
+    style NIC1 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style NIC2 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style P1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P2 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P3 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P4 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Configuration Example:**
@@ -243,19 +273,19 @@ flowchart-elk
 
     SW1 --- SW2
 
-    style STORAGE1 fill:#e67e22,color:#fff
-    style STORAGE2 fill:#e67e22,color:#fff
-    style NIC1 fill:#95a5a6,color:#fff
-    style NIC2 fill:#95a5a6,color:#fff
-    style BOND fill:#34495e,color:#fff
-    style MGMT fill:#3498db,color:#fff
-    style BRIDGE fill:#2ecc71,color:#fff
-    style P1 fill:#e67e22,color:#fff
-    style P2 fill:#e67e22,color:#fff
-    style P3 fill:#e67e22,color:#fff
-    style P4 fill:#e67e22,color:#fff
-    style SW1 fill:#34495e,color:#fff
-    style SW2 fill:#34495e,color:#fff
+    style STORAGE1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style STORAGE2 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style NIC1 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style NIC2 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style BOND fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
+    style MGMT fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style BRIDGE fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style P1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P2 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P3 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P4 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style SW1 fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
+    style SW2 fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Configuration Example:**
@@ -384,6 +414,8 @@ Result: Each node has 8 paths (2 NICs × 4 portals)
 
 ## High Availability & Redundancy
 
+> **Note:** For detailed multipath concepts and configuration patterns, see [Multipath Concepts](../common/includes/multipath-concepts.md).
+
 ### Multipath Architecture
 
 NVMe native multipathing provides automatic failover and load balancing across multiple paths.
@@ -442,16 +474,16 @@ flowchart-elk
     PORTAL3 --> SUBSYS
     PORTAL4 --> SUBSYS
 
-    style HOST fill:#2374ab
-    style SUBSYS fill:#27ae60
-    style P1 fill:#95a5a6
-    style P2 fill:#95a5a6
-    style P3 fill:#95a5a6
-    style P4 fill:#95a5a6
-    style P5 fill:#95a5a6
-    style P6 fill:#95a5a6
-    style P7 fill:#95a5a6
-    style P8 fill:#95a5a6
+    style HOST fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style SUBSYS fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style P1 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P2 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P3 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P4 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P5 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P6 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P7 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P8 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Key Concepts:**
@@ -546,19 +578,19 @@ graph TB
     PATH7 -.-> STORAGE
     PATH8 -.-> STORAGE
 
-    style APP fill:#3498db,color:#fff
-    style DRIVER fill:#34495e,color:#fff
-    style CHECK fill:#9b59b6,color:#fff
-    style SELECT fill:#27ae60,color:#fff
-    style PATH1 fill:#e67e22,color:#fff
-    style PATH2 fill:#f39c12,color:#fff
-    style PATH3 fill:#c0392b,color:#fff
-    style PATH4 fill:#27ae60,color:#fff
-    style PATH5 fill:#f39c12,color:#fff
-    style PATH6 fill:#e67e22,color:#fff
-    style PATH7 fill:#f39c12,color:#fff
-    style PATH8 fill:#f39c12,color:#fff
-    style STORAGE fill:#2c3e50,color:#fff
+    style APP fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style DRIVER fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
+    style CHECK fill:#7d3c98,stroke:#333,stroke-width:2px,color:#fff
+    style SELECT fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style PATH1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style PATH2 fill:#d68910,stroke:#333,stroke-width:2px,color:#fff
+    style PATH3 fill:#a93226,stroke:#333,stroke-width:2px,color:#fff
+    style PATH4 fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style PATH5 fill:#d68910,stroke:#333,stroke-width:2px,color:#fff
+    style PATH6 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style PATH7 fill:#d68910,stroke:#333,stroke-width:2px,color:#fff
+    style PATH8 fill:#d68910,stroke:#333,stroke-width:2px,color:#fff
+    style STORAGE fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Example Scenario:**
@@ -1221,6 +1253,8 @@ ip neigh flush all
 
 ## Performance Optimization
 
+> **Note:** For comprehensive performance tuning guidance, see [Performance Tuning](../common/includes/performance-tuning.md).
+
 ### Performance Tuning Parameters
 
 #### 1. MTU Configuration
@@ -1430,6 +1464,8 @@ sysctl -p /etc/sysctl.d/99-nvme-tcp-arp.conf
 
 ## Security Best Practices
 
+> **Note:** For comprehensive security best practices, see [Security Best Practices](../common/includes/security-best-practices.md).
+
 ### Network Security
 
 #### 1. Network Isolation
@@ -1456,9 +1492,9 @@ graph TB
     NODE ---|Separate NIC| VM
     NODE ---|Storage NIC 1 & 2| STORAGE
 
-    style STORAGE fill:#e74c3c
-    style MGMT fill:#3498db
-    style VM fill:#2ecc71
+    style STORAGE fill:#c0392b,stroke:#333,stroke-width:2px,color:#fff
+    style MGMT fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style VM fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Best Practices:**
@@ -1502,6 +1538,8 @@ ss -tn | grep :4420
 ---
 
 ## Monitoring & Maintenance
+
+> **Note:** For comprehensive monitoring and maintenance procedures, see [Monitoring & Maintenance](../common/includes/monitoring-maintenance.md).
 
 ### Health Monitoring
 
@@ -1589,6 +1627,8 @@ done
 ```
 
 ## Troubleshooting
+
+> **Note:** For common troubleshooting procedures, see [Common Troubleshooting](../common/includes/troubleshooting-common.md).
 
 ### Common Issues and Solutions
 
@@ -1770,9 +1810,9 @@ graph TD
     RESOLVED -->|Yes| END[Complete]
     RESOLVED -->|No| ESCALATE[Escalate to<br/>Vendor Support]
 
-    style START fill:#3498db
-    style END fill:#27ae60
-    style ESCALATE fill:#e74c3c
+    style START fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style END fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style ESCALATE fill:#c0392b,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ---

@@ -2,6 +2,34 @@
 
 This guide shows how to manually configure iSCSI multipath on Proxmox
 
+> **Distribution-Specific Guides:** For detailed guides tailored to specific Linux distributions, see:
+> - [RHEL/Rocky/AlmaLinux Quick Start](../../distributions/rhel/iscsi/QUICKSTART.md)
+> - [Debian/Ubuntu Quick Start](../../distributions/debian/iscsi/QUICKSTART.md)
+> - [SUSE/openSUSE Quick Start](../../distributions/suse/iscsi/QUICKSTART.md)
+> - [Oracle Linux Quick Start](../../distributions/oracle/iscsi/QUICKSTART.md)
+
+---
+
+## ⚠️ Important Disclaimers
+
+> **Vendor Documentation Priority:**
+> - This guide is **specific to Pure Storage configurations** and should be used in conjunction with official vendor documentation
+> - Always consult and follow **Proxmox VE official documentation** for complete system configuration
+> - In case of any conflicts between this guide and vendor documentation, **vendor documentation takes precedence**
+>
+> **Testing Requirements:**
+> - All configurations and recommendations in this guide are **for reference only**
+> - **Test thoroughly in a lab environment** before implementing in production
+> - Validate all settings with your specific hardware, software versions, and workload requirements
+> - Performance and compatibility may vary based on your environment
+>
+> **Support:**
+> - For Pure Storage-specific issues, contact Pure Storage Support
+> - For Proxmox VE issues, consult Proxmox documentation or community forums
+> - This guide is provided as-is without warranty
+
+---
+
 ## Prerequisites
 
 - Proxmox VE 9.x or later
@@ -80,6 +108,8 @@ iscsiadm -m session
 ```
 
 ## Step 6: Configure Multipath
+
+> **Note:** For comprehensive multipath concepts and configuration patterns, see [Multipath Concepts](../common/includes/multipath-concepts.md).
 
 DM-Multipath configuration is beyond the scope of this guide. For more information see: https://support.purestorage.com/bundle/m_linux/page/Solutions/Oracle/Oracle_on_FlashArray/library/common_content/c_recommended_dmmultipath_settings.html
 

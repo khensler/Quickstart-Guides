@@ -2,6 +2,34 @@
 
 Generic guide for configuring NVMe over TCP storage on Proxmox VE using native CLI tools.
 
+> **Distribution-Specific Guides:** For detailed guides tailored to specific Linux distributions, see:
+> - [RHEL/Rocky/AlmaLinux Quick Start](../../distributions/rhel/nvme-tcp/QUICKSTART.md)
+> - [Debian/Ubuntu Quick Start](../../distributions/debian/nvme-tcp/QUICKSTART.md)
+> - [SUSE/openSUSE Quick Start](../../distributions/suse/nvme-tcp/QUICKSTART.md)
+> - [Oracle Linux Quick Start](../../distributions/oracle/nvme-tcp/QUICKSTART.md)
+
+---
+
+## ⚠️ Important Disclaimers
+
+> **Vendor Documentation Priority:**
+> - This guide is **specific to Pure Storage configurations** and should be used in conjunction with official vendor documentation
+> - Always consult and follow **Proxmox VE official documentation** for complete system configuration
+> - In case of any conflicts between this guide and vendor documentation, **vendor documentation takes precedence**
+>
+> **Testing Requirements:**
+> - All configurations and recommendations in this guide are **for reference only**
+> - **Test thoroughly in a lab environment** before implementing in production
+> - Validate all settings with your specific hardware, software versions, and workload requirements
+> - Performance and compatibility may vary based on your environment
+>
+> **Support:**
+> - For Pure Storage-specific issues, contact Pure Storage Support
+> - For Proxmox VE issues, consult Proxmox documentation or community forums
+> - This guide is provided as-is without warranty
+
+---
+
 ## Prerequisites
 
 - Proxmox VE 9.x or later
