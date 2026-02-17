@@ -110,31 +110,37 @@ path_selector "round-robin 0"
 
 ### Multipath Features
 
-#### queue_if_no_path
+#### queue_if_no_path (NOT RECOMMENDED)
 
 **What it does:** Queue I/O if all paths fail instead of returning errors
 
-**Recommended setting:** `features "1 queue_if_no_path"`
+**⚠️ NOT Recommended:** Avoid using `features "1 queue_if_no_path"` in production
+
+**Why it's dangerous:**
+- Causes I/O to hang **indefinitely** if paths don't recover
+- Can make system unresponsive during storage outages
+- Hung processes cannot be killed (D state)
+- May cause similar issues to VMware ESXi APD (All Paths Down) events
+
+**See also:** [APD (All Paths Down) Events](#understanding-apd-events) in iSCSI multipath configuration
+
+#### no_path_retry (RECOMMENDED)
+
+**What it does:** Number of times to retry I/O when all paths are down before failing
+
+**Recommended setting:** `no_path_retry 0`
 
 **Why:**
-- Prevents I/O errors during temporary path failures
-- Allows time for paths to recover
-- Critical for HA configurations
+- **`no_path_retry 0`** - Fail immediately when all paths are down (recommended)
+  - Applications receive errors and can handle them appropriately
+  - Prevents hung I/O and system hangs
+  - Most predictable behavior for applications
 
-**Caution:**
-- Can cause I/O to hang if paths don't recover
-- Monitor path status closely
+- **`no_path_retry 5-30`** - For environments with brief, transient failures
+  - Provides some tolerance for momentary path loss
+  - Still prevents indefinite hangs
 
-#### no_path_retry
-
-**What it does:** Number of times to retry I/O when all paths are down
-
-**Recommended setting:** `no_path_retry 30`
-
-**Why:**
-- Gives paths time to recover (30 seconds with 1-second intervals)
-- Prevents indefinite hangs
-- Balances between availability and responsiveness
+**Important:** The `no_path_retry` parameter **overrides** the `features "1 queue_if_no_path"` option
 
 ### Path Failure Detection
 

@@ -211,7 +211,7 @@ EOF
 echo 'options nvme_core multipath=Y' > /etc/modprobe.d/nvme-tcp.conf
 ```
 
-## Step 2: Generate Host NQN (All Nodes)
+## Step 3: Generate Host NQN (All Nodes)
 
 ```bash
 # Create directory
@@ -230,14 +230,17 @@ cat /etc/nvme/hostnqn
 
 ## Step 4: Discover Targets (Optional)
 
-Replace the `<PORTAL_IP_X>` with your actual portal IP addresses.  Replace `<INTERFACE_NAME>` with your actual interface name.  Replace `<INTERFACE_IP>` with the IP address of the interface. 
+Replace the `<PORTAL_IP_X>` with your actual portal IP addresses.  Replace `<INTERFACE_NAME>` with your actual interface name.  Replace `<INTERFACE_IP>` with the IP address of the interface.
+
+**Port Note:** Port 8009 is the NVMe-oF Discovery Controller port, used only for discovering available subsystems. Port 4420 is the NVMe-TCP data port, used for actual connections. Some storage arrays support discovery on port 4420 as well.
 
 ```bash
 # Discover available NVMe subsystems via specific interface
+# Port 8009 = Discovery Controller port (standard)
 nvme discover -t tcp \
     -a <PORTAL_IP_1> \
     -s 8009 \
-    --host-iface=<INTERFACE_NAME > \
+    --host-iface=<INTERFACE_NAME> \
     --host-traddr=<INTERFACE_IP>
 ```
 
@@ -388,9 +391,13 @@ cat > /etc/nvme/config.d/my-storage.conf << 'EOF'
 --transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
 --transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
 --transport=tcp --traddr=<PORTAL_IP_3> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
---transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=8009 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
-4420
+--transport=tcp --traddr=<PORTAL_IP_4> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<INTERFACE_IP_2> --nqn=<SUBSYSTEM_NQN> --ctrl-loss-tmo=1800 --reconnect-delay=10
+EOF
+```
 
+Enable and start the nvme-connect service:
+
+```bash
 # Enable automatic connection
 systemctl enable nvmf-autoconnect.service
 
@@ -418,7 +425,7 @@ nvme list-subsys
 nvme list
 ```
 
-## Step 7: Create LVM Volume Group (One Node)
+## Step 8: Create LVM Volume Group (One Node)
 
 ### GUI
 
@@ -525,8 +532,8 @@ lvs
 |---------|-------------|
 | `nvme list` | List NVMe devices |
 | `nvme list-subsys` | List subsystems and paths |
-| `nvme discover -t tcp -a <ip> -s 8009` | Discover targets |
-| `nvme connect -t tcp -a <ip> -n <nqn>` | Connect to target |
+| `nvme discover -t tcp -a <ip> -s 8009` | Discover targets (port 8009 = discovery controller) |
+| `nvme connect -t tcp -a <ip> -s 4420 -n <nqn>` | Connect to target (port 4420 = data port) |
 | `nvme disconnect -n <nqn>` | Disconnect from target |
 | `cat /sys/class/nvme-subsystem/*/iopolicy` | Check IO policy |
 

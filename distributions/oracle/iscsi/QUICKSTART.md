@@ -404,14 +404,18 @@ sudo multipath -ll
 sudo multipath -ll
 
 # Expected output: Shows iSCSI LUNs with multiple paths
-# Example:
+# Example (with recommended no_path_retry 0 configuration):
 # mpatha (36000c29e3c2e8c5e5e5e5e5e5e5e5e5e) dm-0 PURE,FlashArray
-# size=1.0T features='1 queue_if_no_path' hwhandler='1 alua' wp=rw
+# size=1.0T features='0' hwhandler='1 alua' wp=rw
 # `-+- policy='service-time 0' prio=50 status=active
 #   |- 2:0:0:1 sdb 8:16  active ready running
 #   |- 3:0:0:1 sdc 8:32  active ready running
 #   |- 4:0:0:1 sdd 8:48  active ready running
 #   `- 5:0:0:1 sde 8:64  active ready running
+#
+# Note: features='0' indicates no_path_retry is configured (recommended)
+# If you see features='1 queue_if_no_path', update multipath.conf to use
+# no_path_retry 0 to prevent APD (All Paths Down) hangs
 
 # Verify all paths are active
 sudo multipath -ll | grep -E "status=active|status=enabled"

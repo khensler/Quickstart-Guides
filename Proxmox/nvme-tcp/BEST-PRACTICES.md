@@ -1095,7 +1095,7 @@ Set the IO policy to queue-depth for optimal performance.
 # Create udev rule for automatic IO policy configuration
 cat > /etc/udev/rules.d/99-nvme-iopolicy.rules << 'EOF'
 # Set IO policy to queue-depth for all NVMe subsystems
-ACTION=="add|chnage", SUBSYSTEM=="nvme-subsystem", ATTR{iopolicy}="queue-depth"
+ACTION=="add|change", SUBSYSTEM=="nvme-subsystem", ATTR{iopolicy}="queue-depth"
 EOF
 # Why: Udev automatically applies this rule when NVMe subsystem is detected
 

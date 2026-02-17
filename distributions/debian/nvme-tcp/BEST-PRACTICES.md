@@ -289,53 +289,39 @@ sudo journalctl | grep -i apparmor
 sudo grep -i apparmor /var/log/syslog
 ```
 
-**Create profile for multipathd if needed:**
+**AppArmor and NVMe-TCP:**
+
+> **Note:** NVMe-TCP uses native NVMe multipathing, NOT dm-multipath (`multipathd`). There is no `multipathd` service for NVMe-TCP, so you don't need to create AppArmor profiles for it.
+
+**If you have custom applications accessing NVMe devices:**
 ```bash
 # Install AppArmor utilities
 sudo apt install -y apparmor-utils
 
-# Generate profile in complain mode
-sudo aa-genprof /sbin/multipathd
+# Check if any AppArmor denials related to NVMe
+sudo dmesg | grep -i apparmor | grep nvme
 
-# After testing, enforce the profile
-sudo aa-enforce /sbin/multipathd
-```
-
-**Common AppArmor adjustments for NVMe-TCP:**
-```bash
-# Edit multipathd profile
-sudo nano /etc/apparmor.d/local/usr.sbin.multipathd
-
-# Add necessary permissions
-/dev/nvme* rw,
-/sys/class/nvme/** r,
-/sys/devices/**/nvme*/** r,
-/run/multipathd.sock rw,
-
-# Reload AppArmor
-sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.multipathd
+# If you have custom scripts accessing NVMe devices,
+# you may need to add these permissions to their profiles:
+# /dev/nvme* rw,
+# /sys/class/nvme/** r,
+# /sys/devices/**/nvme*/** r,
 ```
 
 ### AppArmor Best Practices
 
 1. **Use complain mode for testing:**
    ```bash
-   # Set to complain mode
-   sudo aa-complain /sbin/multipathd
-
    # Test NVMe connections
    sudo nvme connect -t tcp -a <portal_ip> -s 4420 -n <nqn>
 
-   # Check for denials
+   # Check for any AppArmor denials
    sudo dmesg | grep -i apparmor
-
-   # Enforce after testing
-   sudo aa-enforce /sbin/multipathd
    ```
 
 2. **Never disable AppArmor in production (Ubuntu):**
    - Use complain mode for troubleshooting
-   - Create proper profiles
+   - Create proper profiles for custom applications
    - Document custom profiles
 
 3. **Monitor for denials:**
@@ -619,74 +605,73 @@ sudo udevadm trigger
 
 ## High Availability
 
-### Multipath Configuration for HA
+### Native NVMe Multipath Configuration for HA
 
-**Recommended multipath.conf:**
+NVMe-TCP uses **native NVMe multipathing** built into the Linux kernel. This is NOT dm-multipath (`multipath.conf`, `multipathd`) - those are for iSCSI/Fibre Channel only.
+
+**Enable Native NVMe Multipath:**
 ```bash
-sudo tee /etc/multipath.conf > /dev/null <<'EOF'
-defaults {
-    user_friendly_names yes
-    find_multipaths no
-    enable_foreign "^$"
+# Enable native NVMe multipathing
+echo 'options nvme_core multipath=Y' | sudo tee /etc/modprobe.d/nvme-tcp.conf
 
-    # HA settings
-    features "1 queue_if_no_path"
-    no_path_retry 30
+# Reboot to apply (required if nvme_core already loaded)
+sudo reboot
+```
 
-    # Performance
-    path_selector "service-time 0"
-    path_grouping_policy "group_by_prio"
-    failback immediate
-
-    # Timeouts
-    fast_io_fail_tmo 5
-    dev_loss_tmo 30
-}
-
-blacklist {
-    devnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st|zram)[0-9]*"
-    devnode "^hd[a-z]"
-    devnode "^cciss.*"
-    device {
-        vendor ".*"
-        product ".*"
-    }
-}
-
-blacklist_exceptions {
-    property "(SCSI_IDENT_|ID_WWN)"
-}
-
-# NVMe devices
-devices {
-    device {
-        vendor "NVME"
-        product ".*"
-        path_selector "service-time 0"
-        path_grouping_policy "group_by_prio"
-        prio "ana"
-        failback "immediate"
-        no_path_retry 30
-        rr_min_io_rq 1
-    }
-}
+**Configure IO Policy for HA:**
+```bash
+# Create udev rule for NVMe IO policy
+sudo tee /etc/udev/rules.d/99-nvme-iopolicy.rules > /dev/null <<'EOF'
+# Set IO policy to queue-depth for all NVMe subsystems (recommended for HA)
+ACTION=="add|change", SUBSYSTEM=="nvme-subsystem", ATTR{iopolicy}="queue-depth"
 EOF
 
-# Restart multipathd
-sudo systemctl restart multipathd
+# Reload udev rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+**Configure NVMe Connection Timeouts for HA:**
+```bash
+# When connecting, use appropriate timeout values
+# ctrl-loss-tmo: Time to wait before declaring controller lost (seconds)
+# reconnect-delay: Delay between reconnection attempts (seconds)
+
+# Example: Conservative HA settings
+nvme connect -t tcp -a <IP> -s 4420 -n <NQN> \
+    --ctrl-loss-tmo=1800 \
+    --reconnect-delay=10
+
+# For faster failover (may cause more transient errors):
+nvme connect -t tcp -a <IP> -s 4420 -n <NQN> \
+    --ctrl-loss-tmo=600 \
+    --reconnect-delay=5
+```
+
+**Verify Native Multipath Status:**
+```bash
+# Check multipath is enabled
+cat /sys/module/nvme_core/parameters/multipath
+# Should show: Y
+
+# View all paths per subsystem
+sudo nvme list-subsys
+
+# Check IO policy
+cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy
 ```
 
 ### Systemd Service Dependencies
 
 **Ensure proper boot order:**
 ```bash
-# Create drop-in for services that depend on storage
+# Create drop-in for services that depend on NVMe storage
 sudo mkdir -p /etc/systemd/system/libvirtd.service.d
 
 sudo tee /etc/systemd/system/libvirtd.service.d/storage.conf > /dev/null <<EOF
 [Unit]
-After=nvmf-autoconnect.service multipathd.service
-Requires=multipathd.service
+After=nvmf-autoconnect.service
+Wants=nvmf-autoconnect.service
 EOF
 
 # Reload systemd
@@ -697,22 +682,23 @@ sudo systemctl daemon-reload
 
 **Set up monitoring with systemd:**
 ```bash
-# Create monitoring script
+# Create monitoring script for native NVMe multipath
 sudo tee /usr/local/bin/check-nvme-paths.sh > /dev/null <<'EOF'
 #!/bin/bash
 
-# Check for failed paths
-FAILED=$(multipath -ll | grep -c "failed\|faulty")
+# Check native NVMe multipath status (NOT dm-multipath)
+# Count connections that are NOT in 'live' state
+FAILED=$(nvme list-subsys 2>/dev/null | grep -c -E "connecting|deleting")
 
 if [ $FAILED -gt 0 ]; then
-    echo "WARNING: $FAILED failed multipath paths detected"
-    multipath -ll | grep -E "failed|faulty"
+    echo "WARNING: $FAILED NVMe paths not in live state"
+    nvme list-subsys
     exit 1
 fi
 
 # Check connection count
 EXPECTED_CONNECTIONS=8
-ACTUAL=$(nvme list-subsys | grep -c "live")
+ACTUAL=$(nvme list-subsys 2>/dev/null | grep -c "live")
 
 if [ $ACTUAL -lt $EXPECTED_CONNECTIONS ]; then
     echo "WARNING: Only $ACTUAL of $EXPECTED_CONNECTIONS NVMe connections active"
@@ -720,7 +706,7 @@ if [ $ACTUAL -lt $EXPECTED_CONNECTIONS ]; then
     exit 1
 fi
 
-echo "OK: All storage paths healthy"
+echo "OK: All NVMe storage paths healthy"
 exit 0
 EOF
 
@@ -844,13 +830,11 @@ sudo apt install -y auditd audispd-plugins
 sudo tee -a /etc/audit/rules.d/storage.rules > /dev/null <<EOF
 # Monitor NVMe device access
 -w /dev/nvme0n1 -p rwa -k nvme_access
--w /dev/mapper/ -p rwa -k multipath_access
-
-# Monitor multipath configuration changes
--w /etc/multipath.conf -p wa -k multipath_config
 
 # Monitor NVMe configuration changes
 -w /etc/nvme/ -p wa -k nvme_config
+-w /etc/modprobe.d/nvme-tcp.conf -p wa -k nvme_multipath_config
+-w /etc/udev/rules.d/99-nvme-iopolicy.rules -p wa -k nvme_iopolicy_config
 EOF
 
 # Reload rules
@@ -925,23 +909,16 @@ sudo ufw allow 4420/tcp
 sudo ufw enable
 ```
 
-**Issue: AppArmor blocking multipathd**
+**Issue: AppArmor blocking NVMe access**
+
+> **Note:** NVMe-TCP uses native NVMe multipathing, NOT dm-multipath. There is no `multipathd` service for NVMe-TCP.
 
 ```bash
-# Check for denials
-sudo dmesg | grep -i apparmor | grep multipath
+# Check for AppArmor denials related to NVMe
+sudo dmesg | grep -i apparmor | grep nvme
 
-# Set to complain mode temporarily
-sudo aa-complain /sbin/multipathd
-
-# Test
-sudo systemctl restart multipathd
-
-# Check logs
-sudo journalctl -u multipathd
-
-# Create proper profile or enforce
-sudo aa-enforce /sbin/multipathd
+# If custom applications have AppArmor profiles and need NVMe access,
+# add permissions to their profiles in /etc/apparmor.d/local/
 ```
 
 **Issue: Package dependency problems**
@@ -977,8 +954,8 @@ sudo apt autoclean
 ## Maintenance Checklist
 
 **Daily:**
-- [ ] Check multipath status: `sudo multipath -ll`
-- [ ] Verify NVMe connections: `sudo nvme list-subsys`
+- [ ] Check NVMe path status: `sudo nvme list-subsys`
+- [ ] Check IO policy: `cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy`
 - [ ] Review system logs: `sudo journalctl -p err --since today`
 - [ ] Check firewall logs: `sudo journalctl -u ufw --since today` (Ubuntu)
 

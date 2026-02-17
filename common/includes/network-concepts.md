@@ -110,3 +110,66 @@ ethtool -L <interface> combined 4
 ethtool -A <interface> rx on tx on
 ```
 
+### IP Addressing Approaches
+
+There are two valid approaches for assigning IP addresses to multiple storage interfaces:
+
+#### Option A: Same Subnet (Recommended for Simplicity)
+
+**Configuration:**
+```
+Interface 1: 10.100.1.101/24
+Interface 2: 10.100.1.102/24
+Storage Array: 10.100.1.10-19/24
+```
+
+**Advantages:**
+- **Simpler routing**: All devices communicate directly without routing between subnets
+- **Single VLAN**: Only one VLAN needed for storage traffic
+- **Easy to understand**: Clear, sequential IP addressing scheme
+- **Fewer firewall rules**: No inter-VLAN routing to configure
+
+**Considerations:**
+- Both interfaces are on the same L2 broadcast domain
+- Requires careful planning to avoid IP conflicts
+- Multipath relies on interface binding, not separate subnets
+
+**Best for:** Proxmox clusters, environments with straightforward network design
+
+#### Option B: Different Subnets (Recommended for Isolation)
+
+**Configuration:**
+```
+Interface 1: 10.100.1.101/24 (VLAN 100)
+Interface 2: 10.100.2.101/24 (VLAN 101)
+Storage Array: 10.100.1.10/24 and 10.100.2.10/24
+```
+
+**Advantages:**
+- **Network path isolation**: Each subnet can use different physical paths
+- **Failure domain separation**: Issues in one subnet don't affect the other
+- **Easier troubleshooting**: Clear separation of traffic per subnet
+- **Required for some switch designs**: Necessary if using separate switch fabrics
+
+**Considerations:**
+- Storage array needs IPs in both subnets
+- Requires two VLANs and potentially more complex switch configuration
+- May need policy-based routing on hosts
+
+**Best for:** Enterprise environments requiring strict network isolation
+
+#### Choosing the Right Approach
+
+| Factor | Same Subnet | Different Subnets |
+|--------|------------|-------------------|
+| **Network complexity** | Lower | Higher |
+| **Failure isolation** | Shared L2 domain | Separate L2 domains |
+| **Switch requirements** | Single VLAN | Multiple VLANs |
+| **Multipath method** | Interface binding | Subnet-based paths |
+| **Routing** | None required | May need policy routing |
+
+**Important:** Both approaches work correctly with multipath. The key is:
+- **iSCSI**: Uses interface binding in iscsiadm to ensure traffic uses specific interfaces
+- **NVMe-TCP**: Uses `--host-iface` and `--host-traddr` parameters to bind connections to interfaces
+
+Choose based on your network infrastructure requirements and organizational preferences.

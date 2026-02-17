@@ -42,11 +42,8 @@ Guide for configuring NVMe over TCP storage on SUSE Linux Enterprise Server (SLE
 sudo zypper refresh
 sudo zypper update -y
 
-# Install NVMe tools and multipath
-sudo zypper install -y nvme-cli multipath-tools
-
-# Enable and start multipathd
-sudo systemctl enable --now multipathd
+# Install NVMe tools
+sudo zypper install -y nvme-cli
 ```
 
 **Verify installation:**
@@ -54,9 +51,11 @@ sudo systemctl enable --now multipathd
 # Check NVMe CLI version
 nvme version
 
-# Check multipathd status
-systemctl status multipathd
+# Verify NVMe-TCP module is available
+modinfo nvme-tcp
 ```
+
+> **Note:** NVMe-TCP uses **native NVMe multipathing** built into the Linux kernel, not dm-multipath (device-mapper-multipath). The `multipath-tools` package is NOT needed for NVMe-TCP - it is only used for iSCSI and Fibre Channel.
 
 ## Step 2: Configure Network Interfaces
 
@@ -309,87 +308,74 @@ sudo nvme list-subsys
 # Expected output shows multiple controllers (paths) per subsystem
 ```
 
-## Step 7: Configure Multipath
+## Step 7: Configure Native NVMe Multipath
 
-### Create Multipath Configuration
+NVMe-TCP uses **native NVMe multipathing** built into the Linux kernel. This is different from dm-multipath (used for iSCSI/FC) and provides lower latency and simpler configuration.
+
+### Enable Native NVMe Multipath
 
 ```bash
-# Backup existing config if present
-sudo cp /etc/multipath.conf /etc/multipath.conf.bak 2>/dev/null || true
+# Enable native NVMe multipathing (must be done before connecting)
+echo 'options nvme_core multipath=Y' | sudo tee /etc/modprobe.d/nvme-tcp.conf
 
-# Create multipath configuration
-sudo tee /etc/multipath.conf > /dev/null <<'EOF'
-defaults {
-    user_friendly_names yes
-    find_multipaths no
-    enable_foreign "^$"
-}
+# If module is already loaded, you need to reload it or reboot
+# Option 1: Reboot (recommended for production)
+sudo reboot
 
-blacklist {
-    devnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st)[0-9]*"
-    devnode "^hd[a-z]"
-    devnode "^cciss.*"
-}
+# Option 2: Reload modules (only if no NVMe devices in use)
+# sudo modprobe -r nvme_tcp nvme_core
+# sudo modprobe nvme_core
+# sudo modprobe nvme_tcp
+```
 
-# Add your storage vendor configuration here
-# Example for Pure Storage:
-devices {
-    device {
-        vendor "PURE"
-        product "FlashArray"
-        path_selector "service-time 0"
-        path_grouping_policy "group_by_prio"
-        prio "alua"
-        failback "immediate"
-        path_checker "tur"
-        fast_io_fail_tmo 10
-        dev_loss_tmo 60
-        no_path_retry 0
-        hardware_handler "1 alua"
-        rr_min_io_rq 1
-    }
-}
+### Configure IO Policy with udev
 
-# Example for generic NVMe devices:
-devices {
-    device {
-        vendor "NVME"
-        product ".*"
-        path_selector "service-time 0"
-        path_grouping_policy "group_by_prio"
-        prio "ana"
-        failback "immediate"
-        no_path_retry 30
-    }
-}
+Create a udev rule to automatically set the IO policy when NVMe subsystems are created:
+
+```bash
+# Create udev rule for NVMe IO policy
+sudo tee /etc/udev/rules.d/99-nvme-iopolicy.rules > /dev/null <<'EOF'
+# Set IO policy to queue-depth for all NVMe subsystems
+ACTION=="add|change", SUBSYSTEM=="nvme-subsystem", ATTR{iopolicy}="queue-depth"
 EOF
 
-# Restart multipathd to apply configuration
-sudo systemctl restart multipathd
+# Reload udev rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
 
-# Verify multipath devices
-sudo multipath -ll
+# Apply to existing subsystems (for current session)
+for subsys in /sys/class/nvme-subsystem/nvme-subsys*; do
+    echo "queue-depth" | sudo tee "$subsys/iopolicy" 2>/dev/null || true
+done
 ```
 
-### Verify Multipath Configuration
+### Verify Native Multipath Configuration
 
 ```bash
-# Check multipath status
-sudo multipath -ll
+# Check that native multipath is enabled
+cat /sys/module/nvme_core/parameters/multipath
+# Expected output: Y
 
-# Expected output: Shows NVMe namespaces with multiple paths
-# Example:
-# mpatha (36000c29e3c2e8c5e5e5e5e5e5e5e5e5e) dm-0 NVME,Pure Storage FlashArray
-# size=1.0T features='1 queue_if_no_path' hwhandler='0' wp=rw
-# `-+- policy='service-time 0' prio=50 status=active
-#   |- 0:1:1 nvme0n1 259:0 active ready running
-#   |- 1:2:1 nvme1n1 259:1 active ready running
-#   |- 2:3:1 nvme2n1 259:2 active ready running
-#   `- 3:4:1 nvme3n1 259:3 active ready running
+# Check IO policy for all subsystems
+cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy
+# Expected output: queue-depth
 
-# Verify all paths are active
-sudo multipath -ll | grep -E "status=active|status=enabled"
+# List all NVMe subsystems with paths
+sudo nvme list-subsys
+
+# Expected output shows multiple controllers (paths) per subsystem:
+# nvme-subsys0 - NQN=nqn.2010-06.com.purestorage:flasharray...
+#  +- nvme0 tcp traddr=10.100.1.10,trsvcid=4420 live
+#  +- nvme1 tcp traddr=10.100.1.11,trsvcid=4420 live
+#  +- nvme2 tcp traddr=10.100.2.10,trsvcid=4420 live
+#  +- nvme3 tcp traddr=10.100.2.11,trsvcid=4420 live
+
+# With native multipath, you see a single device per namespace
+sudo nvme list
+# Shows /dev/nvme0n1 (single device, kernel handles multipathing internally)
 ```
+
+> **Important:** With native NVMe multipathing, the kernel presents a single `/dev/nvmeXnY` device per namespace and automatically handles path selection and failover. You do NOT use `/dev/mapper/` devices or `multipath -ll` commands - those are for dm-multipath (iSCSI/FC only).
 
 ## Step 8: Configure Persistent Connections
 
@@ -462,14 +448,15 @@ sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 ## Step 9: Create LVM Storage
 
 ```bash
-# Find your multipath device
-sudo multipath -ll
+# List NVMe devices (with native multipath, you see single device per namespace)
+sudo nvme list
+# Example output: /dev/nvme0n1
 
-# Create physical volume (use /dev/mapper/mpathX)
-sudo pvcreate /dev/mapper/mpatha
+# Create physical volume using the NVMe device directly
+sudo pvcreate /dev/nvme0n1
 
 # Create volume group
-sudo vgcreate nvme-storage /dev/mapper/mpatha
+sudo vgcreate nvme-storage /dev/nvme0n1
 
 # Create logical volume (example: 500GB)
 sudo lvcreate -L 500G -n data nvme-storage
@@ -489,6 +476,8 @@ echo '/dev/nvme-storage/data /mnt/nvme-storage xfs defaults,_netdev 0 0' | sudo 
 
 **Note:** The `_netdev` option ensures the filesystem is mounted after network is available.
 
+> **Important:** With native NVMe multipathing, use `/dev/nvmeXnY` directly - NOT `/dev/mapper/mpathX`. The kernel handles multipathing internally.
+
 **Alternative: Use Btrfs (SUSE default):**
 ```bash
 # Format with Btrfs
@@ -504,11 +493,14 @@ echo '/dev/nvme-storage/data /mnt/nvme-storage btrfs defaults,_netdev 0 0' | sud
 ## Step 10: Verify Configuration
 
 ```bash
-# Check NVMe connections
+# Check NVMe connections and paths
 sudo nvme list-subsys
 
-# Check multipath devices
-sudo multipath -ll
+# Check IO policy
+cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy
+
+# Check native multipath is enabled
+cat /sys/module/nvme_core/parameters/multipath
 
 # Check LVM
 sudo pvs
@@ -535,16 +527,7 @@ sudo aa-status
 
 # Check for denials
 sudo dmesg | grep -i apparmor
-
-# If needed, set to complain mode temporarily for testing
-sudo aa-complain /usr/sbin/multipathd
-
-# Make permanent (not recommended for production)
-sudo ln -s /etc/apparmor.d/usr.sbin.multipathd /etc/apparmor.d/disable/
-sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.multipathd
 ```
-
-**Better approach:** Create AppArmor profile for NVMe-TCP if needed.
 
 ### Connection Failures
 
@@ -567,21 +550,29 @@ sudo journalctl -u nvmf-autoconnect -f
 sudo dmesg | grep nvme
 ```
 
-### Multipath Not Working
+### Native Multipath Not Working
 
 ```bash
-# Restart multipathd
-sudo systemctl restart multipathd
+# Check if native multipath is enabled
+cat /sys/module/nvme_core/parameters/multipath
+# Should show: Y
 
-# Reload configuration
-sudo multipath -r
+# If not enabled, check modprobe config
+cat /etc/modprobe.d/nvme-tcp.conf
+# Should contain: options nvme_core multipath=Y
 
-# Check for blacklisted devices
-sudo multipath -v3
+# Check all paths are visible
+sudo nvme list-subsys
+# Each subsystem should show multiple controllers
 
-# Verify device-mapper
-sudo dmsetup ls
+# Check IO policy
+cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy
+
+# Check for NVMe errors
+sudo dmesg | grep -i nvme
 ```
+
+> **Note:** NVMe-TCP does NOT use dm-multipath (`multipath -ll`, `multipathd`). Those tools are for iSCSI/FC only. Use `nvme list-subsys` to view NVMe paths.
 
 ### Wicked Network Issues
 
@@ -635,14 +626,14 @@ sudo nvme list-subsys
 sudo nvme disconnect -n <NQN>
 ```
 
-**Check multipath:**
+**Check paths (native NVMe multipath):**
 ```bash
-sudo multipath -ll
+sudo nvme list-subsys
 ```
 
-**Reload multipath:**
+**Check IO policy:**
 ```bash
-sudo systemctl restart multipathd
+cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy
 ```
 
 **Reload network (wicked):**

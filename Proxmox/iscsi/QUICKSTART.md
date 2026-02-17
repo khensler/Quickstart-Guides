@@ -119,14 +119,18 @@ DM-Multipath configuration is beyond the scope of this guide. For more informati
 # Find your multipath device
 multipath -ll
 
-# Example output
+# Example output (with recommended no_path_retry 0 configuration)
 3624a93708eabcb40cc4241b202b61a7c dm-8 PURE,FlashArray
-size=5.0T features='1 queue_if_no_path' hwhandler='1 alua' wp=rw
+size=5.0T features='0' hwhandler='1 alua' wp=rw
 `-+- policy='service-time 0' prio=50 status=active
   |- 20:0:0:254 sdb 8:16 active ready running
   |- 21:0:0:254 sdc 8:32 active ready running
   |- 22:0:0:254 sdd 8:48 active ready running
   `- 23:0:0:254 sde 8:64 active ready running
+
+# Note: features='0' indicates no_path_retry is configured (recommended)
+# If you see features='1 queue_if_no_path', update multipath.conf to use
+# no_path_retry 0 to prevent APD (All Paths Down) hangs
 ```
 
 In the example above the multipath device is `3624a93708eabcb40cc4241b202b61a7c` WWID of the device.  The device name will be different for each environment.  The device name will be the same for each node.  The device name can be used to create the LVM physical volume and volume group.  
