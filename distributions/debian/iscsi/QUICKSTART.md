@@ -35,6 +35,22 @@ Guide for configuring iSCSI storage on Debian and Ubuntu systems.
 - Network connectivity between hosts and storage
 - Root or sudo access
 
+## Key Terminology
+
+> **📖 New to iSCSI?** See the complete [Storage Terminology Glossary](../../common/includes/glossary.md) for definitions of all terms used in this guide.
+
+| Term | Definition |
+|------|------------|
+| **IQN** | iSCSI Qualified Name - unique identifier for initiators and targets (e.g., `iqn.1993-08.org.debian:01:server01`) |
+| **Portal** | IP address and port combination for iSCSI access (e.g., `10.100.1.10:3260`) |
+| **Target** | Storage array component that receives iSCSI connections |
+| **Initiator** | Host-side component that initiates iSCSI connections |
+| **LUN** | Logical Unit Number - individual storage volume presented to the host |
+| **Multipath** | Multiple network paths between host and storage for redundancy |
+| **CHAP** | Challenge-Handshake Authentication Protocol for iSCSI security |
+
+> **⚠️ ARP Configuration Required for Same-Subnet Multipath**: When using multiple interfaces on the same subnet, proper ARP configuration (`arp_ignore=2`, `arp_announce=2`) is **critical** to prevent routing issues. See [ARP Configuration for Same-Subnet Multipath](../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath) for details.
+
 ## Step 1: Install Required Packages
 
 ```bash

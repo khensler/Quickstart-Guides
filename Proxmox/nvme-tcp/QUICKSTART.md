@@ -39,6 +39,19 @@ Generic guide for configuring NVMe over TCP storage on Proxmox VE using native C
 - Dedicated network interfaces for storage traffic (recommended)
 - Network connectivity between Proxmox nodes and storage
 
+## Key Terminology
+
+> **📖 New to NVMe-TCP?** See the complete [Storage Terminology Glossary](../common/includes/glossary.md) for definitions of all terms used in this guide.
+
+| Term | Definition |
+|------|------------|
+| **NQN** | NVMe Qualified Name - unique identifier for hosts and subsystems |
+| **Subsystem** | NVMe storage entity containing one or more namespaces (analogous to iSCSI target) |
+| **Namespace** | Individual NVMe storage volume (analogous to iSCSI LUN) |
+| **Portal** | IP address and port for NVMe-TCP access (data: 4420, discovery: 8009) |
+| **Host NQN** | Unique identifier for this host, stored in `/etc/nvme/hostnqn` |
+| **Native Multipath** | Kernel-level multipathing for NVMe, enabled via `nvme_core multipath=Y` |
+
 ## Step 1: Configure Network Interfaces (All Nodes)
 
 For optimal performance and reliability, configure dedicated network interfaces for NVMe-TCP traffic.
@@ -182,9 +195,10 @@ Repeat on each node
 ### Network Design Notes
 
 - **Jumbo frames (MTU 9000)**: Recommended for storage traffic. Ensure switches and storage support jumbo frames end-to-end.
-- **Same Subnet**:  This configuration assumes the same subnet.  Multiple subnets may be used if needed.  
-- **No bonding**: Do not use a bond interface for storage. If the interfaces are part of a bond the inerface name or raw device setting will apply the configuration to the specific interface.  
+- **Same Subnet**:  This configuration assumes the same subnet.  Multiple subnets may be used if needed.
+- **No bonding**: Do not use a bond interface for storage. If the interfaces are part of a bond the inerface name or raw device setting will apply the configuration to the specific interface.
 - **No Routing Of Storage Traffic**:  The interfaces should be on the same subnet as the storage endpoints.  If this is not the case manual routing will be necessary.
+- **⚠️ ARP Configuration Required for Same-Subnet**: When using multiple interfaces on the same subnet, proper ARP configuration (`arp_ignore=2`, `arp_announce=2`) is **critical** to prevent routing issues. See [ARP Configuration for Same-Subnet Multipath](../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath) and the [Best Practices Guide](./BEST-PRACTICES.md) for detailed configuration.
 
 ## Step 2: Install Dependencies (All Nodes)
 

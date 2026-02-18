@@ -500,6 +500,19 @@ vm.swappiness = 10
 
 # UEK-specific optimizations
 kernel.numa_balancing = 0
+
+# ARP settings for same-subnet multipath (CRITICAL)
+# Prevents ARP responses on wrong interface when multiple NICs share same subnet
+# See: ../../common/includes/network-concepts.md for detailed explanation
+net.ipv4.conf.all.arp_ignore = 2
+net.ipv4.conf.default.arp_ignore = 2
+net.ipv4.conf.all.arp_announce = 2
+net.ipv4.conf.default.arp_announce = 2
+# Interface-specific (adjust interface names as needed)
+net.ipv4.conf.ens1f0.arp_ignore = 2
+net.ipv4.conf.ens1f1.arp_ignore = 2
+net.ipv4.conf.ens1f0.arp_announce = 2
+net.ipv4.conf.ens1f1.arp_announce = 2
 EOF
 
 # Apply settings

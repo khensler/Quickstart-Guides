@@ -478,6 +478,19 @@ net.ipv4.neigh.default.gc_thresh1=4096
 net.ipv4.neigh.default.gc_thresh2=8192
 net.ipv4.neigh.default.gc_thresh3=16384
 
+# ARP settings for same-subnet multipath (CRITICAL)
+# Prevents ARP responses on wrong interface when multiple NICs share same subnet
+# See: ../../common/includes/network-concepts.md for detailed explanation
+net.ipv4.conf.all.arp_ignore=2
+net.ipv4.conf.default.arp_ignore=2
+net.ipv4.conf.all.arp_announce=2
+net.ipv4.conf.default.arp_announce=2
+# Interface-specific (adjust interface names as needed)
+net.ipv4.conf.ens1f0.arp_ignore=2
+net.ipv4.conf.ens1f1.arp_ignore=2
+net.ipv4.conf.ens1f0.arp_announce=2
+net.ipv4.conf.ens1f1.arp_announce=2
+
 [disk]
 # I/O scheduler for NVMe
 elevator=none

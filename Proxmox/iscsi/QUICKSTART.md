@@ -39,6 +39,21 @@ This guide shows how to manually configure iSCSI multipath on Proxmox
 - Dedicated network interfaces for storage traffic (recommended)
 - Network connectivity between Proxmox nodes and storage
 
+## Key Terminology
+
+> **📖 New to iSCSI?** See the complete [Storage Terminology Glossary](../common/includes/glossary.md) for definitions of all terms used in this guide.
+
+| Term | Definition |
+|------|------------|
+| **IQN** | iSCSI Qualified Name - unique identifier for initiators and targets |
+| **Portal** | IP address and port combination for iSCSI access (default port: 3260) |
+| **Target** | Storage array component that receives iSCSI connections |
+| **Initiator** | Host-side component that initiates iSCSI connections |
+| **LUN** | Logical Unit Number - individual storage volume presented to the host |
+| **Multipath** | Multiple network paths between host and storage for redundancy |
+
+> **⚠️ ARP Configuration Required for Same-Subnet Multipath**: When using multiple interfaces on the same subnet, proper ARP configuration (`arp_ignore=2`, `arp_announce=2`) is **critical** to prevent routing issues that can break multipath. See [ARP Configuration for Same-Subnet Multipath](../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath) for detailed configuration instructions and explanation.
+
 ## Step 1: Install iSCSI and Multipath Tools
 
 ```bash

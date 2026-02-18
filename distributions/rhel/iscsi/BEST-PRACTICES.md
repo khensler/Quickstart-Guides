@@ -600,6 +600,19 @@ net.ipv4.tcp_low_latency = 1
 vm.dirty_ratio = 10
 vm.dirty_background_ratio = 5
 vm.swappiness = 10
+
+# ARP settings for same-subnet multipath (CRITICAL)
+# Prevents ARP responses on wrong interface when multiple NICs share same subnet
+# See: ../../common/includes/network-concepts.md for detailed explanation
+net.ipv4.conf.all.arp_ignore = 2
+net.ipv4.conf.default.arp_ignore = 2
+net.ipv4.conf.all.arp_announce = 2
+net.ipv4.conf.default.arp_announce = 2
+# Interface-specific (adjust interface names as needed)
+net.ipv4.conf.ens1f0.arp_ignore = 2
+net.ipv4.conf.ens1f1.arp_ignore = 2
+net.ipv4.conf.ens1f0.arp_announce = 2
+net.ipv4.conf.ens1f1.arp_announce = 2
 EOF
 
 # Apply settings

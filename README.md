@@ -39,6 +39,7 @@ A collection of quick start guides for various technologies and configurations.
 
 ### Common Reference Documentation
 
+- **[Storage Terminology Glossary](common/includes/glossary.md)** - Definitions for iSCSI, NVMe-TCP, and storage terms (IQN, NQN, Portal, LUN, Namespace, etc.)
 - [Network Concepts](common/includes/network-concepts.md) - Network architecture, topology, MTU, and performance tuning
 - [Multipath Concepts](common/includes/multipath-concepts.md) - Multipath configuration, path selection, and monitoring
 - [Performance Tuning](common/includes/performance-tuning.md) - CPU/IRQ tuning, kernel parameters, I/O scheduler

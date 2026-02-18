@@ -133,6 +133,7 @@ Storage Array: 10.100.1.10-19/24
 - Both interfaces are on the same L2 broadcast domain
 - Requires careful planning to avoid IP conflicts
 - Multipath relies on interface binding, not separate subnets
+- **⚠️ Requires ARP configuration** (see [ARP Configuration for Same-Subnet Multipath](#arp-configuration-for-same-subnet-multipath) below)
 
 **Best for:** Proxmox clusters, environments with straightforward network design
 
@@ -173,3 +174,130 @@ Storage Array: 10.100.1.10/24 and 10.100.2.10/24
 - **NVMe-TCP**: Uses `--host-iface` and `--host-traddr` parameters to bind connections to interfaces
 
 Choose based on your network infrastructure requirements and organizational preferences.
+
+### ARP Configuration for Same-Subnet Multipath
+
+> ⚠️ **Critical for Same-Subnet Deployments:** When using multiple interfaces on the same subnet (Option A above), proper ARP configuration is **essential** to prevent routing issues that can break multipath.
+
+#### The Problem
+
+When multiple network interfaces are assigned IP addresses in the same subnet (e.g., `10.100.1.101` on ens1f0 and `10.100.1.102` on ens1f1), Linux's default ARP behavior can cause problems:
+
+**Default Behavior (arp_ignore=0):**
+```
+Storage Portal 10.100.1.10 sends ARP: "Who has 10.100.1.101?"
+Without arp_ignore: BOTH ens1f0 AND ens1f1 might respond
+Result: Storage array gets confused about which MAC address to use
+Impact: Packets may be sent to wrong interface, breaking multipath
+```
+
+**Why This Breaks Multipath:**
+- Storage array may cache the wrong MAC address for an IP
+- Traffic sent to one interface but routed through another (asymmetric routing)
+- Breaks multipath path selection - kernel expects traffic on specific interfaces
+- Causes intermittent connection failures and performance issues
+
+#### The Solution: arp_ignore and arp_announce
+
+**arp_ignore** controls which interfaces respond to ARP requests:
+
+| Value | Behavior | Use Case |
+|-------|----------|----------|
+| **0** (default) | Reply to ARP requests on any interface | Single interface per subnet |
+| **1** | Reply only if target IP is local address on incoming interface | Partial protection |
+| **2** | Reply only if target IP is local address on incoming interface AND sender IP is in same subnet | **Recommended for multipath** |
+
+**arp_announce** controls the source IP used when sending ARP requests:
+
+| Value | Behavior | Use Case |
+|-------|----------|----------|
+| **0** (default) | Use any local address | May cause confusion |
+| **1** | Avoid addresses not in target's subnet | Better behavior |
+| **2** | Use best local address for this target | **Recommended for multipath** |
+
+#### Configuration
+
+**Create persistent sysctl configuration:**
+
+```bash
+# For NVMe-TCP storage
+cat > /etc/sysctl.d/99-nvme-tcp-arp.conf << 'EOF'
+# ARP configuration for storage multipath
+# Prevents ARP responses on wrong interface when multiple NICs share same subnet
+
+# For dedicated physical interfaces (adjust interface names as needed)
+net.ipv4.conf.ens1f0.arp_ignore = 2
+net.ipv4.conf.ens1f1.arp_ignore = 2
+net.ipv4.conf.ens1f0.arp_announce = 2
+net.ipv4.conf.ens1f1.arp_announce = 2
+
+# For VLAN interfaces (uncomment if using VLANs)
+#net.ipv4.conf.ens1f0/100.arp_ignore = 2
+#net.ipv4.conf.ens1f1/100.arp_ignore = 2
+#net.ipv4.conf.ens1f0/100.arp_announce = 2
+#net.ipv4.conf.ens1f1/100.arp_announce = 2
+
+# Global settings (applies to all interfaces)
+net.ipv4.conf.all.arp_ignore = 2
+net.ipv4.conf.default.arp_ignore = 2
+net.ipv4.conf.all.arp_announce = 2
+net.ipv4.conf.default.arp_announce = 2
+EOF
+
+# For iSCSI storage (same settings, different file name for clarity)
+cat > /etc/sysctl.d/99-iscsi-arp.conf << 'EOF'
+# ARP configuration for iSCSI multipath
+net.ipv4.conf.ens1f0.arp_ignore = 2
+net.ipv4.conf.ens1f1.arp_ignore = 2
+net.ipv4.conf.ens1f0.arp_announce = 2
+net.ipv4.conf.ens1f1.arp_announce = 2
+net.ipv4.conf.all.arp_ignore = 2
+net.ipv4.conf.default.arp_ignore = 2
+net.ipv4.conf.all.arp_announce = 2
+net.ipv4.conf.default.arp_announce = 2
+EOF
+
+# Apply settings immediately
+sysctl -p /etc/sysctl.d/99-nvme-tcp-arp.conf
+# or
+sysctl -p /etc/sysctl.d/99-iscsi-arp.conf
+```
+
+#### Verification
+
+```bash
+# Verify settings are applied
+sysctl net.ipv4.conf.ens1f0.arp_ignore
+sysctl net.ipv4.conf.ens1f1.arp_ignore
+# Expected output: net.ipv4.conf.ens1f0.arp_ignore = 2
+
+# Test ARP behavior from another host on same subnet
+arping -I <interface> 10.100.1.101
+# Should only get response from ens1f0's MAC address, not ens1f1
+
+# Monitor ARP traffic
+tcpdump -i ens1f0 arp &
+tcpdump -i ens1f1 arp &
+# Each interface should only respond to ARP requests for its own IP
+
+# Check ARP cache
+ip neigh show
+# Clear ARP cache if needed after configuration changes
+ip neigh flush all
+```
+
+#### Why arp_ignore=2 is Critical for Storage Multipath
+
+- **Ensures correct path selection**: Each interface only responds for its own IP
+- **Prevents asymmetric routing**: Traffic sent to .101 always uses ens1f0, traffic to .102 always uses ens1f1
+- **Maintains multipath integrity**: Storage array can reliably use all paths
+- **Avoids connection confusion**: Each path remains distinct and predictable
+
+#### When ARP Configuration is NOT Required
+
+ARP configuration is **not needed** when using:
+- **Different subnets** (Option B above): Each interface is in a different broadcast domain
+- **Single storage interface**: No ARP confusion possible
+- **Bonded interfaces**: Bond handles the single IP address
+
+**Reference:** [Linux Virtual Server - ARP Configuration](https://kb.linuxvirtualserver.org/wiki/Using_arp_announce/arp_ignore_to_disable_ARP)
