@@ -405,7 +405,7 @@ sudo firewall-cmd --reload
 ## iSCSI Architecture
 
 For comprehensive information on iSCSI architecture, topologies, and design principles, see:
-- [iSCSI Architecture and Design](../../common/includes/iscsi-architecture.md)
+- [iSCSI Architecture and Design](../../../common/includes/iscsi-architecture.md)
 
 **Key points for RHEL:**
 - Use dedicated storage networks (VLANs or physical)
@@ -419,7 +419,7 @@ For comprehensive information on iSCSI architecture, topologies, and design prin
 ## Multipath Configuration
 
 For detailed multipath configuration information, see:
-- [iSCSI Multipath Configuration](../../common/includes/iscsi-multipath-config.md)
+- [iSCSI Multipath Configuration](../../../common/includes/iscsi-multipath-config.md)
 
 ### RHEL-Specific Multipath Setup
 
@@ -485,8 +485,8 @@ sudo journalctl -u multipathd -n 50
 ## Performance Tuning
 
 For comprehensive performance tuning information, see:
-- [iSCSI Performance Tuning](../../common/includes/iscsi-performance-tuning.md)
-- [General Performance Tuning](../../common/includes/performance-tuning.md)
+- [iSCSI Performance Tuning](../../../common/includes/iscsi-performance-tuning.md)
+- [General Performance Tuning](../../../common/includes/performance-tuning.md)
 
 ### RHEL-Specific Tuning
 
@@ -603,7 +603,7 @@ vm.swappiness = 10
 
 # ARP settings for same-subnet multipath (CRITICAL)
 # Prevents ARP responses on wrong interface when multiple NICs share same subnet
-# See: ../../common/includes/network-concepts.md for detailed explanation
+# See: ../../../common/includes/network-concepts.md for detailed explanation
 net.ipv4.conf.all.arp_ignore = 2
 net.ipv4.conf.default.arp_ignore = 2
 net.ipv4.conf.all.arp_announce = 2
@@ -699,7 +699,7 @@ sudo pcs resource status
 ## Monitoring & Maintenance
 
 For general monitoring and maintenance procedures, see:
-- [Monitoring & Maintenance](../../common/includes/monitoring-maintenance.md)
+- [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md)
 
 ### RHEL-Specific Monitoring
 
@@ -789,7 +789,7 @@ echo "0 */6 * * * /usr/local/bin/iscsi-health-check.sh >> /var/log/iscsi-health.
 ## Security
 
 For general security best practices, see:
-- [Security Best Practices](../../common/includes/security-best-practices.md)
+- [Security Best Practices](../../../common/includes/security-best-practices.md)
 
 ### RHEL-Specific Security
 
@@ -846,7 +846,7 @@ sudo ausearch -k iscsi_commands
 ## Troubleshooting
 
 For common troubleshooting procedures, see:
-- [Common Troubleshooting](../../common/includes/troubleshooting-common.md)
+- [Common Troubleshooting](../../../common/includes/troubleshooting-common.md)
 
 ### RHEL-Specific Troubleshooting
 
@@ -952,8 +952,8 @@ sudo tuned-adm verify
 
 - [RHEL Storage Administration Guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/managing_storage_devices/)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts](../../common/includes/network-concepts.md)
-- [Multipath Concepts](../../common/includes/multipath-concepts.md)
+- [Common Network Concepts](../../../common/includes/network-concepts.md)
+- [Multipath Concepts](../../../common/includes/multipath-concepts.md)
 
 ---
 

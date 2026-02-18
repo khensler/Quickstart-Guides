@@ -395,7 +395,7 @@ sudo firewall-cmd --zone=storage --list-all
 ## iSCSI Architecture
 
 For comprehensive information on iSCSI architecture, topologies, and design principles, see:
-- [iSCSI Architecture and Design](../../common/includes/iscsi-architecture.md)
+- [iSCSI Architecture and Design](../../../common/includes/iscsi-architecture.md)
 
 **Key points for Oracle Linux:**
 - Use dedicated storage networks (VLANs or physical)
@@ -409,7 +409,7 @@ For comprehensive information on iSCSI architecture, topologies, and design prin
 ## Multipath Configuration
 
 For detailed multipath configuration information, see:
-- [iSCSI Multipath Configuration](../../common/includes/iscsi-multipath-config.md)
+- [iSCSI Multipath Configuration](../../../common/includes/iscsi-multipath-config.md)
 
 ### Oracle Linux-Specific Multipath Setup
 
@@ -503,7 +503,7 @@ kernel.numa_balancing = 0
 
 # ARP settings for same-subnet multipath (CRITICAL)
 # Prevents ARP responses on wrong interface when multiple NICs share same subnet
-# See: ../../common/includes/network-concepts.md for detailed explanation
+# See: ../../../common/includes/network-concepts.md for detailed explanation
 net.ipv4.conf.all.arp_ignore = 2
 net.ipv4.conf.default.arp_ignore = 2
 net.ipv4.conf.all.arp_announce = 2
@@ -618,8 +618,8 @@ OnCalendar=Sun 02:00
 ## Performance Tuning
 
 For comprehensive performance tuning information, see:
-- [iSCSI Performance Tuning](../../common/includes/iscsi-performance-tuning.md)
-- [General Performance Tuning](../../common/includes/performance-tuning.md)
+- [iSCSI Performance Tuning](../../../common/includes/iscsi-performance-tuning.md)
+- [General Performance Tuning](../../../common/includes/performance-tuning.md)
 
 ### Oracle Linux-Specific Tuning
 
@@ -718,7 +718,7 @@ sudo tuned-adm active
 ## Monitoring & Maintenance
 
 For general monitoring and maintenance procedures, see:
-- [Monitoring & Maintenance](../../common/includes/monitoring-maintenance.md)
+- [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md)
 
 ### Oracle Linux-Specific Monitoring
 
@@ -835,7 +835,7 @@ echo "0 */6 * * * /usr/local/bin/iscsi-health-check-oracle.sh >> /var/log/iscsi-
 ## Security
 
 For general security best practices, see:
-- [Security Best Practices](../../common/includes/security-best-practices.md)
+- [Security Best Practices](../../../common/includes/security-best-practices.md)
 
 ### Oracle Linux-Specific Security
 
@@ -896,7 +896,7 @@ sudo ausearch -k ksplice_updates
 ## Troubleshooting
 
 For common troubleshooting procedures, see:
-- [Common Troubleshooting](../../common/includes/troubleshooting-common.md)
+- [Common Troubleshooting](../../../common/includes/troubleshooting-common.md)
 
 ### Oracle Linux-Specific Troubleshooting
 
@@ -1021,8 +1021,8 @@ sudo semodule -i iscsi_troubleshoot.pp
 - [UEK Release Notes](https://docs.oracle.com/en/operating-systems/uek/)
 - [Ksplice Documentation](https://docs.oracle.com/en/operating-systems/ksplice/)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts](../../common/includes/network-concepts.md)
-- [Multipath Concepts](../../common/includes/multipath-concepts.md)
+- [Common Network Concepts](../../../common/includes/network-concepts.md)
+- [Multipath Concepts](../../../common/includes/multipath-concepts.md)
 
 ---
 

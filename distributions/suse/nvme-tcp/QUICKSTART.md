@@ -37,7 +37,7 @@ Guide for configuring NVMe over TCP storage on SUSE Linux Enterprise Server (SLE
 
 ## Key Terminology
 
-> **📖 New to NVMe-TCP?** See the complete [Storage Terminology Glossary](../../common/includes/glossary.md) for definitions of all terms used in this guide.
+> **📖 New to NVMe-TCP?** See the complete [Storage Terminology Glossary](../../../common/includes/glossary.md) for definitions of all terms used in this guide.
 
 | Term | Definition |
 |------|------------|
@@ -49,7 +49,7 @@ Guide for configuring NVMe over TCP storage on SUSE Linux Enterprise Server (SLE
 | **Native Multipath** | Kernel-level multipathing for NVMe, enabled via `nvme_core multipath=Y` |
 | **IO Policy** | Algorithm for selecting paths (queue-depth, round-robin, numa) |
 
-> **⚠️ ARP Configuration Required for Same-Subnet Multipath**: When using multiple interfaces on the same subnet, proper ARP configuration (`arp_ignore=2`, `arp_announce=2`) is **critical** to prevent routing issues. See [ARP Configuration for Same-Subnet Multipath](../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath) for details.
+> **⚠️ ARP Configuration Required for Same-Subnet Multipath**: When using multiple interfaces on the same subnet, proper ARP configuration (`arp_ignore=2`, `arp_announce=2`) is **critical** to prevent routing issues. See [ARP Configuration for Same-Subnet Multipath](../../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath) for details.
 
 ## Step 1: Install Required Packages
 
@@ -621,9 +621,9 @@ sudo journalctl -u YaST2
 - [SUSE Documentation](https://documentation.suse.com/)
 - [openSUSE Wiki](https://en.opensuse.org/Main_Page)
 - [NVMe-TCP Best Practices](./BEST-PRACTICES.md)
-- [Common Network Concepts](../../common/includes/network-concepts.md)
-- [Multipath Concepts](../../common/includes/multipath-concepts.md)
-- [Troubleshooting Guide](../../common/includes/troubleshooting-common.md)
+- [Common Network Concepts](../../../common/includes/network-concepts.md)
+- [Multipath Concepts](../../../common/includes/multipath-concepts.md)
+- [Troubleshooting Guide](../../../common/includes/troubleshooting-common.md)
 
 ## Quick Reference
 

@@ -410,7 +410,7 @@ net.ipv4.neigh.default.gc_thresh3 = 16384
 
 # ARP settings for same-subnet multipath (CRITICAL)
 # Prevents ARP responses on wrong interface when multiple NICs share same subnet
-# See: ../../common/includes/network-concepts.md for detailed explanation
+# See: ../../../common/includes/network-concepts.md for detailed explanation
 net.ipv4.conf.all.arp_ignore = 2
 net.ipv4.conf.default.arp_ignore = 2
 net.ipv4.conf.all.arp_announce = 2
@@ -692,7 +692,7 @@ sudo systemctl enable --now check-nvme-paths.timer
 ## Monitoring & Maintenance
 
 <!-- Include common monitoring content -->
-For detailed monitoring procedures, see [Monitoring & Maintenance](../../common/includes/monitoring-maintenance.md).
+For detailed monitoring procedures, see [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md).
 
 ### SUSE-Specific Monitoring Tools
 
@@ -733,7 +733,7 @@ sudo systemctl enable --now prometheus-node_exporter
 ## Security
 
 <!-- Include common security content -->
-For general security best practices, see [Security Best Practices](../../common/includes/security-best-practices.md).
+For general security best practices, see [Security Best Practices](../../../common/includes/security-best-practices.md).
 
 ### SUSE-Specific Security
 
@@ -777,7 +777,7 @@ sudo systemctl enable --now auditd
 ## Troubleshooting
 
 <!-- Include common troubleshooting content -->
-For common troubleshooting procedures, see [Common Troubleshooting](../../common/includes/troubleshooting-common.md).
+For common troubleshooting procedures, see [Common Troubleshooting](../../../common/includes/troubleshooting-common.md).
 
 ### SUSE-Specific Issues
 
@@ -848,9 +848,9 @@ sudo systemctl start firewalld
 - [SUSE Documentation](https://documentation.suse.com/)
 - [openSUSE Wiki](https://en.opensuse.org/)
 - [Quick Start Guide](./QUICKSTART.md)
-- [Network Concepts](../../common/includes/network-concepts.md)
-- [Multipath Concepts](../../common/includes/multipath-concepts.md)
-- [Performance Tuning](../../common/includes/performance-tuning.md)
+- [Network Concepts](../../../common/includes/network-concepts.md)
+- [Multipath Concepts](../../../common/includes/multipath-concepts.md)
+- [Performance Tuning](../../../common/includes/performance-tuning.md)
 
 ---
 

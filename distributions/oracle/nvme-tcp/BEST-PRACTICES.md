@@ -25,12 +25,12 @@ Comprehensive best practices for deploying NVMe over TCP storage on Oracle Linux
 ---
 
 > **Common Reference Documentation:** This guide references common best practices. See also:
-> - [Network Concepts](../../common/includes/network-concepts.md)
-> - [Multipath Concepts](../../common/includes/multipath-concepts.md)
-> - [Performance Tuning](../../common/includes/performance-tuning.md)
-> - [Security Best Practices](../../common/includes/security-best-practices.md)
-> - [Monitoring & Maintenance](../../common/includes/monitoring-maintenance.md)
-> - [Troubleshooting Common Issues](../../common/includes/troubleshooting-common.md)
+> - [Network Concepts](../../../common/includes/network-concepts.md)
+> - [Multipath Concepts](../../../common/includes/multipath-concepts.md)
+> - [Performance Tuning](../../../common/includes/performance-tuning.md)
+> - [Security Best Practices](../../../common/includes/security-best-practices.md)
+> - [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md)
+> - [Troubleshooting Common Issues](../../../common/includes/troubleshooting-common.md)
 
 ## Table of Contents
 
@@ -120,7 +120,7 @@ sudo reboot
 
 ## Network Configuration
 
-> **Note:** For comprehensive network architecture concepts, see [Network Concepts](../../common/includes/network-concepts.md).
+> **Note:** For comprehensive network architecture concepts, see [Network Concepts](../../../common/includes/network-concepts.md).
 
 ### Oracle Linux Network Best Practices
 
@@ -360,7 +360,7 @@ systemctl status uptrack-upgrade.timer
 
 ## Performance Tuning
 
-> **Note:** For comprehensive performance tuning guidance, see [Performance Tuning](../../common/includes/performance-tuning.md).
+> **Note:** For comprehensive performance tuning guidance, see [Performance Tuning](../../../common/includes/performance-tuning.md).
 
 ### Oracle-Specific Tuning Profiles
 
@@ -432,7 +432,7 @@ net.ipv4.neigh.default.gc_thresh3=16384
 
 # ARP settings for same-subnet multipath (CRITICAL)
 # Prevents ARP responses on wrong interface when multiple NICs share same subnet
-# See: ../../common/includes/network-concepts.md for detailed explanation
+# See: ../../../common/includes/network-concepts.md for detailed explanation
 net.ipv4.conf.all.arp_ignore=2
 net.ipv4.conf.default.arp_ignore=2
 net.ipv4.conf.all.arp_announce=2
@@ -533,7 +533,7 @@ sudo systemctl enable --now irqbalance
 
 ## Security
 
-> **Note:** For comprehensive security best practices, see [Security Best Practices](../../common/includes/security-best-practices.md).
+> **Note:** For comprehensive security best practices, see [Security Best Practices](../../../common/includes/security-best-practices.md).
 
 ### SELinux Configuration
 
@@ -645,7 +645,7 @@ sudo systemctl enable --now auditd
 
 ## Monitoring & Maintenance
 
-> **Note:** For comprehensive monitoring procedures, see [Monitoring & Maintenance](../../common/includes/monitoring-maintenance.md).
+> **Note:** For comprehensive monitoring procedures, see [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md).
 
 ### Oracle Linux Monitoring Tools
 
@@ -764,7 +764,7 @@ sudo systemctl enable --now nvme-health-check.timer
 
 ## Troubleshooting
 
-> **Note:** For common troubleshooting procedures, see [Troubleshooting Common Issues](../../common/includes/troubleshooting-common.md).
+> **Note:** For common troubleshooting procedures, see [Troubleshooting Common Issues](../../../common/includes/troubleshooting-common.md).
 
 ### UEK-Specific Issues
 
