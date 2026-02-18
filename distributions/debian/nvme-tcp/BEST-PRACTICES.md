@@ -227,7 +227,7 @@ network:
 
 ### Storage Network Configuration
 
-#### Dedicated Interfaces with Routing
+#### Dedicated Interfaces (No Routing)
 
 ```yaml
 # /etc/netplan/50-storage.yaml
