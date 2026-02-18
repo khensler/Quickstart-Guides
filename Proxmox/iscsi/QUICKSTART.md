@@ -1,58 +1,27 @@
-# Quick Start: Manual iSCSI Multipath Configuration
+# iSCSI on Proxmox VE - Quick Start Guide
 
-This guide shows how to manually configure iSCSI multipath on Proxmox
+This guide provides a streamlined path to configure iSCSI storage on Proxmox VE.
 
-> **Distribution-Specific Guides:** For detailed guides tailored to specific Linux distributions, see:
-> - [RHEL/Rocky/AlmaLinux Quick Start](../../distributions/rhel/iscsi/QUICKSTART.md)
-> - [Debian/Ubuntu Quick Start](../../distributions/debian/iscsi/QUICKSTART.md)
-> - [SUSE/openSUSE Quick Start](../../distributions/suse/iscsi/QUICKSTART.md)
-> - [Oracle Linux Quick Start](../../distributions/oracle/iscsi/QUICKSTART.md)
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
 
 ---
 
 ## ⚠️ Important Disclaimers
 
-> **Vendor Documentation Priority:**
-> - This guide is **specific to Pure Storage configurations** and should be used in conjunction with official vendor documentation
-> - Always consult and follow **Proxmox VE official documentation** for complete system configuration
-> - In case of any conflicts between this guide and vendor documentation, **vendor documentation takes precedence**
->
-> **Testing Requirements:**
-> - All configurations and recommendations in this guide are **for reference only**
-> - **Test thoroughly in a lab environment** before implementing in production
-> - Validate all settings with your specific hardware, software versions, and workload requirements
-> - Performance and compatibility may vary based on your environment
->
-> **Support:**
-> - For Pure Storage-specific issues, contact Pure Storage Support
-> - For Proxmox VE issues, consult Proxmox documentation or community forums
-> - This guide is provided as-is without warranty
+> **Vendor Documentation Priority:** This guide is **specific to Pure Storage** and for reference only. Always consult official Proxmox VE and storage vendor documentation. Test thoroughly in a lab environment before production use.
 
 ---
 
 ## Prerequisites
 
-- Proxmox VE 9.x or later
-- ISCSI storage array with:
-  - Portal IP address(es) and port
-  - Target IQN
-- Dedicated network interfaces for storage traffic (recommended)
-- Network connectivity between Proxmox nodes and storage
+- Proxmox VE 8.x or later
+- iSCSI storage array with portal IPs and target IQN
+- Dedicated storage network interfaces
+- Root access to all cluster nodes
 
-## Key Terminology
+> **📖 New to iSCSI?** See the [Storage Terminology Glossary](../../common/includes/glossary.md)
 
-> **📖 New to iSCSI?** See the complete [Storage Terminology Glossary](../../common/includes/glossary.md) for definitions of all terms used in this guide.
-
-| Term | Definition |
-|------|------------|
-| **IQN** | iSCSI Qualified Name - unique identifier for initiators and targets |
-| **Portal** | IP address and port combination for iSCSI access (default port: 3260) |
-| **Target** | Storage array component that receives iSCSI connections |
-| **Initiator** | Host-side component that initiates iSCSI connections |
-| **LUN** | Logical Unit Number - individual storage volume presented to the host |
-| **Multipath** | Multiple network paths between host and storage for redundancy |
-
-> **⚠️ ARP Configuration Required for Same-Subnet Multipath**: When using multiple interfaces on the same subnet, proper ARP configuration (`arp_ignore=2`, `arp_announce=2`) is **critical** to prevent routing issues that can break multipath. See [ARP Configuration for Same-Subnet Multipath](../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath) for detailed configuration instructions and explanation.
+> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration](../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath).
 
 ## Step 1: Install iSCSI and Multipath Tools
 
@@ -186,3 +155,15 @@ Go to: Datacenter -> Storage.  Click "Add" -> "LVM".
 Name the storage in the ID field.  Select the volume group in the Volume Group drop down.  Check the "Shared" box.  Select the appropriate Content (Disk Image, Container).  Enable the volume on other nodes by either selecting them in the Nodes drop down or by clearing the Nodes field by clicking the "x" to the right of the field.  Click "Add".
 
 ![Configure Storage](./img/disk-configuration-2.png)
+
+---
+
+## Next Steps
+
+For production deployments, see [iSCSI Best Practices](./BEST-PRACTICES.md) for:
+- Network design and optimization
+- Multipath configuration details
+- High availability with Proxmox HA
+- Performance tuning
+- Security best practices
+- Monitoring and troubleshooting

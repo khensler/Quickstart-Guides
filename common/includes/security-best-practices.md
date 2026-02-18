@@ -36,22 +36,47 @@ ip route show dev ens1f0
 # Should show only local subnet route
 ```
 
-#### 2. Firewall Rules
+#### 2. Firewall Configuration
 
-**Restrict storage network access:**
+**Option 1: Disable Filtering on Storage Interfaces (Recommended)**
+
+For dedicated, isolated storage networks, **disable firewall filtering** on storage interfaces to eliminate CPU overhead from packet inspection.
+
+```bash
+# Add storage interfaces to trusted zone (firewalld)
+firewall-cmd --permanent --zone=trusted --add-interface=ens1f0
+firewall-cmd --permanent --zone=trusted --add-interface=ens1f1
+firewall-cmd --reload
+
+# Or accept all traffic on interfaces (iptables)
+iptables -A INPUT -i ens1f0 -j ACCEPT
+iptables -A INPUT -i ens1f1 -j ACCEPT
+```
+
+**Why disable filtering on storage interfaces:**
+- **CPU overhead**: Firewall packet inspection adds latency and consumes CPU cycles
+- **Performance impact**: At high IOPS (millions with NVMe-TCP), filtering overhead becomes significant
+- **Network isolation**: Dedicated storage VLANs provide security at the network layer
+- **Simplicity**: No port rules to maintain for storage traffic
+
+**Option 2: Port Filtering (For Shared or Non-Isolated Networks)**
+
+Use port filtering only when storage interfaces share a network with other traffic or when additional host-level security is required by policy.
+
+> **⚠️ Performance Note:** Port filtering adds CPU overhead for every packet. For production storage with high IOPS requirements, use Option 1 with network-level isolation instead.
 
 ```bash
 # Allow only storage traffic on storage interfaces
-# Example for iptables
-iptables -A INPUT -i ens1f0 -p tcp --dport 4420 -j ACCEPT  # NVMe-TCP
+# Example for iptables (NVMe-TCP: 4420 data, 8009 discovery; iSCSI: 3260)
+iptables -A INPUT -i ens1f0 -p tcp --dport 4420 -j ACCEPT  # NVMe-TCP data
+iptables -A INPUT -i ens1f0 -p tcp --dport 8009 -j ACCEPT  # NVMe-TCP discovery
 iptables -A INPUT -i ens1f0 -p tcp --dport 3260 -j ACCEPT  # iSCSI
 iptables -A INPUT -i ens1f0 -j DROP  # Drop all other traffic
 ```
 
-**Best Practices:**
-- Only allow required ports (NVMe-TCP: 4420, iSCSI: 3260)
-- Drop all other traffic on storage interfaces
-- Log dropped packets for security monitoring
+**Required Ports (if using port filtering):**
+- **NVMe-TCP**: Port 4420 (data), Port 8009 (discovery)
+- **iSCSI**: Port 3260
 
 #### 3. Access Control
 

@@ -25,6 +25,7 @@ Comprehensive best practices for deploying iSCSI storage on Debian and Ubuntu sy
 ---
 
 ## Table of Contents
+- [Architecture Overview](#architecture-overview)
 - [Debian/Ubuntu-Specific Considerations](#debianubuntu-specific-considerations)
 - [Network Configuration](#network-configuration)
 - [AppArmor Configuration](#apparmor-configuration)
@@ -36,6 +37,102 @@ Comprehensive best practices for deploying iSCSI storage on Debian and Ubuntu sy
 - [Monitoring & Maintenance](#monitoring--maintenance)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Architecture Overview
+
+### Deployment Topology
+
+```mermaid
+flowchart TB
+    subgraph "Debian/Ubuntu Hosts"
+        HOST1[Linux Host 1<br/>2x Storage NICs]
+        HOST2[Linux Host 2<br/>2x Storage NICs]
+        HOST3[Linux Host 3<br/>2x Storage NICs]
+    end
+
+    subgraph "Storage Network"
+        SW1[Storage Switch 1<br/>10/25/100 GbE]
+        SW2[Storage Switch 2<br/>10/25/100 GbE]
+    end
+
+    subgraph "iSCSI Storage Array"
+        CTRL1[Controller 1<br/>Portal 1 & 2]
+        CTRL2[Controller 2<br/>Portal 3 & 4]
+        LUN[(iSCSI LUNs)]
+    end
+
+    SW1 --- SW2
+
+    HOST1 ---|NIC 1| SW1
+    HOST1 ---|NIC 2| SW2
+    HOST2 ---|NIC 1| SW1
+    HOST2 ---|NIC 2| SW2
+    HOST3 ---|NIC 1| SW1
+    HOST3 ---|NIC 2| SW2
+
+    SW1 --- CTRL1
+    SW1 --- CTRL2
+    SW2 --- CTRL1
+    SW2 --- CTRL2
+
+    CTRL1 --- LUN
+    CTRL2 --- LUN
+
+    style LUN fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style SW1 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style SW2 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+```
+
+### dm-multipath Architecture
+
+```mermaid
+graph TB
+    subgraph "Application Layer"
+        APP[Application]
+        FS[Filesystem<br/>/dev/mapper/mpathX]
+    end
+
+    subgraph "Device Mapper - Multipath"
+        DM[dm-multipath<br/>multipathd daemon]
+        POLICY{Path Selection<br/>service-time 0}
+    end
+
+    subgraph "SCSI Layer"
+        SDA[/dev/sda<br/>Path 1]
+        SDB[/dev/sdb<br/>Path 2]
+        SDC[/dev/sdc<br/>Path 3]
+        SDD[/dev/sdd<br/>Path 4]
+    end
+
+    subgraph "iSCSI Sessions"
+        ISCSI[iSCSI Initiator<br/>iscsid]
+    end
+
+    APP --> FS
+    FS --> DM
+    DM --> POLICY
+    POLICY --> SDA
+    POLICY --> SDB
+    POLICY --> SDC
+    POLICY --> SDD
+    SDA --> ISCSI
+    SDB --> ISCSI
+    SDC --> ISCSI
+    SDD --> ISCSI
+
+    style DM fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style FS fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+```
+
+**Key Design Principles:**
+- **Dual switches** for network redundancy
+- **Minimum 2 NICs per host** for multipath
+- **Dual controller array** for storage HA
+- **dm-multipath** aggregates all paths into single device
+
+> **📊 More Diagrams:** See [Common Storage Topology](../../../common/includes/diagrams-storage-topology.md) and [iSCSI Multipath Diagrams](../../../common/includes/diagrams-iscsi-multipath.md) for additional diagrams.
 
 ---
 
@@ -336,52 +433,43 @@ sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.iscsid
 
 ## Firewall Configuration
 
-### UFW (Ubuntu)
+### Option 1: Disable Filtering on Storage Interfaces (Recommended)
 
-**Enable and configure UFW:**
+For dedicated storage networks, **disable firewall filtering** on storage interfaces to eliminate CPU overhead from packet inspection. This is important for high-throughput iSCSI storage.
+
+**Why disable filtering on storage interfaces:**
+- **CPU overhead**: Firewall packet inspection adds latency and consumes CPU cycles
+- **Performance impact**: At high IOPS, filtering overhead becomes significant
+- **Network isolation**: Dedicated storage VLANs provide security at the network layer
+- **Simplicity**: No port rules to maintain for storage traffic
+
+#### Using UFW (Ubuntu)
+
 ```bash
-# Enable UFW
-sudo ufw enable
+# Allow all traffic on storage interfaces (no filtering)
+sudo ufw allow in on ens1f0
+sudo ufw allow in on ens1f1
 
-# Allow iSCSI traffic
-sudo ufw allow from 10.100.1.0/24 to any port 3260 proto tcp
-sudo ufw allow from 10.100.2.0/24 to any port 3260 proto tcp
-
-# Or allow on specific interface
-sudo ufw allow in on ens1f0 to any port 3260 proto tcp
-sudo ufw allow in on ens1f1 to any port 3260 proto tcp
-
-# Check status
+# Verify
 sudo ufw status verbose
 ```
 
-### iptables (Debian)
+#### Using iptables (Debian)
 
-**Configure iptables:**
 ```bash
-# Allow iSCSI traffic
-sudo iptables -A INPUT -p tcp --dport 3260 -s 10.100.1.0/24 -j ACCEPT
-sudo iptables -A INPUT -p tcp --dport 3260 -s 10.100.2.0/24 -j ACCEPT
-
-# Or allow on specific interface
-sudo iptables -A INPUT -i ens1f0 -p tcp --dport 3260 -j ACCEPT
-sudo iptables -A INPUT -i ens1f1 -p tcp --dport 3260 -j ACCEPT
+# Accept all traffic on storage interfaces (no filtering)
+sudo iptables -A INPUT -i ens1f0 -j ACCEPT
+sudo iptables -A INPUT -i ens1f1 -j ACCEPT
 
 # Save rules
-# Debian:
 sudo apt install iptables-persistent
 sudo netfilter-persistent save
-
-# Ubuntu:
-sudo apt install iptables-persistent
-sudo iptables-save > /etc/iptables/rules.v4
 ```
 
-### nftables (Debian 10+)
+#### Using nftables (Debian 10+)
 
-**Configure nftables:**
 ```bash
-# Create nftables configuration
+# Create nftables configuration with no filtering on storage interfaces
 sudo tee /etc/nftables.conf > /dev/null <<'EOF'
 #!/usr/sbin/nft -f
 
@@ -397,7 +485,78 @@ table inet filter {
         # Allow loopback
         iif lo accept
 
-        # Allow iSCSI on storage interfaces
+        # Allow all traffic on storage interfaces (no filtering)
+        iifname "ens1f0" accept
+        iifname "ens1f1" accept
+    }
+}
+EOF
+
+# Enable and start nftables
+sudo systemctl enable nftables
+sudo systemctl restart nftables
+```
+
+### Option 2: Port Filtering (For Shared or Non-Isolated Networks)
+
+Use port filtering only when storage interfaces share a network with other traffic or when additional host-level security is required by policy.
+
+> **⚠️ Performance Note:** Port filtering adds CPU overhead for every packet. For production storage with high IOPS requirements, use Option 1 with network-level isolation instead.
+
+#### Using UFW (Ubuntu)
+
+```bash
+# Enable UFW
+sudo ufw enable
+
+# Allow iSCSI traffic from specific subnet
+sudo ufw allow from 10.100.1.0/24 to any port 3260 proto tcp
+sudo ufw allow from 10.100.2.0/24 to any port 3260 proto tcp
+
+# Or allow on specific interface with port filtering
+sudo ufw allow in on ens1f0 to any port 3260 proto tcp
+sudo ufw allow in on ens1f1 to any port 3260 proto tcp
+
+# Check status
+sudo ufw status verbose
+```
+
+#### Using iptables (Debian)
+
+```bash
+# Allow iSCSI traffic with port filtering
+sudo iptables -A INPUT -p tcp --dport 3260 -s 10.100.1.0/24 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 3260 -s 10.100.2.0/24 -j ACCEPT
+
+# Or allow on specific interface with port filtering
+sudo iptables -A INPUT -i ens1f0 -p tcp --dport 3260 -j ACCEPT
+sudo iptables -A INPUT -i ens1f1 -p tcp --dport 3260 -j ACCEPT
+
+# Save rules
+sudo apt install iptables-persistent
+sudo netfilter-persistent save
+```
+
+#### Using nftables (Debian 10+)
+
+```bash
+# Create nftables configuration with port filtering
+sudo tee /etc/nftables.conf > /dev/null <<'EOF'
+#!/usr/sbin/nft -f
+
+flush ruleset
+
+table inet filter {
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # Allow established connections
+        ct state established,related accept
+
+        # Allow loopback
+        iif lo accept
+
+        # Allow iSCSI on storage interfaces (port filtering)
         iifname "ens1f0" tcp dport 3260 accept
         iifname "ens1f1" tcp dport 3260 accept
     }
@@ -574,6 +733,86 @@ cat /proc/interrupts | grep -E "eth|ens"
 ---
 
 ## High Availability
+
+### iSCSI Path Redundancy Model
+
+```mermaid
+flowchart TB
+    subgraph "Linux Host"
+        INIT[iSCSI Initiator<br/>IQN]
+        NIC1[NIC 1<br/>10.100.1.101]
+        NIC2[NIC 2<br/>10.100.1.102]
+    end
+
+    subgraph "iSCSI Sessions - 4 Paths"
+        S1[Session 1: NIC1→Portal1]
+        S2[Session 2: NIC1→Portal2]
+        S3[Session 3: NIC2→Portal1]
+        S4[Session 4: NIC2→Portal2]
+    end
+
+    subgraph "dm-multipath Layer"
+        MPATH[/dev/mapper/mpathX<br/>Aggregates All Paths]
+    end
+
+    subgraph "iSCSI Storage Array"
+        TARGET[iSCSI Target]
+        PORTAL1[Portal 1]
+        PORTAL2[Portal 2]
+        LUN[(LUN 0)]
+    end
+
+    INIT --> NIC1
+    INIT --> NIC2
+
+    NIC1 --> S1 --> PORTAL1
+    NIC1 --> S2 --> PORTAL2
+    NIC2 --> S3 --> PORTAL1
+    NIC2 --> S4 --> PORTAL2
+
+    S1 --> MPATH
+    S2 --> MPATH
+    S3 --> MPATH
+    S4 --> MPATH
+
+    PORTAL1 --> TARGET --> LUN
+    PORTAL2 --> TARGET
+
+    style MPATH fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style LUN fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+```
+
+### Failover Behavior
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant DM as dm-multipath
+    participant Path1 as /dev/sda (Path 1)
+    participant Path2 as /dev/sdb (Path 2)
+    participant Target as iSCSI Target
+
+    App->>DM: Write to /dev/mapper/mpathX
+    DM->>Path1: Route via sda
+    Path1->>Target: SCSI Command
+    Target->>Path1: Success
+
+    Note over Path1: Path 1 Fails (Link Down)
+
+    App->>DM: Write Request
+    DM->>Path1: Attempt sda
+    Path1--xDM: I/O Error
+    Note over DM: multipathd marks path failed
+    DM->>Path2: Failover to sdb
+    Path2->>Target: SCSI Command
+    Target->>Path2: Success
+    DM->>App: Success
+
+    Note over Path1: Path 1 Recovers
+    Path1->>DM: Path reinstated
+```
+
+> **📊 More Diagrams:** See [iSCSI Multipath Diagrams](../../../common/includes/diagrams-iscsi-multipath.md) and [Failover Diagrams](../../../common/includes/diagrams-failover.md) for additional details.
 
 ### Cluster Configuration with Pacemaker
 
@@ -798,6 +1037,51 @@ sudo ausearch -k iscsi_commands
 ---
 
 ## Troubleshooting
+
+### Troubleshooting Flowchart
+
+```mermaid
+graph TD
+    START[iSCSI Issue Detected]
+
+    START --> CHECK_SESSION{Active sessions?<br/>iscsiadm -m session}
+
+    CHECK_SESSION -->|No sessions| CHECK_NET[Check Network<br/>Connectivity]
+    CHECK_NET --> PING{Can ping<br/>storage portals?}
+    PING -->|No| FIX_NET[Fix Network:<br/>- Check cables<br/>- Check netplan config<br/>- Check VLAN]
+    PING -->|Yes| DISCOVER[Rediscover targets:<br/>iscsiadm -m discovery]
+    DISCOVER --> LOGIN[Login to targets:<br/>iscsiadm -m node -l]
+
+    CHECK_SESSION -->|Sessions exist| CHECK_MPATH{Multipath<br/>healthy?<br/>multipath -ll}
+
+    CHECK_MPATH -->|Degraded| CHECK_PATHS[Check failed paths:<br/>- Interface binding<br/>- iSCSI interface config]
+    CHECK_PATHS --> RESCAN[Rescan sessions:<br/>iscsiadm -m session -R]
+
+    CHECK_MPATH -->|All active| CHECK_PERF{Performance<br/>Issue?}
+
+    CHECK_PERF -->|Yes| CHECK_MTU[Verify MTU 9000]
+    CHECK_MTU --> CHECK_POLICY[Check path_selector]
+    CHECK_POLICY --> CHECK_QUEUE[Check queue depth]
+
+    CHECK_PERF -->|No| CHECK_PERSIST{Persistence<br/>Issue?}
+
+    CHECK_PERSIST -->|Yes| CHECK_STARTUP[Check node.startup=automatic]
+    CHECK_STARTUP --> CHECK_SERVICES[Verify iscsid and<br/>multipathd enabled]
+
+    FIX_NET --> LOGIN
+    RESCAN --> VERIFY[Verify:<br/>multipath -ll]
+    CHECK_QUEUE --> TUNE[Tune Settings]
+    CHECK_SERVICES --> ENABLE[Enable services]
+
+    LOGIN --> VERIFY
+    TUNE --> VERIFY
+    ENABLE --> VERIFY
+
+    style START fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+```
+
+> **📊 More Diagrams:** See [Troubleshooting Flowcharts](../../../common/includes/diagrams-troubleshooting.md) for detailed procedures.
 
 For common troubleshooting procedures, see:
 - [Common Troubleshooting](../../../common/includes/troubleshooting-common.md)

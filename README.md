@@ -11,6 +11,7 @@ A collection of quick start guides for various technologies and configurations.
 - [NVMe-TCP Setup Guide](Proxmox/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for Proxmox VE
 - [NVMe-TCP Best Practices](Proxmox/nvme-tcp/BEST-PRACTICES.md) - Production deployment best practices with architectural diagrams
 - [iSCSI Setup Guide](Proxmox/iscsi/QUICKSTART.md) - Configure iSCSI for Proxmox VE
+- [iSCSI Best Practices](Proxmox/iscsi/BEST-PRACTICES.md) - Production deployment best practices for iSCSI on Proxmox VE
 - [VMware to Proxmox Migration Guide for Pure vVols](Proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Pure vVols
 
 **RHEL/Rocky/AlmaLinux:**
@@ -39,7 +40,7 @@ A collection of quick start guides for various technologies and configurations.
 
 ### Common Reference Documentation
 
-- **[Storage Terminology Glossary](common/includes/glossary.md)** - Definitions for iSCSI, NVMe-TCP, and storage terms (IQN, NQN, Portal, LUN, Namespace, etc.)
+- [Storage Terminology Glossary](common/includes/glossary.md) - Definitions for iSCSI, NVMe-TCP, and storage terms (IQN, NQN, Portal, LUN, Namespace, etc.)
 - [Network Concepts](common/includes/network-concepts.md) - Network architecture, topology, MTU, and performance tuning
 - [Multipath Concepts](common/includes/multipath-concepts.md) - Multipath configuration, path selection, and monitoring
 - [Performance Tuning](common/includes/performance-tuning.md) - CPU/IRQ tuning, kernel parameters, I/O scheduler

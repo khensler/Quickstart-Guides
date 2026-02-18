@@ -1501,7 +1501,29 @@ graph TB
 - Never route storage traffic through management network
 - Use dedicated VLANs or physical networks for storage
 - No default gateway on storage interfaces
-- Implement firewall rules to restrict storage network access
+- Disable firewall filtering on storage interfaces (use network-level isolation instead)
+
+#### Firewall Configuration for Storage Interfaces
+
+For dedicated storage networks, **disable firewall filtering** on storage interfaces to eliminate CPU overhead from packet inspection. This is critical for high-throughput NVMe-TCP storage.
+
+```bash
+# Option 1 (Recommended): Add storage interfaces to trusted zone in pve-firewall
+# Edit /etc/pve/firewall/cluster.fw or node-specific firewall
+# Storage interfaces should not have filtering enabled
+
+# Option 2: Use iptables to accept all traffic on storage interfaces
+iptables -A INPUT -i <STORAGE_INTERFACE_1> -j ACCEPT
+iptables -A INPUT -i <STORAGE_INTERFACE_2> -j ACCEPT
+```
+
+**Why disable filtering on storage interfaces:**
+- **CPU overhead**: Firewall packet inspection adds latency and consumes CPU cycles
+- **Performance impact**: At high IOPS (millions with NVMe-TCP), filtering overhead becomes significant
+- **Network isolation**: Dedicated storage VLANs provide security at the network layer
+- **Simplicity**: No port rules to maintain for storage traffic
+
+> **⚠️ Note:** If port filtering is required by security policy, allow ports 4420 (data) and 8009 (discovery). However, this adds CPU overhead for every packet.
 
 #### 2. Access Control
 
@@ -1519,7 +1541,7 @@ cat /etc/nvme/hostnqn
 **Access Control Checklist:**
 - [ ] Only authorized host NQNs registered on storage array
 - [ ] Storage network isolated from public networks
-- [ ] Firewall rules restrict access to storage ports
+- [ ] Firewall filtering disabled on storage interfaces (or ports 4420/8009 allowed if filtering required)
 - [ ] Regular audit of authorized hosts
 
 ### Security Monitoring

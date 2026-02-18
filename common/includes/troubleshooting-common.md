@@ -42,8 +42,9 @@ ip link show <storage_interface>
    - Check MTU settings match end-to-end
 
 2. **Firewall blocking:**
-   - Allow required ports (4420 for NVMe-TCP, 3260 for iSCSI)
+   - Allow required ports: NVMe-TCP (4420 data, 8009 discovery), iSCSI (3260)
    - Check both host and storage array firewalls
+   - **Recommended:** For dedicated storage networks, use trusted zone to disable filtering on storage interfaces (reduces CPU overhead)
 
 3. **Incorrect configuration:**
    - Verify portal IP addresses

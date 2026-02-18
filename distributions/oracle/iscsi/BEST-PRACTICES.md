@@ -25,6 +25,7 @@ Comprehensive best practices for deploying iSCSI storage on Oracle Linux with Un
 ---
 
 ## Table of Contents
+- [Architecture Overview](#architecture-overview)
 - [Oracle Linux-Specific Considerations](#oracle-linux-specific-considerations)
 - [Kernel Selection Strategy](#kernel-selection-strategy)
 - [Network Configuration](#network-configuration)
@@ -38,6 +39,103 @@ Comprehensive best practices for deploying iSCSI storage on Oracle Linux with Un
 - [Monitoring & Maintenance](#monitoring--maintenance)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Architecture Overview
+
+### Deployment Topology
+
+```mermaid
+flowchart TB
+    subgraph "Oracle Linux Hosts"
+        HOST1[Linux Host 1<br/>2x Storage NICs<br/>UEK Kernel]
+        HOST2[Linux Host 2<br/>2x Storage NICs<br/>UEK Kernel]
+        HOST3[Linux Host 3<br/>2x Storage NICs<br/>UEK Kernel]
+    end
+
+    subgraph "Storage Network"
+        SW1[Storage Switch 1<br/>10/25/100 GbE]
+        SW2[Storage Switch 2<br/>10/25/100 GbE]
+    end
+
+    subgraph "iSCSI Storage Array"
+        CTRL1[Controller 1<br/>Portal 1 & 2]
+        CTRL2[Controller 2<br/>Portal 3 & 4]
+        LUN[(iSCSI LUNs)]
+    end
+
+    SW1 --- SW2
+
+    HOST1 ---|NIC 1| SW1
+    HOST1 ---|NIC 2| SW2
+    HOST2 ---|NIC 1| SW1
+    HOST2 ---|NIC 2| SW2
+    HOST3 ---|NIC 1| SW1
+    HOST3 ---|NIC 2| SW2
+
+    SW1 --- CTRL1
+    SW1 --- CTRL2
+    SW2 --- CTRL1
+    SW2 --- CTRL2
+
+    CTRL1 --- LUN
+    CTRL2 --- LUN
+
+    style LUN fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style SW1 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style SW2 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+```
+
+### dm-multipath Architecture
+
+```mermaid
+graph TB
+    subgraph "Application Layer"
+        APP[Application]
+        FS[Filesystem<br/>/dev/mapper/mpathX]
+    end
+
+    subgraph "Device Mapper - Multipath"
+        DM[dm-multipath<br/>multipathd daemon]
+        POLICY{Path Selection<br/>service-time 0}
+    end
+
+    subgraph "SCSI Layer"
+        SDA[/dev/sda<br/>Path 1]
+        SDB[/dev/sdb<br/>Path 2]
+        SDC[/dev/sdc<br/>Path 3]
+        SDD[/dev/sdd<br/>Path 4]
+    end
+
+    subgraph "iSCSI Sessions"
+        ISCSI[iSCSI Initiator<br/>iscsid]
+    end
+
+    APP --> FS
+    FS --> DM
+    DM --> POLICY
+    POLICY --> SDA
+    POLICY --> SDB
+    POLICY --> SDC
+    POLICY --> SDD
+    SDA --> ISCSI
+    SDB --> ISCSI
+    SDC --> ISCSI
+    SDD --> ISCSI
+
+    style DM fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style FS fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+```
+
+**Key Design Principles:**
+- **Dual switches** for network redundancy
+- **Minimum 2 NICs per host** for multipath
+- **Dual controller array** for storage HA
+- **dm-multipath** aggregates all paths into single device
+- **UEK kernel** for optimized iSCSI performance
+
+> **📊 More Diagrams:** See [Common Storage Topology](../../../common/includes/diagrams-storage-topology.md) and [iSCSI Multipath Diagrams](../../../common/includes/diagrams-iscsi-multipath.md) for additional diagrams.
 
 ---
 
@@ -343,9 +441,36 @@ sudo semodule -i multipath_iscsi.pp
 
 ## Firewall Configuration
 
-### firewalld Configuration
+### Option 1: Trusted Zone (Recommended for Dedicated Storage Networks)
 
-**Enable and configure firewalld:**
+For dedicated storage networks, **disable firewall filtering** on storage interfaces to eliminate CPU overhead from packet inspection. This is important for high-throughput iSCSI storage.
+
+**Why disable filtering on storage interfaces:**
+- **CPU overhead**: Firewall packet inspection adds latency and consumes CPU cycles
+- **Performance impact**: At high IOPS, filtering overhead becomes significant
+- **Network isolation**: Dedicated storage VLANs provide security at the network layer
+- **Simplicity**: No port rules to maintain for storage traffic
+
+```bash
+# Add storage interfaces to trusted zone (no packet filtering)
+sudo firewall-cmd --permanent --zone=trusted --add-interface=ens1f0
+sudo firewall-cmd --permanent --zone=trusted --add-interface=ens1f1
+
+# Reload
+sudo firewall-cmd --reload
+
+# Verify
+sudo firewall-cmd --zone=trusted --list-all
+```
+
+### Option 2: Port Filtering (For Shared or Non-Isolated Networks)
+
+Use port filtering only when storage interfaces share a network with other traffic or when additional host-level security is required by policy.
+
+> **⚠️ Performance Note:** Port filtering adds CPU overhead for every packet. For production storage with high IOPS requirements, use Option 1 with network-level isolation instead.
+
+#### Basic firewalld Configuration
+
 ```bash
 # Enable firewalld
 sudo systemctl enable --now firewalld
@@ -366,9 +491,9 @@ sudo firewall-cmd --reload
 sudo firewall-cmd --list-all
 ```
 
-### Zone-Based Configuration
+#### Zone-Based Configuration with Port Filtering
 
-**Dedicated storage zone (recommended):**
+**Dedicated storage zone with port filtering:**
 ```bash
 # Create storage zone
 sudo firewall-cmd --permanent --new-zone=storage
@@ -380,8 +505,8 @@ sudo firewall-cmd --permanent --zone=storage --add-interface=ens1f1
 # Allow iSCSI in storage zone
 sudo firewall-cmd --permanent --zone=storage --add-port=3260/tcp
 
-# Set target to ACCEPT (trust storage network)
-sudo firewall-cmd --permanent --zone=storage --set-target=ACCEPT
+# Set target to DROP (deny by default except allowed ports)
+sudo firewall-cmd --permanent --zone=storage --set-target=DROP
 
 # Reload
 sudo firewall-cmd --reload
@@ -546,6 +671,86 @@ sudo udevadm trigger
 ---
 
 ## High Availability with Ksplice
+
+### iSCSI Path Redundancy Model
+
+```mermaid
+flowchart TB
+    subgraph "Linux Host"
+        INIT[iSCSI Initiator<br/>IQN]
+        NIC1[NIC 1<br/>10.100.1.101]
+        NIC2[NIC 2<br/>10.100.1.102]
+    end
+
+    subgraph "iSCSI Sessions - 4 Paths"
+        S1[Session 1: NIC1→Portal1]
+        S2[Session 2: NIC1→Portal2]
+        S3[Session 3: NIC2→Portal1]
+        S4[Session 4: NIC2→Portal2]
+    end
+
+    subgraph "dm-multipath Layer"
+        MPATH[/dev/mapper/mpathX<br/>Aggregates All Paths]
+    end
+
+    subgraph "iSCSI Storage Array"
+        TARGET[iSCSI Target]
+        PORTAL1[Portal 1]
+        PORTAL2[Portal 2]
+        LUN[(LUN 0)]
+    end
+
+    INIT --> NIC1
+    INIT --> NIC2
+
+    NIC1 --> S1 --> PORTAL1
+    NIC1 --> S2 --> PORTAL2
+    NIC2 --> S3 --> PORTAL1
+    NIC2 --> S4 --> PORTAL2
+
+    S1 --> MPATH
+    S2 --> MPATH
+    S3 --> MPATH
+    S4 --> MPATH
+
+    PORTAL1 --> TARGET --> LUN
+    PORTAL2 --> TARGET
+
+    style MPATH fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style LUN fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+```
+
+### Failover Behavior
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant DM as dm-multipath
+    participant Path1 as /dev/sda (Path 1)
+    participant Path2 as /dev/sdb (Path 2)
+    participant Target as iSCSI Target
+
+    App->>DM: Write to /dev/mapper/mpathX
+    DM->>Path1: Route via sda
+    Path1->>Target: SCSI Command
+    Target->>Path1: Success
+
+    Note over Path1: Path 1 Fails (Link Down)
+
+    App->>DM: Write Request
+    DM->>Path1: Attempt sda
+    Path1--xDM: I/O Error
+    Note over DM: multipathd marks path failed
+    DM->>Path2: Failover to sdb
+    Path2->>Target: SCSI Command
+    Target->>Path2: Success
+    DM->>App: Success
+
+    Note over Path1: Path 1 Recovers
+    Path1->>DM: Path reinstated
+```
+
+> **📊 More Diagrams:** See [iSCSI Multipath Diagrams](../../../common/includes/diagrams-iscsi-multipath.md) and [Failover Diagrams](../../../common/includes/diagrams-failover.md) for additional details.
 
 ### What is Ksplice?
 
@@ -894,6 +1099,51 @@ sudo ausearch -k ksplice_updates
 ---
 
 ## Troubleshooting
+
+### Troubleshooting Flowchart
+
+```mermaid
+graph TD
+    START[iSCSI Issue Detected]
+
+    START --> CHECK_SESSION{Active sessions?<br/>iscsiadm -m session}
+
+    CHECK_SESSION -->|No sessions| CHECK_NET[Check Network<br/>Connectivity]
+    CHECK_NET --> PING{Can ping<br/>storage portals?}
+    PING -->|No| FIX_NET[Fix Network:<br/>- Check cables<br/>- Check nmcli config<br/>- Check VLAN]
+    PING -->|Yes| DISCOVER[Rediscover targets:<br/>iscsiadm -m discovery]
+    DISCOVER --> LOGIN[Login to targets:<br/>iscsiadm -m node -l]
+
+    CHECK_SESSION -->|Sessions exist| CHECK_MPATH{Multipath<br/>healthy?<br/>multipath -ll}
+
+    CHECK_MPATH -->|Degraded| CHECK_PATHS[Check failed paths:<br/>- Interface binding<br/>- iSCSI interface config]
+    CHECK_PATHS --> RESCAN[Rescan sessions:<br/>iscsiadm -m session -R]
+
+    CHECK_MPATH -->|All active| CHECK_PERF{Performance<br/>Issue?}
+
+    CHECK_PERF -->|Yes| CHECK_MTU[Verify MTU 9000]
+    CHECK_MTU --> CHECK_POLICY[Check path_selector]
+    CHECK_POLICY --> CHECK_KERNEL[Verify UEK kernel<br/>is active]
+
+    CHECK_PERF -->|No| CHECK_PERSIST{Persistence<br/>Issue?}
+
+    CHECK_PERSIST -->|Yes| CHECK_STARTUP[Check node.startup=automatic]
+    CHECK_STARTUP --> CHECK_SERVICES[Verify iscsid and<br/>multipathd enabled]
+
+    FIX_NET --> LOGIN
+    RESCAN --> VERIFY[Verify:<br/>multipath -ll]
+    CHECK_KERNEL --> TUNE[Tune Settings]
+    CHECK_SERVICES --> ENABLE[Enable services]
+
+    LOGIN --> VERIFY
+    TUNE --> VERIFY
+    ENABLE --> VERIFY
+
+    style START fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+```
+
+> **📊 More Diagrams:** See [Troubleshooting Flowcharts](../../../common/includes/diagrams-troubleshooting.md) for detailed procedures.
 
 For common troubleshooting procedures, see:
 - [Common Troubleshooting](../../../common/includes/troubleshooting-common.md)

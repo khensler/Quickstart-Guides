@@ -55,12 +55,12 @@ A unique identifier for iSCSI initiators and targets. Format: `iqn.YYYY-MM.rever
 
 **Location on Linux hosts:** `/etc/iscsi/initiatorname.iscsi`
 
-### Portal
+### Portal (iSCSI)
 An IP address and TCP port combination that provides access to an iSCSI target. Default iSCSI port is **3260**.
 
 **Example:** `10.100.1.10:3260`
 
-A storage array typically has multiple portals for redundancy and performance.
+A storage array typically has multiple portals across controllers for redundancy and performance.
 
 ### Session
 An active connection between an iSCSI initiator and target. A session can contain multiple TCP connections for performance.
@@ -109,6 +109,13 @@ The NVMe component that manages connections and I/O between a host and subsystem
 
 ### Discovery Controller
 A special NVMe controller (port **8009**) that provides information about available subsystems. Used for automatic discovery of storage resources.
+
+### Portal (NVMe-TCP)
+An IP address and TCP port combination that provides access to an NVMe subsystem. Default NVMe-TCP data port is **4420**; discovery port is **8009**.
+
+**Example:** `10.100.1.10:4420`
+
+A storage array typically has multiple portals across controllers for redundancy and performance. Each portal can serve multiple subsystems.
 
 ### Native NVMe Multipathing
 Linux kernel-level multipathing for NVMe devices, enabled via `nvme_core multipath=Y`. Unlike dm-multipath (used for iSCSI), native NVMe multipathing presents a single device path (`/dev/nvmeXnY`) with the kernel managing multiple underlying paths automatically.

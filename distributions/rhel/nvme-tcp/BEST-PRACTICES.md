@@ -25,6 +25,7 @@ Comprehensive best practices for deploying NVMe-TCP storage on RHEL-based system
 ---
 
 ## Table of Contents
+- [Architecture Overview](#architecture-overview)
 - [RHEL-Specific Considerations](#rhel-specific-considerations)
 - [Network Configuration](#network-configuration)
 - [SELinux Configuration](#selinux-configuration)
@@ -34,6 +35,100 @@ Comprehensive best practices for deploying NVMe-TCP storage on RHEL-based system
 - [Monitoring & Maintenance](#monitoring--maintenance)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Architecture Overview
+
+### Deployment Topology
+
+```mermaid
+flowchart TB
+    subgraph "RHEL/Rocky/AlmaLinux Hosts"
+        HOST1[Linux Host 1<br/>2x Storage NICs]
+        HOST2[Linux Host 2<br/>2x Storage NICs]
+        HOST3[Linux Host 3<br/>2x Storage NICs]
+    end
+
+    subgraph "Storage Network"
+        SW1[Storage Switch 1<br/>10/25/100 GbE]
+        SW2[Storage Switch 2<br/>10/25/100 GbE]
+    end
+
+    subgraph "NVMe-TCP Storage Array"
+        CTRL1[Controller 1<br/>Portal 1 & 2]
+        CTRL2[Controller 2<br/>Portal 3 & 4]
+        NVME[(NVMe Namespace)]
+    end
+
+    SW1 --- SW2
+
+    HOST1 ---|NIC 1| SW1
+    HOST1 ---|NIC 2| SW2
+    HOST2 ---|NIC 1| SW1
+    HOST2 ---|NIC 2| SW2
+    HOST3 ---|NIC 1| SW1
+    HOST3 ---|NIC 2| SW2
+
+    SW1 --- CTRL1
+    SW1 --- CTRL2
+    SW2 --- CTRL1
+    SW2 --- CTRL2
+
+    CTRL1 --- NVME
+    CTRL2 --- NVME
+
+    style NVME fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style SW1 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style SW2 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+```
+
+### Network Architecture
+
+```mermaid
+flowchart LR
+    subgraph "RHEL Host"
+        NIC1[Storage NIC 1<br/>10.100.1.101]
+        NIC2[Storage NIC 2<br/>10.100.1.102]
+    end
+
+    subgraph "Storage Network - VLAN 100"
+        SW1[Switch 1]
+        SW2[Switch 2]
+    end
+
+    subgraph "Storage Array"
+        P1[Portal 1<br/>10.100.1.10]
+        P2[Portal 2<br/>10.100.1.11]
+        P3[Portal 3<br/>10.100.1.12]
+        P4[Portal 4<br/>10.100.1.13]
+    end
+
+    NIC1 ---|Path 1-4| SW1
+    NIC2 ---|Path 5-8| SW2
+    SW1 --- SW2
+    SW1 --- P1
+    SW1 --- P2
+    SW1 --- P3
+    SW1 --- P4
+    SW2 --- P1
+    SW2 --- P2
+    SW2 --- P3
+    SW2 --- P4
+
+    style NIC1 fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style NIC2 fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style SW1 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style SW2 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+```
+
+**Key Design Principles:**
+- **Dual switches** for network redundancy
+- **Minimum 2 NICs per host** for multipath
+- **Dual controller array** for storage HA
+- **8 paths** (2 NICs × 4 portals) for maximum redundancy
+
+> **📊 More Diagrams:** See [Common Storage Topology](../../../common/includes/diagrams-storage-topology.md) and [Network Architecture](../../../common/includes/diagrams-network-architecture.md) for additional diagrams.
 
 ---
 
@@ -340,10 +435,12 @@ sudo firewall-cmd --list-all
 
 ### Storage Network Firewall Rules
 
-#### Option 1: Trusted Zone (Recommended)
+#### Option 1: Trusted Zone (Recommended for Dedicated Storage Networks)
+
+For dedicated storage networks, **disable firewall filtering** on storage interfaces to eliminate CPU overhead from packet inspection. This is critical for high-throughput NVMe-TCP storage.
 
 ```bash
-# Add storage interfaces to trusted zone
+# Add storage interfaces to trusted zone (no packet filtering)
 sudo firewall-cmd --permanent --zone=trusted --add-interface=ens1f0
 sudo firewall-cmd --permanent --zone=trusted --add-interface=ens1f1
 
@@ -354,17 +451,25 @@ sudo firewall-cmd --reload
 sudo firewall-cmd --zone=trusted --list-all
 ```
 
-**Why trusted zone:**
-- Storage network is isolated
-- No need for port filtering on dedicated storage network
-- Simplifies management
+**Why disable filtering on storage interfaces:**
+- **CPU overhead**: Firewall packet inspection adds latency and consumes CPU cycles
+- **Performance impact**: At high IOPS (millions with NVMe-TCP), filtering overhead becomes significant
+- **Network isolation**: Dedicated storage VLANs provide security at the network layer
+- **Simplicity**: No port rules to maintain for storage traffic
 
-#### Option 2: Custom Zone with Port Filtering
+#### Option 2: Custom Zone with Port Filtering (For Shared Networks)
+
+Use port filtering only when storage interfaces share a network with other traffic or when additional host-level security is required by policy.
+
+> **⚠️ Performance Note:** Port filtering adds CPU overhead for every packet. For production storage with high IOPS requirements, use Option 1 with network-level isolation instead.
 
 ```bash
 # Create custom storage zone
 sudo firewall-cmd --permanent --new-zone=storage
+# Port 4420 = Data port (connections)
+# Port 8009 = Discovery port (optional, for nvme discover)
 sudo firewall-cmd --permanent --zone=storage --add-port=4420/tcp
+sudo firewall-cmd --permanent --zone=storage --add-port=8009/tcp
 sudo firewall-cmd --permanent --zone=storage --add-interface=ens1f0
 sudo firewall-cmd --permanent --zone=storage --add-interface=ens1f1
 
@@ -383,6 +488,11 @@ sudo firewall-cmd --permanent --zone=storage --add-rich-rule='
   rule family="ipv4"
   source address="10.100.1.0/24"
   port protocol="tcp" port="4420" accept'
+
+sudo firewall-cmd --permanent --zone=storage --add-rich-rule='
+  rule family="ipv4"
+  source address="10.100.1.0/24"
+  port protocol="tcp" port="8009" accept'
 
 # Log dropped packets
 sudo firewall-cmd --permanent --zone=storage --add-rich-rule='
@@ -635,6 +745,89 @@ sudo reboot
 
 ## High Availability
 
+### Path Redundancy Model
+
+```mermaid
+flowchart TB
+    subgraph "Linux Host"
+        HOST[Host NQN]
+        NIC1[NIC 1<br/>10.100.1.101]
+        NIC2[NIC 2<br/>10.100.1.102]
+    end
+
+    subgraph "8 Redundant Paths"
+        P1[Path 1: NIC1→Portal1]
+        P2[Path 2: NIC1→Portal2]
+        P3[Path 3: NIC1→Portal3]
+        P4[Path 4: NIC1→Portal4]
+        P5[Path 5: NIC2→Portal1]
+        P6[Path 6: NIC2→Portal2]
+        P7[Path 7: NIC2→Portal3]
+        P8[Path 8: NIC2→Portal4]
+    end
+
+    subgraph "Storage Array - 10.100.1.0/24"
+        SUBSYS[NVMe Subsystem<br/>Single Namespace]
+        PORTAL1[Portal 1]
+        PORTAL2[Portal 2]
+        PORTAL3[Portal 3]
+        PORTAL4[Portal 4]
+    end
+
+    HOST --> NIC1
+    HOST --> NIC2
+
+    NIC1 --> P1 --> PORTAL1
+    NIC1 --> P2 --> PORTAL2
+    NIC1 --> P3 --> PORTAL3
+    NIC1 --> P4 --> PORTAL4
+
+    NIC2 --> P5 --> PORTAL1
+    NIC2 --> P6 --> PORTAL2
+    NIC2 --> P7 --> PORTAL3
+    NIC2 --> P8 --> PORTAL4
+
+    PORTAL1 --> SUBSYS
+    PORTAL2 --> SUBSYS
+    PORTAL3 --> SUBSYS
+    PORTAL4 --> SUBSYS
+
+    style SUBSYS fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style HOST fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+```
+
+### Failover Behavior
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant NVMe as NVMe Multipath
+    participant Path1 as Active Path 1
+    participant Path2 as Standby Path 2
+    participant Storage as Storage Array
+
+    App->>NVMe: Write Request
+    NVMe->>Path1: Route via Path 1
+    Path1->>Storage: I/O Operation
+    Storage->>Path1: Success
+
+    Note over Path1: Path 1 Fails
+
+    App->>NVMe: Write Request
+    NVMe->>Path1: Attempt Path 1
+    Path1--xNVMe: Timeout/Error
+    NVMe->>Path2: Automatic Failover
+    Path2->>Storage: I/O Operation
+    Storage->>Path2: Success
+    NVMe->>App: Success
+
+    Note over Path1: Path 1 Recovers
+    Path1->>NVMe: Path Available
+    NVMe->>NVMe: Rebalance I/O
+```
+
+> **📊 More Diagrams:** See [NVMe Multipath Diagrams](../../../common/includes/diagrams-nvme-multipath.md) and [Failover Diagrams](../../../common/includes/diagrams-failover.md) for additional details.
+
 ### Native NVMe Multipath Configuration for HA
 
 NVMe-TCP uses **native NVMe multipathing** built into the Linux kernel. This is NOT dm-multipath (`multipath.conf`, `multipathd`) - those are for iSCSI/Fibre Channel only.
@@ -863,6 +1056,51 @@ sudo systemctl enable --now auditd
 ---
 
 ## Troubleshooting
+
+### Troubleshooting Flowchart
+
+```mermaid
+graph TD
+    START[NVMe Issue Detected]
+
+    START --> CHECK_PATHS{Are paths live?<br/>nvme list-subsys}
+
+    CHECK_PATHS -->|No paths| CHECK_NET[Check Network<br/>Connectivity]
+    CHECK_NET --> PING{Can ping<br/>storage portals?}
+    PING -->|No| FIX_NET[Fix Network:<br/>- Check cables<br/>- Check switch config<br/>- Check interface IP]
+    PING -->|Yes| CHECK_MOD{NVMe modules<br/>loaded?}
+    CHECK_MOD -->|No| LOAD_MOD[Load modules:<br/>modprobe nvme-tcp]
+    CHECK_MOD -->|Yes| CHECK_NQN[Verify Host NQN<br/>registered on array]
+
+    CHECK_PATHS -->|Some paths| CHECK_PARTIAL[Check Failed Paths:<br/>- Interface down?<br/>- Portal unreachable?]
+
+    CHECK_PATHS -->|All live| CHECK_PERF{Performance<br/>Issue?}
+
+    CHECK_PERF -->|Yes| CHECK_MTU[Verify MTU 9000<br/>end-to-end]
+    CHECK_MTU --> CHECK_POLICY[Check IO Policy:<br/>queue-depth recommended]
+    CHECK_POLICY --> CHECK_LOAD[Check Network<br/>Utilization]
+
+    CHECK_PERF -->|No| CHECK_PERSIST{Persistence<br/>Issue?}
+
+    CHECK_PERSIST -->|Yes| CHECK_SERVICE[Check nvmf-autoconnect<br/>service enabled]
+    CHECK_SERVICE --> CHECK_CONFIG[Verify discovery.conf]
+
+    FIX_NET --> RECONNECT[Reconnect:<br/>nvme connect-all]
+    LOAD_MOD --> RECONNECT
+    CHECK_NQN --> RECONNECT
+    CHECK_PARTIAL --> RECONNECT
+    CHECK_LOAD --> TUNE[Tune Performance]
+    CHECK_CONFIG --> ENABLE[Enable service]
+
+    RECONNECT --> VERIFY[Verify:<br/>nvme list-subsys]
+    TUNE --> VERIFY
+    ENABLE --> VERIFY
+
+    style START fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+```
+
+> **📊 More Diagrams:** See [Troubleshooting Flowcharts](../../../common/includes/diagrams-troubleshooting.md) for detailed troubleshooting procedures.
 
 <!-- Include common troubleshooting content -->
 For common troubleshooting procedures, see [Common Troubleshooting](../../../common/includes/troubleshooting-common.md).
