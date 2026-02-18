@@ -93,9 +93,46 @@ iscsiadm -m session
 
 ## Step 6: Configure Multipath
 
-> **Note:** For comprehensive multipath concepts and configuration patterns, see [Multipath Concepts](../../common/includes/multipath-concepts.md).
+Create `/etc/multipath.conf`:
 
-DM-Multipath configuration is beyond the scope of this guide. For more information see: https://support.purestorage.com/bundle/m_linux/page/Solutions/Oracle/Oracle_on_FlashArray/library/common_content/c_recommended_dmmultipath_settings.html
+```bash
+tee /etc/multipath.conf > /dev/null <<'EOF'
+defaults {
+    find_multipaths      off
+    polling_interval     10
+    path_selector        "service-time 0"
+    path_grouping_policy group_by_prio
+    failback             immediate
+    no_path_retry        0
+}
+
+devices {
+    device {
+        vendor           "PURE"
+        product          "FlashArray"
+        path_selector    "service-time 0"
+        hardware_handler "1 alua"
+        path_grouping_policy group_by_prio
+        prio             alua
+        failback         immediate
+        path_checker     tur
+        fast_io_fail_tmo 10
+        dev_loss_tmo     60
+        no_path_retry    0
+    }
+}
+EOF
+
+# Restart multipathd to apply configuration
+systemctl restart multipathd
+
+# Verify multipath devices
+multipath -ll
+```
+
+> **Why `find_multipaths off`?** This ensures ALL paths to storage devices are claimed by multipath immediately, rather than waiting to detect multiple paths. See [iSCSI Best Practices](./BEST-PRACTICES.md#multipath-configuration) for detailed explanation.
+
+> **Note:** For comprehensive multipath concepts and configuration patterns, see [Multipath Concepts](../../common/includes/multipath-concepts.md).
 
 ## Step 7: Create LVM
 
