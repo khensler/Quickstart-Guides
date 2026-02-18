@@ -122,7 +122,7 @@ path_selector "round-robin 0"
 - Hung processes cannot be killed (D state)
 - May cause similar issues to VMware ESXi APD (All Paths Down) events
 
-**See also:** [APD (All Paths Down) Events](#understanding-apd-events) in iSCSI multipath configuration
+**See also:** [APD (All Paths Down) Events](iscsi-multipath-config.md#understanding-apd-all-paths-down-events) in iSCSI multipath configuration
 
 #### no_path_retry (RECOMMENDED)
 

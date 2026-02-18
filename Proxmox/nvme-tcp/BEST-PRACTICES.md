@@ -108,7 +108,7 @@ flowchart-elk
 
 ## Network Design
 
-> **Note:** For comprehensive network architecture concepts and design patterns, see [Network Concepts](../common/includes/network-concepts.md).
+> **Note:** For comprehensive network architecture concepts and design patterns, see [Network Concepts](../../common/includes/network-concepts.md).
 
 ### Network Architecture Principles
 
@@ -414,7 +414,7 @@ Result: Each node has 8 paths (2 NICs × 4 portals)
 
 ## High Availability & Redundancy
 
-> **Note:** For detailed multipath concepts and configuration patterns, see [Multipath Concepts](../common/includes/multipath-concepts.md).
+> **Note:** For detailed multipath concepts and configuration patterns, see [Multipath Concepts](../../common/includes/multipath-concepts.md).
 
 ### Multipath Architecture
 
@@ -1253,7 +1253,7 @@ ip neigh flush all
 
 ## Performance Optimization
 
-> **Note:** For comprehensive performance tuning guidance, see [Performance Tuning](../common/includes/performance-tuning.md).
+> **Note:** For comprehensive performance tuning guidance, see [Performance Tuning](../../common/includes/performance-tuning.md).
 
 ### Performance Tuning Parameters
 
@@ -1464,7 +1464,7 @@ sysctl -p /etc/sysctl.d/99-nvme-tcp-arp.conf
 
 ## Security Best Practices
 
-> **Note:** For comprehensive security best practices, see [Security Best Practices](../common/includes/security-best-practices.md).
+> **Note:** For comprehensive security best practices, see [Security Best Practices](../../common/includes/security-best-practices.md).
 
 ### Network Security
 
@@ -1539,7 +1539,7 @@ ss -tn | grep :4420
 
 ## Monitoring & Maintenance
 
-> **Note:** For comprehensive monitoring and maintenance procedures, see [Monitoring & Maintenance](../common/includes/monitoring-maintenance.md).
+> **Note:** For comprehensive monitoring and maintenance procedures, see [Monitoring & Maintenance](../../common/includes/monitoring-maintenance.md).
 
 ### Health Monitoring
 
@@ -1628,7 +1628,7 @@ done
 
 ## Troubleshooting
 
-> **Note:** For common troubleshooting procedures, see [Common Troubleshooting](../common/includes/troubleshooting-common.md).
+> **Note:** For common troubleshooting procedures, see [Common Troubleshooting](../../common/includes/troubleshooting-common.md).
 
 ### Common Issues and Solutions
 

@@ -41,7 +41,7 @@ Generic guide for configuring NVMe over TCP storage on Proxmox VE using native C
 
 ## Key Terminology
 
-> **📖 New to NVMe-TCP?** See the complete [Storage Terminology Glossary](../common/includes/glossary.md) for definitions of all terms used in this guide.
+> **📖 New to NVMe-TCP?** See the complete [Storage Terminology Glossary](../../common/includes/glossary.md) for definitions of all terms used in this guide.
 
 | Term | Definition |
 |------|------------|
