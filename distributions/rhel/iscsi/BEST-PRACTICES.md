@@ -91,7 +91,7 @@ flowchart TB
 graph TB
     subgraph "Application Layer"
         APP[Application]
-        FS[Filesystem<br/>/dev/mapper/mpathX]
+        FS["Filesystem<br/>mpathX"]
     end
 
     subgraph "Device Mapper - Multipath"
@@ -100,10 +100,10 @@ graph TB
     end
 
     subgraph "SCSI Layer"
-        SDA[/dev/sda<br/>Path 1]
-        SDB[/dev/sdb<br/>Path 2]
-        SDC[/dev/sdc<br/>Path 3]
-        SDD[/dev/sdd<br/>Path 4]
+        SDA["sda<br/>Path 1"]
+        SDB["sdb<br/>Path 2"]
+        SDC["sdc<br/>Path 3"]
+        SDD["sdd<br/>Path 4"]
     end
 
     subgraph "iSCSI Sessions"
@@ -764,7 +764,7 @@ flowchart TB
     end
 
     subgraph "dm-multipath Layer"
-        MPATH[/dev/mapper/mpathX<br/>Aggregates All Paths]
+        MPATH["mpathX Device<br/>Aggregates All Paths"]
     end
 
     subgraph "iSCSI Storage Array"
