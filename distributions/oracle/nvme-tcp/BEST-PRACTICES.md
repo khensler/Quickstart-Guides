@@ -636,6 +636,13 @@ tuned-adm active
 tuned-adm verify
 ```
 
+> **⚠️ Note:** The values in this custom tuned profile are **starting points** for testing. Actual optimal values depend on:
+> - **Driver/firmware limitations**: Check NIC and UEK driver documentation for supported buffer sizes and queue depths
+> - **Hardware capabilities**: Use `ethtool -g <interface>` to verify ring buffer limits
+> - **Workload characteristics**: Sequential vs. random I/O, block sizes, concurrency
+>
+> **Always validate with performance monitoring** (`iostat -x 1`, `sar -n DEV 1`, `perf`, Oracle OSWatcher) before deploying to production. Measure baseline performance first, then test changes incrementally.
+
 ### IRQ Affinity for UEK
 
 UEK has better IRQ handling, but you can optimize further:
