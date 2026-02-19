@@ -366,15 +366,17 @@ blacklist {
     devnode "^cciss.*"
 }
 
-devices {
-    device {
-        vendor "PURE"
-        product "FlashArray"
-        path_selector "service-time 0"
-        path_grouping_policy "group_by_prio"
-        prio "alua"
-        failback "immediate"
-        path_checker "tur"
+# Add device-specific settings for your storage array
+# Consult your storage vendor documentation for recommended values
+#devices {
+#    device {
+#        vendor "VENDOR"
+#        product "PRODUCT"
+#        path_selector "service-time 0"
+#        path_grouping_policy "group_by_prio"
+#        prio "alua"
+#        failback "immediate"
+#        path_checker "tur"
         fast_io_fail_tmo 10
         dev_loss_tmo 60
         no_path_retry 0
@@ -421,7 +423,7 @@ echo "InitiatorName=iqn.2024-01.com.yourcompany:proxmox-node1" > /etc/iscsi/init
 # Configure iSCSI settings
 cat >> /etc/iscsi/iscsid.conf << 'EOF'
 
-# Timeouts optimized for Pure Storage
+# Timeouts optimized for storage arrays
 node.session.timeo.replacement_timeout = 20
 node.conn[0].timeo.login_timeout = 30
 node.conn[0].timeo.logout_timeout = 15
@@ -564,7 +566,7 @@ pvesm add lvmthin iscsi-shared \
 multipath -ll
 
 # Expected output with 4 paths (2 NICs × 2 portals):
-# mpathX (3600...) dm-0 PURE,FlashArray
+# mpathX (3600...) dm-0 VENDOR,PRODUCT
 # size=100G features='0' hwhandler='1 alua' wp=rw
 # |-+- policy='service-time 0' prio=50 status=active
 # | |- 1:0:0:1 sda 8:0   active ready running
@@ -637,11 +639,11 @@ cat > /etc/udev/rules.d/99-iscsi-scheduler.rules << 'EOF'
 # Set I/O scheduler for iSCSI devices (none/noop for SSD/Flash)
 ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
 
-# Set queue depth for Pure Storage devices
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="PURE*", ATTR{device/queue_depth}="128"
+# Set queue depth (adjust vendor to match your storage)
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{device/queue_depth}="128"
 
-# Set read-ahead
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="PURE*", ATTR{bdi/read_ahead_kb}="128"
+# Set read-ahead (adjust vendor to match your storage)
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{bdi/read_ahead_kb}="128"
 
 # Multipath device settings
 ACTION=="add|change", KERNEL=="dm-*", ATTR{dm/name}=="mpath*", ATTR{queue/scheduler}="none"
@@ -724,7 +726,7 @@ cat /proc/interrupts | grep -E "ens1f"
 **Configure CHAP on iSCSI initiator:**
 ```bash
 # Set CHAP credentials for a target
-TARGET_IQN="iqn.2010-06.com.purestorage:flasharray.12345abc"
+TARGET_IQN="iqn.2010-06.com.storagevendor:array.12345abc"
 PORTAL_IP="10.100.1.10"
 
 iscsiadm -m node -T $TARGET_IQN -p $PORTAL_IP:3260 \

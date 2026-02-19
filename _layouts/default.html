@@ -7,6 +7,27 @@
   {%- seo -%}
   <link rel="stylesheet" href="{{ '/assets/main.css' | relative_url }}">
   {%- feed_meta -%}
+  <!-- Custom styles for wider content -->
+  <style>
+    .wrapper {
+      max-width: 1400px;
+      padding-left: 30px;
+      padding-right: 30px;
+    }
+    .page-content .wrapper {
+      max-width: 1400px;
+    }
+    .site-header .wrapper {
+      max-width: 1400px;
+    }
+    .site-footer .wrapper {
+      max-width: 1400px;
+    }
+    /* Ensure content uses full width */
+    .post-content, .home {
+      max-width: 100%;
+    }
+  </style>
   <!-- Mermaid diagram support -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <script>

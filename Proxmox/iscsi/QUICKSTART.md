@@ -105,7 +105,7 @@ iscsiadm -m session
 multipath -ll
 
 # Example output (with recommended no_path_retry 0 configuration)
-3624a93708eabcb40cc4241b202b61a7c dm-8 PURE,FlashArray
+3624a93708eabcb40cc4241b202b61a7c dm-8 VENDOR,PRODUCT
 size=5.0T features='0' hwhandler='1 alua' wp=rw
 `-+- policy='service-time 0' prio=50 status=active
   |- 20:0:0:254 sdb 8:16 active ready running

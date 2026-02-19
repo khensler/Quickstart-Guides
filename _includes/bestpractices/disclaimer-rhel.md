@@ -1,7 +1,7 @@
 ## ⚠️ Important Disclaimers
 
 > **Vendor Documentation Priority:**
-> - This guide is **specific to Pure Storage configurations** and should be used in conjunction with official vendor documentation
+> - This guide should be used in conjunction with official vendor documentation
 > - Always consult and follow **Red Hat Enterprise Linux official documentation** for complete system configuration
 > - In case of any conflicts between this guide and vendor documentation, **vendor documentation takes precedence**
 >
@@ -12,7 +12,7 @@
 > - Performance and compatibility may vary based on your environment
 >
 > **Support:**
-> - For Pure Storage-specific issues, contact Pure Storage Support
+> - For storage array issues, contact your storage vendor support
 > - For RHEL/Rocky/AlmaLinux issues, contact Red Hat Support or community resources
 > - This guide is provided as-is without warranty
 

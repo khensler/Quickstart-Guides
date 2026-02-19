@@ -3,7 +3,7 @@ layout: default
 title: Storage Terminology Glossary
 ---
 
-> **⚠️ Disclaimer:** This content is specific to Pure Storage configurations and for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
+> **⚠️ Disclaimer:** This content is for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
 
 # Storage Terminology Glossary
 
@@ -14,7 +14,7 @@ This glossary defines key terms used throughout the iSCSI and NVMe-TCP documenta
 ## Common Storage Terms
 
 ### Volume
-A logical unit of storage provisioned on a storage array. Volumes are presented to hosts as block devices. On Pure Storage arrays, volumes are thin-provisioned and can be resized dynamically.
+A logical unit of storage provisioned on a storage array. Volumes are presented to hosts as block devices. Modern storage arrays typically support thin-provisioning and dynamic resizing.
 
 ### LUN (Logical Unit Number)
 An identifier used to address a specific storage volume within a target. In iSCSI, each volume presented to a host is assigned a LUN number. The term "LUN" is often used interchangeably with "volume" in storage discussions.
@@ -52,7 +52,7 @@ A unique identifier for iSCSI initiators and targets. Format: `iqn.YYYY-MM.rever
 
 **Examples:**
 - Initiator: `iqn.1994-05.com.redhat:server01`
-- Target: `iqn.2010-06.com.purestorage:flasharray.12345abc`
+- Target: `iqn.2010-06.com.storagevendor:array.12345abc`
 
 **Location on Linux hosts:** `/etc/iscsi/initiatorname.iscsi`
 
@@ -95,7 +95,7 @@ A unique identifier for NVMe hosts and subsystems. Similar in purpose to iSCSI I
 
 **Examples:**
 - Host NQN: `nqn.2014-08.org.nvmexpress:uuid:12345678-1234-1234-1234-123456789abc`
-- Subsystem NQN: `nqn.2010-06.com.purestorage:flasharray.12345abc`
+- Subsystem NQN: `nqn.2010-06.com.storagevendor:array.12345abc`
 
 **Location on Linux hosts:** `/etc/nvme/hostnqn`
 

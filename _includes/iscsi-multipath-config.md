@@ -1,4 +1,4 @@
-> **⚠️ Disclaimer:** This content is specific to Pure Storage configurations and for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
+> **⚠️ Disclaimer:** This content is for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
 
 ## iSCSI Multipath Configuration
 
@@ -44,20 +44,22 @@ blacklist {
     devnode "^cciss.*"
 }
 
-devices {
-    device {
-        vendor "PURE"
-        product "FlashArray"
-        path_selector "service-time 0"
-        path_grouping_policy "group_by_prio"
-        prio "alua"
-        failback "immediate"
-        path_checker "tur"
-        fast_io_fail_tmo 10
-        dev_loss_tmo 60
-        no_path_retry 0
-        hardware_handler "1 alua"
-        rr_min_io_rq 1
+# Add device-specific settings for your storage array
+# Consult your storage vendor documentation for recommended values
+#devices {
+#    device {
+#        vendor "VENDOR"
+#        product "PRODUCT"
+#        path_selector "service-time 0"
+#        path_grouping_policy "group_by_prio"
+#        prio "alua"
+#        failback "immediate"
+#        path_checker "tur"
+#        fast_io_fail_tmo 10
+#        dev_loss_tmo 60
+#        no_path_retry 0
+#        hardware_handler "1 alua"
+#        rr_min_io_rq 1
     }
 }
 ```
@@ -154,7 +156,7 @@ multipath -r
 
 **Example output (with recommended `no_path_retry 0` configuration):**
 ```
-mpatha (360014380116e6d6e00000000000000001) dm-0 PURE,FlashArray
+mpatha (360014380116e6d6e00000000000000001) dm-0 VENDOR,PRODUCT
 size=1.0T features='0' hwhandler='1 alua' wp=rw
 |-+- policy='service-time 0' prio=50 status=active
 | |- 3:0:0:1 sdb 8:16 active ready running
@@ -201,8 +203,8 @@ The `queue_if_no_path` feature tells the device mapper to queue I/O requests whe
 # /etc/multipath.conf
 devices {
     device {
-        vendor "PURE"
-        product "FlashArray"
+        vendor "VENDOR"
+        product "PRODUCT"
         # ... other settings ...
         no_path_retry 0        # Fail immediately when all paths are down
         # OR

@@ -1,5 +1,5 @@
 # Jekyll configuration for GitHub Pages
-title: Pure Storage Linux Configuration Guides
+title: Linux Storage Configuration Guides
 description: Best practices for NVMe-TCP and iSCSI storage on Linux distributions
 baseurl: "/Quickstart-Guides"
 url: "https://khensler.github.io"

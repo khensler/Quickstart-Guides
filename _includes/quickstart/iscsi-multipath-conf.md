@@ -11,21 +11,23 @@ defaults {
     no_path_retry        0
 }
 
-devices {
-    device {
-        vendor           "PURE"
-        product          "FlashArray"
-        path_selector    "service-time 0"
-        hardware_handler "1 alua"
-        path_grouping_policy group_by_prio
-        prio             alua
-        failback         immediate
-        path_checker     tur
-        fast_io_fail_tmo 10
-        dev_loss_tmo     60
-        no_path_retry    0
-    }
-}
+# Add device-specific settings for your storage array
+# Example for a storage array supporting ALUA:
+#devices {
+#    device {
+#        vendor           "VENDOR"
+#        product          "PRODUCT"
+#        path_selector    "service-time 0"
+#        hardware_handler "1 alua"
+#        path_grouping_policy group_by_prio
+#        prio             alua
+#        failback         immediate
+#        path_checker     tur
+#        fast_io_fail_tmo 10
+#        dev_loss_tmo     60
+#        no_path_retry    0
+#    }
+#}
 EOF
 
 # Restart multipathd to apply configuration

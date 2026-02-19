@@ -543,15 +543,17 @@ blacklist {
     devnode "^cciss.*"
 }
 
-devices {
-    device {
-        vendor "PURE"
-        product "FlashArray"
-        path_selector "service-time 0"
-        path_grouping_policy "group_by_prio"
-        prio "alua"
-        failback "immediate"
-        path_checker "tur"
+# Add device-specific settings for your storage array
+# Consult your storage vendor documentation for recommended values
+#devices {
+#    device {
+#        vendor "VENDOR"
+#        product "PRODUCT"
+#        path_selector "service-time 0"
+#        path_grouping_policy "group_by_prio"
+#        prio "alua"
+#        failback "immediate"
+#        path_checker "tur"
         fast_io_fail_tmo 10
         dev_loss_tmo 60
         no_path_retry 0
@@ -644,11 +646,11 @@ sudo tee /etc/udev/rules.d/99-iscsi-scheduler.rules > /dev/null <<'EOF'
 # Set I/O scheduler for iSCSI devices (SSD/Flash)
 ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
 
-# Set queue depth
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="PURE", ATTR{device/queue_depth}="128"
+# Set queue depth (adjust vendor to match your storage)
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{device/queue_depth}="128"
 
-# Set read-ahead
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="PURE", ATTR{bdi/read_ahead_kb}="128"
+# Set read-ahead (adjust vendor to match your storage)
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{bdi/read_ahead_kb}="128"
 EOF
 
 # Reload udev rules

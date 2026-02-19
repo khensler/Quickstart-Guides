@@ -562,15 +562,17 @@ blacklist {
     devnode "^cciss.*"
 }
 
-devices {
-    device {
-        vendor "PURE"
-        product "FlashArray"
-        path_selector "service-time 0"
-        path_grouping_policy "group_by_prio"
-        prio "alua"
-        failback "immediate"
-        path_checker "tur"
+# Add device-specific settings for your storage array
+# Consult your storage vendor documentation for recommended values
+#devices {
+#    device {
+#        vendor "VENDOR"
+#        product "PRODUCT"
+#        path_selector "service-time 0"
+#        path_grouping_policy "group_by_prio"
+#        prio "alua"
+#        failback "immediate"
+#        path_checker "tur"
         fast_io_fail_tmo 10
         dev_loss_tmo 60
         no_path_retry 0

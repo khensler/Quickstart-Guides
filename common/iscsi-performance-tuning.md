@@ -3,7 +3,7 @@ layout: default
 title: iSCSI Performance Tuning
 ---
 
-> **⚠️ Disclaimer:** This content is specific to Pure Storage configurations and for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
+> **⚠️ Disclaimer:** This content is for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
 
 ## iSCSI Performance Tuning
 
@@ -66,9 +66,9 @@ cat /sys/block/sda/device/queue_depth
 # Increase queue depth (per device)
 echo 128 > /sys/block/sda/device/queue_depth
 
-# Make persistent via udev rule
+# Make persistent via udev rule (adjust vendor to match your storage)
 # /etc/udev/rules.d/99-iscsi-queue-depth.rules
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="PURE", ATTR{device/queue_depth}="128"
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{device/queue_depth}="128"
 ```
 
 **Recommended values:**
@@ -174,9 +174,9 @@ blockdev --setra 256 /dev/sda  # 128 KB
 # For sequential I/O workloads (file servers):
 blockdev --setra 8192 /dev/sda  # 4 MB
 
-# Make persistent via udev rule
+# Make persistent via udev rule (adjust vendor to match your storage)
 # /etc/udev/rules.d/99-iscsi-readahead.rules
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="PURE", ATTR{bdi/read_ahead_kb}="128"
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{bdi/read_ahead_kb}="128"
 ```
 
 ### Monitoring Performance

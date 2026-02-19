@@ -3,11 +3,11 @@ layout: home
 title: Home
 ---
 
-# Pure Storage Linux Configuration Guides
+# Linux Storage Configuration Guides
 
-Best practices for configuring NVMe-TCP and iSCSI storage on Linux distributions with Pure Storage FlashArray.
+Best practices for configuring NVMe-TCP and iSCSI storage on Linux distributions.
 
-> **⚠️ Disclaimer:** This content is specific to Pure Storage configurations and for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use.
+> **⚠️ Disclaimer:** This content is for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use.
 
 ---
 

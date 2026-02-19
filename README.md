@@ -17,7 +17,7 @@ A collection of quick start guides for various technologies and configurations.
 - [NVMe-TCP Best Practices](Proxmox/nvme-tcp/BEST-PRACTICES.md) - Production deployment best practices with architectural diagrams
 - [iSCSI Setup Guide](Proxmox/iscsi/QUICKSTART.md) - Configure iSCSI for Proxmox VE
 - [iSCSI Best Practices](Proxmox/iscsi/BEST-PRACTICES.md) - Production deployment best practices for iSCSI on Proxmox VE
-- [VMware to Proxmox Migration Guide for Pure vVols](Proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Pure vVols
+- [VMware to Proxmox Migration Guide (Pure Storage vVols)](Proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Pure Storage vVols (vendor-specific guide)
 
 **RHEL/Rocky/AlmaLinux:**
 - [NVMe-TCP Quick Start](distributions/rhel/nvme-tcp/QUICKSTART.md) - Quick start guide for RHEL-based distributions

@@ -3,7 +3,7 @@ layout: default
 title: iSCSI Architecture
 ---
 
-> **⚠️ Disclaimer:** This content is specific to Pure Storage configurations and for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
+> **⚠️ Disclaimer:** This content is for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
 
 ## iSCSI Architecture and Design
 
@@ -17,7 +17,7 @@ title: iSCSI Architecture
 **Target (Storage Array):**
 - Storage device that receives iSCSI connections
 - Also identified by IQN
-- Example: `iqn.2010-06.com.purestorage:flasharray.12345abc`
+- Example: `iqn.2010-06.com.storagevendor:array.12345abc`
 
 **Portal:**
 - IP address and port combination for iSCSI access
@@ -57,7 +57,7 @@ title: iSCSI Architecture
 ```
 Host                    Storage Array
 ┌─────────────┐        ┌─────────────┐
-│   Server    │        │ FlashArray  │
+│   Server    │        │ Array       │
 │             │        │             │
 │  ┌───────┐  │        │  ┌───────┐  │
 │  │ eth0  │──┼────────┼──│Portal1│  │
@@ -85,7 +85,7 @@ Paths: 2 NICs × 2 Portals = 4 paths
 ```
 Host                Switches              Storage Array
 ┌─────────────┐    ┌────────┐           ┌─────────────┐
-│   Server    │    │Switch 1│           │ FlashArray  │
+│   Server    │    │Switch 1│           │ Array       │
 │             │    └────────┘           │             │
 │  ┌───────┐  │        │                │  ┌───────┐  │
 │  │ eth0  │──┼────────┼────────────────┼──│Portal1│  │
@@ -113,7 +113,7 @@ Paths: 2 NICs × 2 Portals = 4 paths
 ```
 Host                Switches              Storage Array
 ┌─────────────┐    ┌────────┐           ┌─────────────┐
-│   Server    │    │Switch 1│           │ FlashArray  │
+│   Server    │    │Switch 1│           │ Array       │
 │  ┌───────┐  │    └────────┘           │  ┌───────┐  │
 │  │ eth0  │──┼────────┼────────────────┼──│Portal1│  │
 │  └───────┘  │        │                │  └───────┘  │
