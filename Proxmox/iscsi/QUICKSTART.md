@@ -11,9 +11,7 @@ This guide provides a streamlined path to configure iSCSI storage on Proxmox VE.
 
 ---
 
-## ⚠️ Important Disclaimers
-
-> **Vendor Documentation Priority:** This guide is **specific to Pure Storage** and for reference only. Always consult official Proxmox VE and storage vendor documentation. Test thoroughly in a lab environment before production use.
+{% include quickstart/disclaimer.md %}
 
 ---
 
@@ -24,9 +22,7 @@ This guide provides a streamlined path to configure iSCSI storage on Proxmox VE.
 - Dedicated storage network interfaces
 - Root access to all cluster nodes
 
-> **📖 New to iSCSI?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
-
-> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({{ site.baseurl }}/common/network-concepts.html).
+{% include quickstart/glossary-link-iscsi.md %}
 
 ## Step 1: Install iSCSI and Multipath Tools
 
@@ -98,44 +94,7 @@ iscsiadm -m session
 
 ## Step 6: Configure Multipath
 
-Create `/etc/multipath.conf`:
-
-```bash
-tee /etc/multipath.conf > /dev/null <<'EOF'
-defaults {
-    find_multipaths      off
-    polling_interval     10
-    path_selector        "service-time 0"
-    path_grouping_policy group_by_prio
-    failback             immediate
-    no_path_retry        0
-}
-
-devices {
-    device {
-        vendor           "PURE"
-        product          "FlashArray"
-        path_selector    "service-time 0"
-        hardware_handler "1 alua"
-        path_grouping_policy group_by_prio
-        prio             alua
-        failback         immediate
-        path_checker     tur
-        fast_io_fail_tmo 10
-        dev_loss_tmo     60
-        no_path_retry    0
-    }
-}
-EOF
-
-# Restart multipathd to apply configuration
-systemctl restart multipathd
-
-# Verify multipath devices
-multipath -ll
-```
-
-> **Why `find_multipaths off`?** This ensures ALL paths to storage devices are claimed by multipath immediately, rather than waiting to detect multiple paths. See [iSCSI Best Practices](./BEST-PRACTICES.md#multipath-configuration) for detailed explanation.
+{% include quickstart/iscsi-multipath-conf.md %}
 
 > **Note:** For comprehensive multipath concepts and configuration patterns, see [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html).
 
@@ -199,6 +158,8 @@ Name the storage in the ID field.  Select the volume group in the Volume Group d
 ![Configure Storage](./img/disk-configuration-2.png)
 
 ---
+
+{% include quickstart/iscsi-quick-reference.md %}
 
 ## Next Steps
 

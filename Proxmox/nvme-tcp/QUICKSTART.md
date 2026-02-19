@@ -11,9 +11,7 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Proxmox 
 
 ---
 
-## ⚠️ Important Disclaimers
-
-> **Vendor Documentation Priority:** This guide is **specific to Pure Storage** and for reference only. Always consult official Proxmox VE and storage vendor documentation. Test thoroughly in a lab environment before production use.
+{% include quickstart/disclaimer.md %}
 
 ---
 
@@ -24,9 +22,9 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Proxmox 
 - Dedicated storage network interfaces
 - Root access to all cluster nodes
 
-> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
+{% include quickstart/glossary-link-nvme.md %}
 
-> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({{ site.baseurl }}/common/network-concepts.html).
+{% include quickstart/arp-warning.md %}
 
 ## Step 1: Configure Network (All Nodes)
 
@@ -79,68 +77,21 @@ echo 'options nvme_core multipath=Y' > /etc/modprobe.d/nvme-tcp.conf
 
 ## Step 3: Generate Host NQN (All Nodes)
 
-```bash
-mkdir -p /etc/nvme
-[ ! -f /etc/nvme/hostnqn ] && nvme gen-hostnqn > /etc/nvme/hostnqn
-cat /etc/nvme/hostnqn
-```
+{% include quickstart/nvme-generate-hostnqn.md %}
 
 **Register each node's host NQN** with your storage array.
 
 ## Step 4: Connect to NVMe Subsystems (All Nodes)
 
-```bash
-# Connect via first interface
-nvme connect -t tcp -a <PORTAL_IP_1> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=<INTERFACE_NAME_1> --host-traddr=<HOST_IP_1> \
-    --ctrl-loss-tmo=1800 --reconnect-delay=10
-
-nvme connect -t tcp -a <PORTAL_IP_2> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=<INTERFACE_NAME_1> --host-traddr=<HOST_IP_1> \
-    --ctrl-loss-tmo=1800 --reconnect-delay=10
-
-# Connect via second interface
-nvme connect -t tcp -a <PORTAL_IP_1> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=<INTERFACE_NAME_2> --host-traddr=<HOST_IP_2> \
-    --ctrl-loss-tmo=1800 --reconnect-delay=10
-
-nvme connect -t tcp -a <PORTAL_IP_2> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=<INTERFACE_NAME_2> --host-traddr=<HOST_IP_2> \
-    --ctrl-loss-tmo=1800 --reconnect-delay=10
-
-# Verify
-nvme list-subsys
-```
+{% include quickstart/nvme-connect-storage.md %}
 
 ## Step 5: Configure IO Policy (All Nodes)
 
-```bash
-# Create udev rule for persistence
-cat > /etc/udev/rules.d/99-nvme-iopolicy.rules << 'EOF'
-ACTION=="add", SUBSYSTEM=="nvme-subsystem", ATTR{iopolicy}="queue-depth"
-EOF
-
-udevadm control --reload-rules && udevadm trigger
-
-# Apply to existing subsystems
-for s in /sys/class/nvme-subsystem/nvme-subsys*/iopolicy; do
-    echo "queue-depth" > "$s" 2>/dev/null || true
-done
-```
+{% include quickstart/nvme-io-policy.md %}
 
 ## Step 6: Configure Persistent Connections (All Nodes)
 
-```bash
-# Create discovery configuration
-cat > /etc/nvme/discovery.conf << 'EOF'
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<HOST_IP_1>
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_1> --host-traddr=<HOST_IP_1>
---transport=tcp --traddr=<PORTAL_IP_1> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<HOST_IP_2>
---transport=tcp --traddr=<PORTAL_IP_2> --trsvcid=4420 --host-iface=<INTERFACE_NAME_2> --host-traddr=<HOST_IP_2>
-EOF
-
-systemctl enable nvmf-autoconnect.service
-```
+{% include quickstart/nvme-persistent-connections.md %}
 
 ## Step 7: Create Storage in Proxmox
 
@@ -166,29 +117,16 @@ pvscan --cache
 
 ## Step 8: Verify
 
+{% include quickstart/nvme-verify.md %}
+
 ```bash
-# Check connections
-nvme list-subsys
-
-# Check IO policy
-cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy
-
 # Check Proxmox storage
 pvesm status
 ```
 
 ---
 
-## Quick Reference
-
-| Command | Description |
-|---------|-------------|
-| `nvme discover -t tcp -a <IP> -s 8009` | Discover subsystems (port 8009) |
-| `nvme connect -t tcp -a <IP> -s 4420 -n <NQN>` | Connect to subsystem (port 4420) |
-| `nvme disconnect -n <NQN>` | Disconnect from subsystem |
-| `nvme list-subsys` | List subsystems and paths |
-| `cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy` | Check IO policy |
-| `pvesm status` | Check Proxmox storage status |
+{% include quickstart/nvme-quick-reference.md %}
 
 ---
 

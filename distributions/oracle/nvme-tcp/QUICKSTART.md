@@ -11,9 +11,7 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Oracle L
 
 ---
 
-## ⚠️ Important Disclaimers
-
-> **Vendor Documentation Priority:** This guide is **specific to Pure Storage** and for reference only. Always consult official Oracle Linux and storage vendor documentation. Test thoroughly in a lab environment before production use.
+{% include quickstart/disclaimer.md %}
 
 ---
 
@@ -24,9 +22,9 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Oracle L
 - Dedicated storage network interfaces
 - Root or sudo access
 
-> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
+{% include quickstart/glossary-link-nvme.md %}
 
-> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({{ site.baseurl }}/common/network-concepts.html).
+{% include quickstart/arp-warning.md %}
 
 ## Step 1: Install Packages
 
@@ -38,119 +36,36 @@ echo "nvme-tcp" | sudo tee /etc/modules-load.d/nvme-tcp.conf
 
 ## Step 2: Configure Network Interfaces
 
-```bash
-# First storage interface
-sudo nmcli connection add type ethernet \
-    con-name storage-1 \
-    ifname <INTERFACE_NAME_1> \
-    ipv4.method manual \
-    ipv4.addresses <HOST_IP_1>/24 \
-    ipv4.never-default yes \
-    802-3-ethernet.mtu 9000 \
-    connection.autoconnect yes
-
-# Second storage interface
-sudo nmcli connection add type ethernet \
-    con-name storage-2 \
-    ifname <INTERFACE_NAME_2> \
-    ipv4.method manual \
-    ipv4.addresses <HOST_IP_2>/24 \
-    ipv4.never-default yes \
-    802-3-ethernet.mtu 9000 \
-    connection.autoconnect yes
-
-# Activate
-sudo nmcli connection up storage-1
-sudo nmcli connection up storage-2
-```
+{% include quickstart/network-rhel.md %}
 
 ## Step 3: Configure Firewall
 
-Add storage interfaces to trusted zone (recommended for dedicated storage networks):
-
-```bash
-sudo firewall-cmd --permanent --zone=trusted --add-interface=<INTERFACE_NAME_1>
-sudo firewall-cmd --permanent --zone=trusted --add-interface=<INTERFACE_NAME_2>
-sudo firewall-cmd --reload
-```
+{% include quickstart/firewall-rhel.md %}
 
 > **Alternative:** For port filtering options, see [Best Practices - Firewall Configuration](./BEST-PRACTICES.md#firewall-configuration).
 
 ## Step 4: Generate Host NQN
 
-```bash
-# Check/generate host NQN
-cat /etc/nvme/hostnqn || sudo nvme gen-hostnqn | sudo tee /etc/nvme/hostnqn
-```
+{% include quickstart/nvme-generate-hostnqn.md %}
 
-**Register this host NQN** with your storage array.
+## Step 5: Connect to NVMe Subsystems
 
-## Step 5: Discover NVMe Subsystems
+{% include quickstart/nvme-connect-storage.md %}
 
-```bash
-# Port 8009 = Discovery Controller port
-sudo nvme discover -t tcp -a <PORTAL_IP_1> -s 8009
-```
+## Step 6: Configure IO Policy
 
-## Step 6: Connect to NVMe Subsystems
+{% include quickstart/nvme-io-policy.md %}
 
-```bash
-# Connect via first interface
-sudo nvme connect -t tcp -a <PORTAL_IP_1> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=<INTERFACE_NAME_1> --host-traddr=<HOST_IP_1> \
-    --ctrl-loss-tmo=1800 --reconnect-delay=10
+## Step 7: Configure Persistent Connections
 
-sudo nvme connect -t tcp -a <PORTAL_IP_2> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=<INTERFACE_NAME_1> --host-traddr=<HOST_IP_1> \
-    --ctrl-loss-tmo=1800 --reconnect-delay=10
+{% include quickstart/nvme-persistent-connections.md %}
 
-# Connect via second interface
-sudo nvme connect -t tcp -a <PORTAL_IP_1> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=<INTERFACE_NAME_2> --host-traddr=<HOST_IP_2> \
-    --ctrl-loss-tmo=1800 --reconnect-delay=10
+## Step 8: Create LVM Storage
 
-sudo nvme connect -t tcp -a <PORTAL_IP_2> -s 4420 -n <SUBSYSTEM_NQN> \
-    --host-iface=<INTERFACE_NAME_2> --host-traddr=<HOST_IP_2> \
-    --ctrl-loss-tmo=1800 --reconnect-delay=10
-
-# Verify connections
-sudo nvme list-subsys
-```
-
-## Step 7: Configure IO Policy
+{% include quickstart/nvme-lvm-storage.md %}
 
 ```bash
-# Set IO policy (queue-depth recommended for Pure Storage)
-for ctrl in /sys/class/nvme-subsystem/nvme-subsys*/iopolicy; do
-    echo "queue-depth" | sudo tee $ctrl
-done
-
-# Make persistent with udev rule
-sudo tee /etc/udev/rules.d/71-nvme-io-policy.rules > /dev/null <<'EOF'
-ACTION=="add|change", SUBSYSTEM=="nvme-subsystem", ATTR{iopolicy}="queue-depth"
-EOF
-```
-
-## Step 8: Configure Persistent Connections
-
-```bash
-# Enable nvmf-autoconnect service
-sudo systemctl enable --now nvmf-autoconnect.service
-```
-
-## Step 9: Create LVM Storage
-
-```bash
-# Find NVMe device
-sudo nvme list
-# Example: /dev/nvme0n1
-
-# Create LVM
-sudo pvcreate /dev/nvme0n1
-sudo vgcreate nvme-storage /dev/nvme0n1
-sudo lvcreate -L 500G -n data nvme-storage
-
-# Format and mount
+# Format and mount (Oracle Linux: XFS recommended)
 sudo mkfs.xfs /dev/nvme-storage/data
 sudo mkdir -p /mnt/nvme-storage
 sudo mount /dev/nvme-storage/data /mnt/nvme-storage
@@ -159,30 +74,13 @@ sudo mount /dev/nvme-storage/data /mnt/nvme-storage
 echo '/dev/nvme-storage/data /mnt/nvme-storage xfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab
 ```
 
-## Step 10: Verify
+## Step 9: Verify
 
-```bash
-# Check connections
-sudo nvme list-subsys
-
-# Check IO policy
-cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy
-
-# Verify storage
-df -h | grep nvme
-```
+{% include quickstart/nvme-verify.md %}
 
 ---
 
-## Quick Reference
-
-| Command | Description |
-|---------|-------------|
-| `sudo nvme discover -t tcp -a <IP> -s 8009` | Discover subsystems (port 8009) |
-| `sudo nvme connect -t tcp -a <IP> -s 4420 -n <NQN>` | Connect to subsystem (port 4420) |
-| `sudo nvme disconnect -n <NQN>` | Disconnect from subsystem |
-| `sudo nvme list-subsys` | List subsystems and paths |
-| `cat /sys/class/nvme-subsystem/nvme-subsys*/iopolicy` | Check IO policy |
+{% include quickstart/nvme-quick-reference.md %}
 
 ---
 

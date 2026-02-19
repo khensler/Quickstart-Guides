@@ -15,23 +15,7 @@ Comprehensive best practices for deploying iSCSI storage on Proxmox VE in produc
 
 ---
 
-## ⚠️ Important Disclaimers
-
-> **Vendor Documentation Priority:**
-> - This guide is **specific to Pure Storage configurations** and should be used in conjunction with official vendor documentation
-> - Always consult and follow **Proxmox VE official documentation** for complete system configuration
-> - In case of any conflicts between this guide and vendor documentation, **vendor documentation takes precedence**
->
-> **Testing Requirements:**
-> - All configurations and recommendations in this guide are **for reference only**
-> - **Test thoroughly in a lab environment** before implementing in production
-> - Validate all settings with your specific hardware, software versions, and workload requirements
-> - Performance and compatibility may vary based on your environment
->
-> **Support:**
-> - For Pure Storage-specific issues, contact Pure Storage Support
-> - For Proxmox VE issues, consult Proxmox documentation or community forums
-> - This guide is provided as-is without warranty
+{% include bestpractices/disclaimer-proxmox.md %}
 
 ---
 
@@ -973,26 +957,11 @@ pvesm status
 
 ---
 
-## Quick Reference
-
-**Discover targets:**
-```bash
-iscsiadm -m discovery -t sendtargets -p <portal_ip>:3260
-```
+{% include bestpractices/quick-reference-iscsi.md %}
 
 **Login to all targets:**
 ```bash
 iscsiadm -m node -L all
-```
-
-**Check sessions:**
-```bash
-iscsiadm -m session
-```
-
-**Check multipath:**
-```bash
-multipath -ll
 ```
 
 **Restart services:**
