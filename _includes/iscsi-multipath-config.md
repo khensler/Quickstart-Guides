@@ -37,9 +37,9 @@ defaults {
     enable_foreign "^$"
 }
 
+# Blacklist local devices and NVMe (NVMe uses native multipath)
 blacklist {
-    # Exclude local disks and system devices
-    devnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st)[0-9]*"
+    devnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st|nvme)[0-9]*"
     devnode "^hd[a-z]"
     devnode "^cciss.*"
 }
@@ -60,8 +60,8 @@ blacklist {
 #        no_path_retry 0
 #        hardware_handler "1 alua"
 #        rr_min_io_rq 1
-    }
-}
+#    }
+#}
 ```
 
 #### Key Parameters Explained

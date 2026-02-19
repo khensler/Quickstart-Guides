@@ -825,7 +825,7 @@ iface ens1f1.100 inet static
 
 **ifupdown2 dependency**
 
-Proxmox uses ifupdown2 for network configuration.  The configuration above is for ifupdown2.  If your distribution uses a different network configuration tool, the configuration will be different.  The principles are the same, but the syntax will be different.  Recent changes to the ifupdown code have resulted in an error when configuring the interfaces of a bridge with other configurations.  Proxmox does not include the version of ifupdown2 that has this behavior.  (https://lore.proxmox.com/pve-devel/20250930140948.265119-1-s.hanreich@proxmox.com/)
+Proxmox uses ifupdown2 for network configuration.  The configuration above is for ifupdown2.  If your distribution uses a different network configuration tool, the configuration will be different.  The principles are the same, but the syntax will be different.  At the time of this writing, recent changes to the ifupdown code have resulted in an error when configuring the interfaces of a bridge with other configurations.  Proxmox does not include the version of ifupdown2 that has this behavior.  (https://lore.proxmox.com/pve-devel/20250930140948.265119-1-s.hanreich@proxmox.com/)
 
 **Apply configuration:**
 ```bash
@@ -856,10 +856,10 @@ net.ipv4.conf.ens1f0.arp_announce = 2
 net.ipv4.conf.ens1f1.arp_announce = 2
 
 # For VLAN interfaces (uncomment if using VLANs instead of physical)
-#net.ipv4.conf.ens1f0/100.arp_ignore = 2
-#net.ipv4.conf.ens1f1/100.arp_ignore = 2
-#net.ipv4.conf.ens1f0/100.arp_announce = 2
-#net.ipv4.conf.ens1f1/100.arp_announce = 2
+#net.ipv4.conf.ens1f0.100.arp_ignore = 2
+#net.ipv4.conf.ens1f1.100.arp_ignore = 2
+#net.ipv4.conf.ens1f0.100.arp_announce = 2
+#net.ipv4.conf.ens1f1.100.arp_announce = 2
 
 # Global settings
 net.ipv4.conf.all.arp_ignore = 2
@@ -1381,8 +1381,8 @@ net.ipv4.conf.ens1f0.arp_ignore = 2
 net.ipv4.conf.ens1f1.arp_ignore = 2
 
 # For VLAN interfaces (uncomment if using VLANs)
-#net.ipv4.conf.ens1f0/100.arp_ignore = 2
-#net.ipv4.conf.ens1f1/100.arp_ignore = 2
+#net.ipv4.conf.ens1f0.100.arp_ignore = 2
+#net.ipv4.conf.ens1f1.100.arp_ignore = 2
 
 # Global setting (applies to all interfaces)
 net.ipv4.conf.all.arp_ignore = 2

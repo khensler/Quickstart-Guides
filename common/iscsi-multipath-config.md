@@ -16,7 +16,7 @@ Multipath provides critical benefits for iSCSI storage:
 2. **Load Balancing**: Distribute I/O across multiple paths
    - *Why*: Better performance and bandwidth utilization
 3. **No Single Point of Failure**: Continue operating even if NICs, switches, or storage controllers fail
-   - *Why*: Critical for production environments requiring 99.99%+ uptime
+   - *Why*: Critical for production environments requiring high uptime
 4. **Zero Downtime Maintenance**: Perform maintenance on network components without storage outage
    - *Why*: Enables rolling upgrades and maintenance windows
 
@@ -42,9 +42,9 @@ defaults {
     enable_foreign "^$"
 }
 
+# Blacklist local devices and NVMe (NVMe uses native multipath)
 blacklist {
-    # Exclude local disks and system devices
-    devnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st)[0-9]*"
+    devnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st|nvme)[0-9]*"
     devnode "^hd[a-z]"
     devnode "^cciss.*"
 }
@@ -60,13 +60,13 @@ blacklist {
 #        prio "alua"
 #        failback "immediate"
 #        path_checker "tur"
-        fast_io_fail_tmo 10
-        dev_loss_tmo 60
-        no_path_retry 0
-        hardware_handler "1 alua"
-        rr_min_io_rq 1
-    }
-}
+#        fast_io_fail_tmo 10
+#        dev_loss_tmo 60
+#        no_path_retry 0
+#        hardware_handler "1 alua"
+#        rr_min_io_rq 1
+#    }
+#}
 ```
 
 #### Key Parameters Explained
