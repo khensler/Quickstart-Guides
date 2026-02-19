@@ -11,7 +11,7 @@ Multipath provides critical benefits for iSCSI storage:
 2. **Load Balancing**: Distribute I/O across multiple paths
    - *Why*: Better performance and bandwidth utilization
 3. **No Single Point of Failure**: Continue operating even if NICs, switches, or storage controllers fail
-   - *Why*: Critical for production environments requiring 99.99%+ uptime
+   - *Why*: Critical for production environments requiring high uptime
 4. **Zero Downtime Maintenance**: Perform maintenance on network components without storage outage
    - *Why*: Enables rolling upgrades and maintenance windows
 

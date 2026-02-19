@@ -215,7 +215,6 @@ sudo dnf install -y tuned tuned-utils
 - Default in RHEL 8/9
 - Better integration with systemd
 - Dynamic configuration support
-- Team/bond support
 - Consistent across RHEL ecosystem
 
 **Disable network-scripts (RHEL 8):**
@@ -259,39 +258,6 @@ sudo nmcli connection up storage-nvme-1
 - `ipv4.may-fail no` - Boot waits for this interface
 - `connection.autoconnect-priority 10` - Higher priority for storage
 - `ethtool.*` - NIC tuning parameters
-
-#### Team/Bond Configuration (HA)
-
-**Using team (recommended for RHEL):**
-```bash
-# Create team interface
-sudo nmcli connection add type team \
-    con-name storage-team0 \
-    ifname team0 \
-    team.runner activebackup \
-    ipv4.method manual \
-    ipv4.addresses 10.100.1.101/24 \
-    ipv4.never-default yes
-
-# Add team ports
-sudo nmcli connection add type ethernet \
-    con-name storage-team0-port1 \
-    ifname ens1f0 \
-    master team0
-
-sudo nmcli connection add type ethernet \
-    con-name storage-team0-port2 \
-    ifname ens1f1 \
-    master team0
-
-# Activate
-sudo nmcli connection up storage-team0
-```
-
-**Team runners:**
-- `activebackup` - Active-passive failover (recommended for storage)
-- `loadbalance` - Load balancing (use with caution for storage)
-- `lacp` - 802.3ad LACP (requires switch support)
 
 ### MTU Configuration
 

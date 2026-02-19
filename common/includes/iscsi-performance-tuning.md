@@ -7,10 +7,10 @@
 #### MTU Configuration (Jumbo Frames)
 
 **Why use jumbo frames:**
-- Reduces CPU overhead by ~30%
-- Improves throughput by reducing packet count
+- Reduces CPU overhead by lowering packet count and interrupt rate
+- Improves throughput for large sequential I/O (actual gains vary by workload)
 - Lowers interrupt rate
-- Essential for high-performance storage
+- Recommended for high-performance storage (validate with benchmarks)
 
 **Configuration:**
 ```bash

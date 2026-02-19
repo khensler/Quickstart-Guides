@@ -37,7 +37,7 @@
 
 **3. Jumbo Frames (MTU 9000)**
 - *Why*: Reduces CPU overhead and improves throughput
-- *Benefit*: ~30% better performance
+- *Benefit*: Improved performance (verify with benchmarks in your environment)
 - *Requirement*: Must be configured end-to-end
 
 **4. No Default Gateway**

@@ -12,7 +12,7 @@
    - *Why*: Prevents noisy neighbor problems; ensures storage performance is not affected by VM traffic spikes; improves security posture; simplifies network troubleshooting
 
 4. **Optimized MTU**: Use jumbo frames (MTU 9000) end-to-end when possible
-   - *Why*: Reduces CPU overhead by ~30%; improves throughput by reducing packet count; lowers interrupt rate; essential for high-performance storage
+   - *Why*: Reduces CPU overhead and improves throughput by reducing packet count; lowers interrupt rate; recommended for high-performance storage (actual gains vary by workload)
 
 ### Network Topology Options
 
@@ -60,7 +60,7 @@ Choose this option when you have limited physical NICs or want to consolidate in
 ### MTU Configuration Best Practices
 
 **Jumbo Frames (MTU 9000):**
-- **Performance Impact**: 20-30% improvement in throughput for large sequential I/O
+- **Performance Impact**: Improved throughput for large sequential I/O (actual gains vary by workload; validate with benchmarks)
 - **CPU Reduction**: Fewer packets to process means lower CPU overhead
 - **Latency**: Slightly reduced latency for large transfers
 

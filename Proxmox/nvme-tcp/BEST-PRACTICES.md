@@ -111,7 +111,7 @@ flowchart-elk
    - *Why*: Prevents noisy neighbor problems; ensures storage performance is not affected by VM traffic spikes; improves security posture; simplifies network troubleshooting
 
 4. **Optimized MTU**: Use jumbo frames (MTU 9000) end-to-end when possible
-   - *Why*: Reduces CPU overhead by ~30%; improves throughput by reducing packet count; lowers interrupt rate; essential for high-performance storage
+   - *Why*: Reduces CPU overhead and improves throughput by reducing packet count; lowers interrupt rate; recommended for high-performance storage (actual gains vary by workload)
 
 ### Network Topology Options
 
@@ -363,7 +363,7 @@ iface ens1f1.100 inet static
 
 | Practice | Recommendation | Rationale |
 |----------|---------------|-----------|
-| **MTU Size** | 9000 (Jumbo Frames) | Reduces CPU overhead by ~30%; improves throughput by reducing packet count; lowers interrupt rate; must be configured end-to-end (NICs, switches, storage) |
+| **MTU Size** | 9000 (Jumbo Frames) | Reduces CPU overhead and improves throughput by reducing packet count; lowers interrupt rate; must be configured end-to-end (NICs, switches, storage) |
 | **Number of NICs** | Minimum 2 per node | Provides redundancy (one NIC can fail); enables load distribution across paths; recommended 2-4 NICs depending on performance requirements |
 | **Switch Redundancy** | Minimum 2 switches | Eliminates switch as single point of failure; allows switch firmware updates without downtime; each NIC connects to different switch |
 | **IP Addressing** | Same subnet for all paths | Simplifies routing (no need for static routes); all NICs can reach all portals directly; easier troubleshooting; matches most storage array configurations |
@@ -825,7 +825,7 @@ iface ens1f1.100 inet static
 
 **ifupdown2 dependency**
 
-Proxmox uses ifupdown2 for network configuration.  The configuration above is for ifupdown2.  If your distribution uses a different network configuration tool, the configuration will be different.  The principles are the same, but the syntax will be different.  Recent changes to the ifupdown code have resulted in an error when configuring the interfraces of a bridge with other configurations.  Proxmox does not include the version if ifupdown2 that has this behavior.  (https://lore.proxmox.com/pve-devel/20250930140948.265119-1-s.hanreich@proxmox.com/)
+Proxmox uses ifupdown2 for network configuration.  The configuration above is for ifupdown2.  If your distribution uses a different network configuration tool, the configuration will be different.  The principles are the same, but the syntax will be different.  Recent changes to the ifupdown code have resulted in an error when configuring the interfaces of a bridge with other configurations.  Proxmox does not include the version of ifupdown2 that has this behavior.  (https://lore.proxmox.com/pve-devel/20250930140948.265119-1-s.hanreich@proxmox.com/)
 
 **Apply configuration:**
 ```bash
@@ -1254,7 +1254,7 @@ ip neigh flush all
 - Standard MTU (1500) requires more packets for same data
 - Jumbo frames (9000) reduce packet count by ~6x
 - Fewer packets = fewer interrupts = lower CPU usage
-- Can improve throughput by 20-30% for large sequential I/O
+- Improved throughput for large sequential I/O (actual gains vary by workload; validate with benchmarks)
 
 **Important:** MTU must be 9000 on ALL devices in path (NICs, switches, storage)
 

@@ -360,6 +360,7 @@ defaults {
     polling_interval 5
 }
 
+# Blacklist local devices and NVMe (NVMe uses native multipath)
 blacklist {
     devnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st|nvme)[0-9]*"
     devnode "^hd[a-z]"
@@ -377,13 +378,13 @@ blacklist {
 #        prio "alua"
 #        failback "immediate"
 #        path_checker "tur"
-        fast_io_fail_tmo 10
-        dev_loss_tmo 60
-        no_path_retry 0
-        hardware_handler "1 alua"
-        rr_min_io_rq 1
-    }
-}
+#        fast_io_fail_tmo 10
+#        dev_loss_tmo 60
+#        no_path_retry 0
+#        hardware_handler "1 alua"
+#        rr_min_io_rq 1
+#    }
+#}
 EOF
 ```
 

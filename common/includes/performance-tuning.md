@@ -61,40 +61,50 @@ done
 
 #### Kernel Parameters
 
+> **⚠️ Starting Point Values:** The values below are suggested starting points for testing. Actual optimal values depend on your specific hardware, workload, and environment. **Always validate with performance telemetry** (iostat, sar, perf, etc.) before deploying to production.
+
 **Edit `/etc/sysctl.conf` or create `/etc/sysctl.d/99-storage-tuning.conf`:**
 
 ```bash
-# Increase network buffer sizes
+# Network buffer sizes
+# Note: Maximum values depend on available system RAM
+# These values (128MB max) assume 64GB+ RAM; reduce proportionally for smaller systems
+# Example: For 16GB RAM, consider rmem_max/wmem_max = 33554432 (32MB)
 net.core.rmem_max = 134217728
 net.core.wmem_max = 134217728
 net.core.rmem_default = 16777216
 net.core.wmem_default = 16777216
 
-# Increase TCP buffer sizes
+# TCP buffer sizes (min, default, max)
+# Note: Max values limited by rmem_max/wmem_max above
+# Adjust based on workload: higher for throughput, lower for latency-sensitive
 net.ipv4.tcp_rmem = 4096 87380 67108864
 net.ipv4.tcp_wmem = 4096 65536 67108864
 
-# Increase maximum number of queued connections
+# Connection queue sizes
+# Note: Higher values require more kernel memory; scale based on workload
 net.core.netdev_max_backlog = 30000
-
-# Increase socket listen backlog
 net.core.somaxconn = 4096
 
-# Enable TCP window scaling
+# TCP optimizations
 net.ipv4.tcp_window_scaling = 1
-
-# Disable TCP timestamps (reduces overhead)
-net.ipv4.tcp_timestamps = 0
-
-# Enable TCP selective acknowledgments
+net.ipv4.tcp_timestamps = 0    # Trade-off: disables RTT measurement
 net.ipv4.tcp_sack = 1
 
-# Increase ARP cache size
+# ARP cache sizes
+# Note: Scale based on number of storage targets and network size
+# These values suit environments with 50-200 storage paths
 net.ipv4.neigh.default.gc_thresh1 = 4096
 net.ipv4.neigh.default.gc_thresh2 = 8192
 net.ipv4.neigh.default.gc_thresh3 = 16384
 
-# VM tuning for storage workloads
+# VM dirty page settings
+# Note: These affect write caching behavior and depend on RAM and workload
+# - dirty_ratio: % of RAM that can hold dirty pages before blocking writes
+# - dirty_background_ratio: % of RAM before background writeback starts
+# Lower values = more consistent latency; higher = better burst throughput
+# For 64GB+ RAM with mixed workloads, start with these values
+# For latency-sensitive workloads, consider dirty_ratio=5, dirty_background_ratio=2
 vm.dirty_ratio = 10
 vm.dirty_background_ratio = 5
 vm.swappiness = 10
@@ -106,12 +116,18 @@ sysctl -p /etc/sysctl.d/99-storage-tuning.conf
 ```
 
 **Why these settings:**
-- **Buffer sizes**: Accommodate high-bandwidth storage traffic
+- **Buffer sizes**: Accommodate high-bandwidth storage traffic (scale with available RAM)
 - **Backlog**: Handle burst traffic without drops
 - **Window scaling**: Enable large TCP windows for high-bandwidth×delay networks
 - **Timestamps**: Reduce per-packet overhead (trade-off: no RTT measurement)
 - **ARP cache**: Prevent ARP table overflow in large storage networks
 - **VM dirty ratios**: Prevent large amounts of dirty data in cache, improving write consistency
+
+**Tuning considerations:**
+- **RAM sizing**: Buffer sizes should scale with system memory. The values above assume 64GB+ RAM.
+- **NIC/driver constraints**: Some NICs have hardware buffer limits; check `ethtool -g <interface>` for maximums.
+- **Workload profiling**: Use `iostat -x 1`, `sar -n DEV 1`, and `ss -tnp` to measure actual utilization before and after changes.
+- **Iterative testing**: Change one parameter at a time and measure impact with consistent benchmarks.
 
 ### I/O Scheduler Tuning
 

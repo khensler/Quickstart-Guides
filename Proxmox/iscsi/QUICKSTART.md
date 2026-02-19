@@ -24,6 +24,8 @@ This guide provides a streamlined path to configure iSCSI storage on Proxmox VE.
 
 {% include quickstart/glossary-link-iscsi.md %}
 
+{% include quickstart/arp-warning.md %}
+
 ## Step 1: Install iSCSI and Multipath Tools
 
 ```bash

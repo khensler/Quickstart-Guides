@@ -5,7 +5,7 @@ Configure dedicated storage interfaces using Wicked (SUSE default):
 sudo tee /etc/sysconfig/network/ifcfg-<INTERFACE_NAME_1> > /dev/null <<EOF
 BOOTPROTO='static'
 STARTMODE='auto'
-IPADDR='<HOST_IP_1>/24'
+IPADDR='<HOST_IP_1>/<CIDR>'
 MTU='9000'
 NAME='Storage Network 1'
 EOF
@@ -14,7 +14,7 @@ EOF
 sudo tee /etc/sysconfig/network/ifcfg-<INTERFACE_NAME_2> > /dev/null <<EOF
 BOOTPROTO='static'
 STARTMODE='auto'
-IPADDR='<HOST_IP_2>/24'
+IPADDR='<HOST_IP_2>/<CIDR>'
 MTU='9000'
 NAME='Storage Network 2'
 EOF

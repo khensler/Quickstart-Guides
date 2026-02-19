@@ -35,6 +35,8 @@ sudo systemctl enable --now iscsid multipathd
 
 {% include quickstart/network-suse.md %}
 
+{% include quickstart/arp-warning.md %}
+
 ## Step 3: Configure Firewall
 
 {% include quickstart/firewall-rhel.md %}

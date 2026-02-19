@@ -8,13 +8,13 @@ network:
   ethernets:
     <INTERFACE_NAME_1>:
       addresses:
-        - <HOST_IP_1>/24
+        - <HOST_IP_1>/<CIDR>
       mtu: 9000
       dhcp4: no
       dhcp6: no
     <INTERFACE_NAME_2>:
       addresses:
-        - <HOST_IP_2>/24
+        - <HOST_IP_2>/<CIDR>
       mtu: 9000
       dhcp4: no
       dhcp6: no

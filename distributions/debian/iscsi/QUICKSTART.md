@@ -36,6 +36,8 @@ sudo systemctl enable --now open-iscsi multipathd
 
 {% include quickstart/network-debian.md %}
 
+{% include quickstart/arp-warning.md %}
+
 ## Step 3: Configure Firewall
 
 {% include quickstart/firewall-debian.md %}
