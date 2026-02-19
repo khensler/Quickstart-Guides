@@ -1,8 +1,4 @@
----
-
 > **⚠️ Disclaimer:** This content is specific to Pure Storage configurations and for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
-
----
 
 ## Common Troubleshooting
 
