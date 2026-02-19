@@ -11,10 +11,28 @@ kramdown:
   hard_wrap: false
   syntax_highlighter: rouge
 
-# Theme - using a minimal theme that works well with technical docs
-remote_theme: pages-themes/minimal@v0.2.0
+# Theme - Just the Docs (clean documentation theme)
+remote_theme: just-the-docs/just-the-docs@v0.8.2
 plugins:
   - jekyll-remote-theme
+
+# Just the Docs theme settings
+color_scheme: light
+search_enabled: true
+heading_anchors: true
+enable_copy_code_button: true
+
+# Navigation structure
+nav_sort: case_insensitive
+back_to_top: true
+back_to_top_text: "Back to top"
+
+# Footer content
+footer_content: "Pure Storage Linux Configuration Guides"
+
+# Mermaid diagram support
+mermaid:
+  version: "10.6.0"
 
 # Include directories that Jekyll normally ignores
 include:
@@ -24,7 +42,6 @@ include:
 
 # Exclude files from build
 exclude:
-  - README.md
   - LICENSE
   - Gemfile
   - Gemfile.lock

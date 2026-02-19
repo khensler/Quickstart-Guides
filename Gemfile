@@ -3,9 +3,13 @@ source "https://rubygems.org"
 # GitHub Pages gem includes Jekyll and all supported plugins
 gem "github-pages", group: :jekyll_plugins
 
+# Just the Docs theme
+gem "just-the-docs"
+
 # Additional plugins
 group :jekyll_plugins do
   gem "jekyll-remote-theme"
+  gem "jekyll-seo-tag"
 end
 
 # Windows-specific gems
