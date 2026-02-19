@@ -1,3 +1,8 @@
+---
+layout: default
+title: iSCSI on SUSE/openSUSE - Best Practices Guide
+---
+
 # iSCSI on SUSE/openSUSE - Best Practices Guide
 
 Comprehensive best practices for deploying iSCSI storage on SUSE Linux Enterprise Server (SLES) and openSUSE systems in production environments.
@@ -132,7 +137,9 @@ graph TB
 - **Dual controller array** for storage HA
 - **dm-multipath** aggregates all paths into single device
 
-> **📊 More Diagrams:** See [Common Storage Topology](../../../common/includes/diagrams-storage-topology.md) and [iSCSI Multipath Diagrams](../../../common/includes/diagrams-iscsi-multipath.md) for additional diagrams.
+{% include diagrams-storage-topology.md %}
+
+{% include diagrams-iscsi-multipath.md %}
 
 ---
 
@@ -516,8 +523,7 @@ sudo firewall-cmd --list-all
 
 ## iSCSI Architecture
 
-For comprehensive information on iSCSI architecture, topologies, and design principles, see:
-- [iSCSI Architecture and Design](../../../common/includes/iscsi-architecture.md)
+{% include iscsi-architecture.md %}
 
 **Key points for SUSE:**
 - Use dedicated storage networks (VLANs or physical)
@@ -530,8 +536,7 @@ For comprehensive information on iSCSI architecture, topologies, and design prin
 
 ## Multipath Configuration
 
-For detailed multipath configuration information, see:
-- [iSCSI Multipath Configuration](../../../common/includes/iscsi-multipath-config.md)
+{% include iscsi-multipath-config.md %}
 
 ### SUSE-Specific Multipath Setup
 
@@ -598,9 +603,9 @@ sudo yast iscsi-client connect target=<target_iqn> portal=<portal_ip>:3260
 
 ## Performance Tuning
 
-For comprehensive performance tuning information, see:
-- [iSCSI Performance Tuning](../../../common/includes/iscsi-performance-tuning.md)
-- [General Performance Tuning](../../../common/includes/performance-tuning.md)
+{% include iscsi-performance-tuning.md %}
+
+{% include performance-tuning.md %}
 
 ### SUSE-Specific Tuning
 
@@ -630,7 +635,7 @@ vm.swappiness = 10
 
 # ARP settings for same-subnet multipath (CRITICAL)
 # Prevents ARP responses on wrong interface when multiple NICs share same subnet
-# See: ../../../common/includes/network-concepts.md for detailed explanation
+# See: Network Concepts documentation for detailed explanation
 net.ipv4.conf.all.arp_ignore = 2
 net.ipv4.conf.default.arp_ignore = 2
 net.ipv4.conf.all.arp_announce = 2
@@ -778,7 +783,7 @@ sequenceDiagram
     Path1->>DM: Path reinstated
 ```
 
-> **📊 More Diagrams:** See [iSCSI Multipath Diagrams](../../../common/includes/diagrams-iscsi-multipath.md) and [Failover Diagrams](../../../common/includes/diagrams-failover.md) for additional details.
+{% include diagrams-failover.md %}
 
 ### Cluster Configuration with Pacemaker
 
@@ -838,8 +843,7 @@ sudo crm status
 
 ## Monitoring & Maintenance
 
-For general monitoring and maintenance procedures, see:
-- [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md)
+{% include monitoring-maintenance.md %}
 
 ### SUSE-Specific Monitoring
 
@@ -889,8 +893,7 @@ sudo yast logs
 
 ## Security
 
-For general security best practices, see:
-- [Security Best Practices](../../../common/includes/security-best-practices.md)
+{% include security-best-practices.md %}
 
 ### SUSE-Specific Security
 
@@ -988,10 +991,9 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-> **📊 More Diagrams:** See [Troubleshooting Flowcharts](../../../common/includes/diagrams-troubleshooting.md) for detailed procedures.
+{% include diagrams-troubleshooting.md %}
 
-For common troubleshooting procedures, see:
-- [Common Troubleshooting](../../../common/includes/troubleshooting-common.md)
+{% include troubleshooting-common.md %}
 
 ### SUSE-Specific Troubleshooting
 
@@ -1066,8 +1068,8 @@ sudo dmsetup status
 - [SUSE Linux Enterprise Server Documentation](https://documentation.suse.com/sles/)
 - [openSUSE Documentation](https://doc.opensuse.org/)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts](../../../common/includes/network-concepts.md)
-- [Multipath Concepts](../../../common/includes/multipath-concepts.md)
+- [Common Network Concepts]({% link _includes/network-concepts.md %})
+- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
 
 ---
 

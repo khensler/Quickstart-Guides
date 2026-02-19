@@ -1,3 +1,8 @@
+---
+layout: default
+title: iSCSI on Oracle Linux - Quick Start Guide
+---
+
 # iSCSI on Oracle Linux - Quick Start Guide
 
 This guide provides a streamlined path to configure iSCSI storage on Oracle Linux.
@@ -19,9 +24,9 @@ This guide provides a streamlined path to configure iSCSI storage on Oracle Linu
 - Dedicated storage network interfaces
 - Root or sudo access
 
-> **📖 New to iSCSI?** See the [Storage Terminology Glossary](../../../common/includes/glossary.md)
+> **📖 New to iSCSI?** See the [Storage Terminology Glossary]({% link _includes/glossary.md %})
 
-> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration](../../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath).
+> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({% link _includes/network-concepts.md %}).
 
 ## Step 1: Install Packages
 
@@ -216,8 +221,8 @@ For production deployments, see [iSCSI Best Practices](./BEST-PRACTICES.md) for:
 - Ksplice zero-downtime updates
 
 **Additional Resources:**
-- [Common Network Concepts](../../../common/includes/network-concepts.md)
-- [Multipath Concepts](../../../common/includes/multipath-concepts.md)
-- [Troubleshooting Guide](../../../common/includes/troubleshooting-common.md)
-- [Storage Terminology Glossary](../../../common/includes/glossary.md)
+- [Common Network Concepts]({% link _includes/network-concepts.md %})
+- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
+- [Troubleshooting Guide]({% link _includes/troubleshooting-common.md %})
+- [Storage Terminology Glossary]({% link _includes/glossary.md %})
 

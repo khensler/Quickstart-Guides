@@ -1,3 +1,8 @@
+---
+layout: default
+title: NVMe-TCP on Oracle Linux - Best Practices Guide
+---
+
 # NVMe-TCP on Oracle Linux - Best Practices Guide
 
 Comprehensive best practices for deploying NVMe over TCP storage on Oracle Linux with Unbreakable Enterprise Kernel (UEK).
@@ -25,12 +30,12 @@ Comprehensive best practices for deploying NVMe over TCP storage on Oracle Linux
 ---
 
 > **Common Reference Documentation:** This guide references common best practices. See also:
-> - [Network Concepts](../../../common/includes/network-concepts.md)
-> - [Multipath Concepts](../../../common/includes/multipath-concepts.md)
-> - [Performance Tuning](../../../common/includes/performance-tuning.md)
-> - [Security Best Practices](../../../common/includes/security-best-practices.md)
-> - [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md)
-> - [Troubleshooting Common Issues](../../../common/includes/troubleshooting-common.md)
+> - [Network Concepts]({% link _includes/network-concepts.md %})
+> - [Multipath Concepts]({% link _includes/multipath-concepts.md %})
+> - [Performance Tuning]({% link _includes/performance-tuning.md %})
+> - [Security Best Practices]({% link _includes/security-best-practices.md %})
+> - [Monitoring & Maintenance]({% link _includes/monitoring-maintenance.md %})
+> - [Troubleshooting Common Issues]({% link _includes/troubleshooting-common.md %})
 
 ## Table of Contents
 
@@ -137,7 +142,9 @@ flowchart LR
 - **8 paths** (2 NICs × 4 portals) for maximum redundancy
 - **UEK kernel** for optimized NVMe-TCP performance
 
-> **📊 More Diagrams:** See [Common Storage Topology](../../../common/includes/diagrams-storage-topology.md) and [Network Architecture](../../../common/includes/diagrams-network-architecture.md) for additional diagrams.
+{% include diagrams-storage-topology.md %}
+
+{% include diagrams-network-architecture.md %}
 
 ---
 
@@ -216,7 +223,7 @@ sudo reboot
 
 ## Network Configuration
 
-> **Note:** For comprehensive network architecture concepts, see [Network Concepts](../../../common/includes/network-concepts.md).
+{% include network-concepts.md %}
 
 ### Oracle Linux Network Best Practices
 
@@ -413,7 +420,9 @@ flowchart TB
     style HOST fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-> **📊 More Diagrams:** See [NVMe Multipath Diagrams](../../../common/includes/diagrams-nvme-multipath.md) and [Failover Diagrams](../../../common/includes/diagrams-failover.md) for additional details.
+{% include diagrams-nvme-multipath.md %}
+
+{% include diagrams-failover.md %}
 
 ### Ksplice Overview
 
@@ -509,7 +518,7 @@ systemctl status uptrack-upgrade.timer
 
 ## Performance Tuning
 
-> **Note:** For comprehensive performance tuning guidance, see [Performance Tuning](../../../common/includes/performance-tuning.md).
+{% include performance-tuning.md %}
 
 ### Oracle-Specific Tuning Profiles
 
@@ -581,7 +590,7 @@ net.ipv4.neigh.default.gc_thresh3=16384
 
 # ARP settings for same-subnet multipath (CRITICAL)
 # Prevents ARP responses on wrong interface when multiple NICs share same subnet
-# See: ../../../common/includes/network-concepts.md for detailed explanation
+# See: Network Concepts documentation for detailed explanation
 net.ipv4.conf.all.arp_ignore=2
 net.ipv4.conf.default.arp_ignore=2
 net.ipv4.conf.all.arp_announce=2
@@ -682,7 +691,7 @@ sudo systemctl enable --now irqbalance
 
 ## Security
 
-> **Note:** For comprehensive security best practices, see [Security Best Practices](../../../common/includes/security-best-practices.md).
+{% include security-best-practices.md %}
 
 ### SELinux Configuration
 
@@ -824,7 +833,7 @@ sudo systemctl enable --now auditd
 
 ## Monitoring & Maintenance
 
-> **Note:** For comprehensive monitoring procedures, see [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md).
+{% include monitoring-maintenance.md %}
 
 ### Oracle Linux Monitoring Tools
 
@@ -986,9 +995,9 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-> **📊 More Diagrams:** See [Troubleshooting Flowcharts](../../../common/includes/diagrams-troubleshooting.md) for detailed procedures.
+{% include diagrams-troubleshooting.md %}
 
-> **Note:** For common troubleshooting procedures, see [Troubleshooting Common Issues](../../../common/includes/troubleshooting-common.md).
+{% include troubleshooting-common.md %}
 
 ### UEK-Specific Issues
 

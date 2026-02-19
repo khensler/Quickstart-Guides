@@ -1,3 +1,8 @@
+---
+layout: default
+title: NVMe-TCP on Oracle Linux - Quick Start Guide
+---
+
 # NVMe-TCP on Oracle Linux - Quick Start Guide
 
 This guide provides a streamlined path to configure NVMe-TCP storage on Oracle Linux.
@@ -19,9 +24,9 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Oracle L
 - Dedicated storage network interfaces
 - Root or sudo access
 
-> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary](../../../common/includes/glossary.md)
+> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary]({% link _includes/glossary.md %})
 
-> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration](../../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath).
+> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({% link _includes/network-concepts.md %}).
 
 ## Step 1: Install Packages
 
@@ -193,8 +198,8 @@ For production deployments, see [NVMe-TCP Best Practices](./BEST-PRACTICES.md) f
 - Ksplice zero-downtime updates
 
 **Additional Resources:**
-- [Common Network Concepts](../../../common/includes/network-concepts.md)
-- [Performance Tuning](../../../common/includes/performance-tuning.md)
-- [Troubleshooting Guide](../../../common/includes/troubleshooting-common.md)
-- [Storage Terminology Glossary](../../../common/includes/glossary.md)
+- [Common Network Concepts]({% link _includes/network-concepts.md %})
+- [Performance Tuning]({% link _includes/performance-tuning.md %})
+- [Troubleshooting Guide]({% link _includes/troubleshooting-common.md %})
+- [Storage Terminology Glossary]({% link _includes/glossary.md %})
 

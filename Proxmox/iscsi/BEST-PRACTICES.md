@@ -1,3 +1,8 @@
+---
+layout: default
+title: iSCSI on Proxmox VE - Best Practices Guide
+---
+
 # iSCSI on Proxmox VE - Best Practices Guide
 
 Comprehensive best practices for deploying iSCSI storage on Proxmox VE in production environments.
@@ -169,7 +174,7 @@ systemctl status multipathd
 
 ## Network Design
 
-> **Note:** For comprehensive network architecture concepts, see [Network Concepts](../../common/includes/network-concepts.md).
+{% include network-concepts.md %}
 
 ### Network Architecture Principles
 
@@ -277,7 +282,7 @@ EOF
 sysctl -p /etc/sysctl.d/99-iscsi-arp.conf
 ```
 
-For detailed explanation of ARP settings, see [ARP Configuration for Same-Subnet Multipath](../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath).
+For detailed explanation of ARP settings, see the ARP Configuration section in the network concepts documentation.
 
 ### MTU Configuration
 
@@ -345,7 +350,9 @@ iptables-save > /etc/iptables.rules
 
 ## Multipath Configuration
 
-> **Note:** For detailed multipath concepts, see [Multipath Concepts](../../common/includes/multipath-concepts.md) and [iSCSI Multipath Configuration](../../common/includes/iscsi-multipath-config.md).
+{% include multipath-concepts.md %}
+
+{% include iscsi-multipath-config.md %}
 
 ### DM-Multipath for iSCSI
 
@@ -406,7 +413,7 @@ EOF
 | `dev_loss_tmo` | `60` | Seconds before removing device on path loss |
 | `no_path_retry` | `0` | **Fail immediately when all paths down** (prevents hangs) |
 
-> **⚠️ Critical**: Setting `no_path_retry 0` is recommended to prevent system hangs during APD (All Paths Down) events. See [Understanding APD Events](../../common/includes/iscsi-multipath-config.md#understanding-apd-all-paths-down-events).
+> **⚠️ Critical**: Setting `no_path_retry 0` is recommended to prevent system hangs during APD (All Paths Down) events. See the APD section in the iSCSI multipath documentation.
 
 **Enable and start multipath:**
 ```bash
@@ -603,7 +610,9 @@ multipath -ll
 
 ## Performance Optimization
 
-> **Note:** For comprehensive performance tuning, see [Performance Tuning](../../common/includes/performance-tuning.md) and [iSCSI Performance Tuning](../../common/includes/iscsi-performance-tuning.md).
+{% include performance-tuning.md %}
+
+{% include iscsi-performance-tuning.md %}
 
 ### Kernel Parameters
 
@@ -724,7 +733,7 @@ cat /proc/interrupts | grep -E "ens1f"
 
 ## Security Best Practices
 
-> **Note:** For general security best practices, see [Security Best Practices](../../common/includes/security-best-practices.md).
+{% include security-best-practices.md %}
 
 ### CHAP Authentication
 
@@ -772,7 +781,7 @@ ls -la /etc/iscsi/
 
 ## Monitoring & Maintenance
 
-> **Note:** For comprehensive monitoring procedures, see [Monitoring & Maintenance](../../common/includes/monitoring-maintenance.md).
+{% include monitoring-maintenance.md %}
 
 ### Health Check Script
 
@@ -848,7 +857,7 @@ EOF
 
 ## Troubleshooting
 
-> **Note:** For common troubleshooting procedures, see [Common Troubleshooting](../../common/includes/troubleshooting-common.md).
+{% include troubleshooting-common.md %}
 
 ### Service Status
 
@@ -958,9 +967,9 @@ pvesm status
 - [Proxmox VE Documentation](https://pve.proxmox.com/wiki/)
 - [Proxmox VE Storage](https://pve.proxmox.com/wiki/Storage)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts](../../common/includes/network-concepts.md)
-- [Multipath Concepts](../../common/includes/multipath-concepts.md)
-- [Storage Terminology Glossary](../../common/includes/glossary.md)
+- [Common Network Concepts]({% link _includes/network-concepts.md %})
+- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
+- [Storage Terminology Glossary]({% link _includes/glossary.md %})
 
 ---
 

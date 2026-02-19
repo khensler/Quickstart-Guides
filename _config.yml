@@ -1,0 +1,45 @@
+# Jekyll configuration for GitHub Pages
+title: Pure Storage Linux Configuration Guides
+description: Best practices for NVMe-TCP and iSCSI storage on Linux distributions
+baseurl: "" # subpath of your site, e.g. /Quickstart-Guides
+url: "" # GitHub will fill this in
+
+# Build settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+  syntax_highlighter: rouge
+
+# Theme - using a minimal theme that works well with technical docs
+remote_theme: pages-themes/minimal@v0.2.0
+plugins:
+  - jekyll-remote-theme
+
+# Include directories that Jekyll normally ignores
+include:
+  - common
+  - distributions
+  - Proxmox
+
+# Exclude files from build
+exclude:
+  - README.md
+  - LICENSE
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+
+# Collections for organizing content
+collections:
+  includes:
+    output: false
+
+# Default front matter
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+

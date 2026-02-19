@@ -1,3 +1,8 @@
+---
+layout: default
+title: iSCSI on RHEL/Rocky/AlmaLinux - Best Practices Guide
+---
+
 # iSCSI on RHEL/Rocky/AlmaLinux - Best Practices Guide
 
 Comprehensive best practices for deploying iSCSI storage on RHEL-based systems in production environments.
@@ -132,7 +137,9 @@ graph TB
 - **Dual controller array** for storage HA
 - **dm-multipath** aggregates all paths into single device
 
-> **📊 More Diagrams:** See [Common Storage Topology](../../../common/includes/diagrams-storage-topology.md) and [iSCSI Multipath Diagrams](../../../common/includes/diagrams-iscsi-multipath.md) for additional diagrams.
+{% include diagrams-storage-topology.md %}
+
+{% include diagrams-iscsi-multipath.md %}
 
 ---
 
@@ -527,8 +534,7 @@ sudo firewall-cmd --reload
 
 ## iSCSI Architecture
 
-For comprehensive information on iSCSI architecture, topologies, and design principles, see:
-- [iSCSI Architecture and Design](../../../common/includes/iscsi-architecture.md)
+{% include iscsi-architecture.md %}
 
 **Key points for RHEL:**
 - Use dedicated storage networks (VLANs or physical)
@@ -541,8 +547,7 @@ For comprehensive information on iSCSI architecture, topologies, and design prin
 
 ## Multipath Configuration
 
-For detailed multipath configuration information, see:
-- [iSCSI Multipath Configuration](../../../common/includes/iscsi-multipath-config.md)
+{% include iscsi-multipath-config.md %}
 
 ### RHEL-Specific Multipath Setup
 
@@ -607,9 +612,9 @@ sudo journalctl -u multipathd -n 50
 
 ## Performance Tuning
 
-For comprehensive performance tuning information, see:
-- [iSCSI Performance Tuning](../../../common/includes/iscsi-performance-tuning.md)
-- [General Performance Tuning](../../../common/includes/performance-tuning.md)
+{% include iscsi-performance-tuning.md %}
+
+{% include performance-tuning.md %}
 
 ### RHEL-Specific Tuning
 
@@ -726,7 +731,7 @@ vm.swappiness = 10
 
 # ARP settings for same-subnet multipath (CRITICAL)
 # Prevents ARP responses on wrong interface when multiple NICs share same subnet
-# See: ../../../common/includes/network-concepts.md for detailed explanation
+# See: Network Concepts documentation for detailed explanation
 net.ipv4.conf.all.arp_ignore = 2
 net.ipv4.conf.default.arp_ignore = 2
 net.ipv4.conf.all.arp_announce = 2
@@ -824,7 +829,7 @@ sequenceDiagram
     Path1->>DM: Path reinstated
 ```
 
-> **📊 More Diagrams:** See [iSCSI Multipath Diagrams](../../../common/includes/diagrams-iscsi-multipath.md) and [Failover Diagrams](../../../common/includes/diagrams-failover.md) for additional details.
+{% include diagrams-failover.md %}
 
 ### Cluster Configuration
 
@@ -901,8 +906,7 @@ sudo pcs resource status
 
 ## Monitoring & Maintenance
 
-For general monitoring and maintenance procedures, see:
-- [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md)
+{% include monitoring-maintenance.md %}
 
 ### RHEL-Specific Monitoring
 
@@ -991,8 +995,7 @@ echo "0 */6 * * * /usr/local/bin/iscsi-health-check.sh >> /var/log/iscsi-health.
 
 ## Security
 
-For general security best practices, see:
-- [Security Best Practices](../../../common/includes/security-best-practices.md)
+{% include security-best-practices.md %}
 
 ### RHEL-Specific Security
 
@@ -1091,10 +1094,9 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-> **📊 More Diagrams:** See [Troubleshooting Flowcharts](../../../common/includes/diagrams-troubleshooting.md) for detailed procedures.
+{% include diagrams-troubleshooting.md %}
 
-For common troubleshooting procedures, see:
-- [Common Troubleshooting](../../../common/includes/troubleshooting-common.md)
+{% include troubleshooting-common.md %}
 
 ### RHEL-Specific Troubleshooting
 
@@ -1200,8 +1202,8 @@ sudo tuned-adm verify
 
 - [RHEL Storage Administration Guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/managing_storage_devices/)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts](../../../common/includes/network-concepts.md)
-- [Multipath Concepts](../../../common/includes/multipath-concepts.md)
+- [Common Network Concepts]({% link _includes/network-concepts.md %})
+- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
 
 ---
 

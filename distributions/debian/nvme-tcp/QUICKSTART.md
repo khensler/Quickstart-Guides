@@ -1,3 +1,8 @@
+---
+layout: default
+title: NVMe-TCP on Debian/Ubuntu - Quick Start Guide
+---
+
 # NVMe-TCP on Debian/Ubuntu - Quick Start Guide
 
 This guide provides a streamlined path to configure NVMe-TCP storage on Debian and Ubuntu systems.
@@ -19,7 +24,7 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Debian a
 - Dedicated storage network interfaces
 - Root or sudo access
 
-> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary](../../../common/includes/glossary.md)
+> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary]({% link _includes/glossary.md %})
 
 ## Step 1: Install NVMe Tools
 
@@ -65,7 +70,7 @@ sudo netplan apply
 ip addr show
 ```
 
-> **⚠️ Same-Subnet Multipath:** If both interfaces are on the same subnet, configure ARP settings. See [ARP Configuration](../../../common/includes/network-concepts.md#arp-configuration-for-same-subnet-multipath).
+> **⚠️ Same-Subnet Multipath:** If both interfaces are on the same subnet, configure ARP settings. See [ARP Configuration]({% link _includes/network-concepts.md %}).
 
 ## Step 4: Configure Firewall
 
@@ -197,7 +202,7 @@ For production deployments, see [NVMe-TCP Best Practices](./BEST-PRACTICES.md) f
 - Netplan and interfaces alternatives
 
 **Additional Resources:**
-- [Common Network Concepts](../../../common/includes/network-concepts.md)
-- [Troubleshooting Guide](../../../common/includes/troubleshooting-common.md)
-- [Storage Terminology Glossary](../../../common/includes/glossary.md)
+- [Common Network Concepts]({% link _includes/network-concepts.md %})
+- [Troubleshooting Guide]({% link _includes/troubleshooting-common.md %})
+- [Storage Terminology Glossary]({% link _includes/glossary.md %})
 

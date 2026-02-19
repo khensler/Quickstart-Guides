@@ -1,3 +1,8 @@
+---
+layout: default
+title: NVMe-TCP on Debian/Ubuntu - Best Practices Guide
+---
+
 # NVMe-TCP on Debian/Ubuntu - Best Practices Guide
 
 Comprehensive best practices for deploying NVMe-TCP storage on Debian and Ubuntu systems in production environments.
@@ -128,7 +133,9 @@ flowchart LR
 - **Dual controller array** for storage HA
 - **8 paths** (2 NICs × 4 portals) for maximum redundancy
 
-> **📊 More Diagrams:** See [Common Storage Topology](../../../common/includes/diagrams-storage-topology.md) and [Network Architecture](../../../common/includes/diagrams-network-architecture.md) for additional diagrams.
+{% include diagrams-storage-topology.md %}
+
+{% include diagrams-network-architecture.md %}
 
 ---
 
@@ -596,7 +603,7 @@ net.ipv4.neigh.default.gc_thresh3 = 16384
 
 # ARP settings for same-subnet multipath (CRITICAL)
 # Prevents ARP responses on wrong interface when multiple NICs share same subnet
-# See: ../../../common/includes/network-concepts.md for detailed explanation
+# See: Network Concepts documentation for detailed explanation
 net.ipv4.conf.all.arp_ignore = 2
 net.ipv4.conf.default.arp_ignore = 2
 net.ipv4.conf.all.arp_announce = 2
@@ -828,7 +835,9 @@ sequenceDiagram
     NVMe->>NVMe: Rebalance I/O
 ```
 
-> **📊 More Diagrams:** See [NVMe Multipath Diagrams](../../../common/includes/diagrams-nvme-multipath.md) and [Failover Diagrams](../../../common/includes/diagrams-failover.md) for additional details.
+{% include diagrams-nvme-multipath.md %}
+
+{% include diagrams-failover.md %}
 
 ### Native NVMe Multipath Configuration for HA
 
@@ -968,8 +977,7 @@ sudo systemctl enable --now check-nvme-paths.timer
 
 ## Monitoring & Maintenance
 
-<!-- Include common monitoring content -->
-For detailed monitoring procedures, see [Monitoring & Maintenance](../../../common/includes/monitoring-maintenance.md).
+{% include monitoring-maintenance.md %}
 
 ### Debian/Ubuntu-Specific Monitoring Tools
 
@@ -1020,8 +1028,7 @@ sudo systemctl enable --now prometheus-node-exporter
 
 ## Security
 
-<!-- Include common security content -->
-For general security best practices, see [Security Best Practices](../../../common/includes/security-best-practices.md).
+{% include security-best-practices.md %}
 
 ### Debian/Ubuntu-Specific Security
 
@@ -1139,10 +1146,9 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-> **📊 More Diagrams:** See [Troubleshooting Flowcharts](../../../common/includes/diagrams-troubleshooting.md) for detailed procedures.
+{% include diagrams-troubleshooting.md %}
 
-<!-- Include common troubleshooting content -->
-For common troubleshooting procedures, see [Common Troubleshooting](../../../common/includes/troubleshooting-common.md).
+{% include troubleshooting-common.md %}
 
 ### Debian/Ubuntu-Specific Issues
 
@@ -1215,9 +1221,9 @@ sudo apt autoclean
 - [Debian Administrator's Handbook](https://debian-handbook.info/)
 - [Ubuntu Server Guide](https://ubuntu.com/server/docs)
 - [Quick Start Guide](./QUICKSTART.md)
-- [Network Concepts](../../../common/includes/network-concepts.md)
-- [Multipath Concepts](../../../common/includes/multipath-concepts.md)
-- [Performance Tuning](../../../common/includes/performance-tuning.md)
+- [Network Concepts]({% link _includes/network-concepts.md %})
+- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
+- [Performance Tuning]({% link _includes/performance-tuning.md %})
 
 ---
 
