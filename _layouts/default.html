@@ -11,11 +11,30 @@
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
+      // Initialize Mermaid
       mermaid.initialize({
-        startOnLoad: true,
+        startOnLoad: false,
         theme: "default",
         securityLevel: "loose"
       });
+
+      // Find all code blocks with language-mermaid class and convert them
+      document.querySelectorAll('code.language-mermaid').forEach(function(codeBlock) {
+        // Get the mermaid code
+        var code = codeBlock.textContent;
+
+        // Create a new div for mermaid
+        var div = document.createElement('div');
+        div.className = 'mermaid';
+        div.textContent = code;
+
+        // Replace the pre>code with the div
+        var pre = codeBlock.parentElement;
+        pre.parentElement.replaceChild(div, pre);
+      });
+
+      // Now render all mermaid diagrams
+      mermaid.run();
     });
   </script>
 </head>
