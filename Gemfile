@@ -1,16 +1,7 @@
 source "https://rubygems.org"
 
-# Jekyll
-gem "jekyll", "~> 4.3"
-
-# Just the Docs theme
-gem "just-the-docs"
-
-# Plugins
-group :jekyll_plugins do
-  gem "jekyll-remote-theme"
-  gem "jekyll-seo-tag"
-end
+# GitHub Pages gem (includes Jekyll and supported plugins)
+gem "github-pages", group: :jekyll_plugins
 
 # Windows-specific gems
 platforms :mingw, :x64_mingw, :mswin, :jruby do

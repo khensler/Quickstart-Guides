@@ -11,26 +11,11 @@ kramdown:
   hard_wrap: false
   syntax_highlighter: rouge
 
-# Theme - Just the Docs (via remote_theme for GitHub Pages compatibility)
-remote_theme: just-the-docs/just-the-docs@v0.8.2
+# Theme - Minima (built-in GitHub Pages theme)
+theme: minima
 
 plugins:
-  - jekyll-remote-theme
   - jekyll-seo-tag
-
-# Just the Docs theme settings
-color_scheme: light
-search_enabled: true
-heading_anchors: true
-enable_copy_code_button: true
-
-# Footer content
-footer_content: "Pure Storage Linux Configuration Guides"
-
-# Aux links (top right)
-aux_links:
-  "View on GitHub":
-    - "https://github.com/"
 
 # Include directories that Jekyll normally ignores
 include:

@@ -1,7 +1,6 @@
 ---
-layout: default
+layout: home
 title: Home
-nav_order: 1
 ---
 
 # Pure Storage Linux Configuration Guides
@@ -30,11 +29,11 @@ Choose your distribution and protocol to get started:
 
 These reference documents are included inline throughout the Best Practices guides.
 
-- [Storage Terminology Glossary](_includes/glossary.md) - Key terms for iSCSI and NVMe-TCP
-- [Network Architecture Concepts](_includes/network-concepts.md) - Network design and ARP configuration
-- [Multipath Concepts](_includes/multipath-concepts.md) - Path management and failover
-- [Security Best Practices](_includes/security-best-practices.md) - Firewall and access control
-- [Troubleshooting Guide](_includes/troubleshooting-common.md) - Common issues and solutions
+- [Storage Terminology Glossary](common/glossary.html) - Key terms for iSCSI and NVMe-TCP
+- [Network Architecture Concepts](common/network-concepts.html) - Network design and ARP configuration
+- [Multipath Concepts](common/multipath-concepts.html) - Path management and failover
+- [Security Best Practices](common/security-best-practices.html) - Firewall and access control
+- [Troubleshooting Guide](common/troubleshooting-common.html) - Common issues and solutions
 
 ---
 
