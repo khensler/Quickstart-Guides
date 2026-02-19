@@ -14,6 +14,9 @@ kramdown:
 # Theme - Minima (built-in GitHub Pages theme)
 theme: minima
 
+# Minima theme settings - only show these pages in header
+header_pages: []
+
 plugins:
   - jekyll-seo-tag
 
