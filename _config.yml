@@ -11,10 +11,15 @@ kramdown:
   hard_wrap: false
   syntax_highlighter: rouge
 
-# Theme - Just the Docs (clean documentation theme)
-remote_theme: just-the-docs/just-the-docs@v0.8.2
+# Theme - Just the Docs
+# For local: uses gem "just-the-docs" from Gemfile
+# For GitHub Pages: uses remote_theme
+theme: just-the-docs
+remote_theme: just-the-docs/just-the-docs
+
 plugins:
   - jekyll-remote-theme
+  - jekyll-seo-tag
 
 # Just the Docs theme settings
 color_scheme: light
@@ -22,17 +27,13 @@ search_enabled: true
 heading_anchors: true
 enable_copy_code_button: true
 
-# Navigation structure
-nav_sort: case_insensitive
-back_to_top: true
-back_to_top_text: "Back to top"
-
 # Footer content
 footer_content: "Pure Storage Linux Configuration Guides"
 
-# Mermaid diagram support
-mermaid:
-  version: "10.6.0"
+# Aux links (top right)
+aux_links:
+  "View on GitHub":
+    - "https://github.com/"
 
 # Include directories that Jekyll normally ignores
 include:
@@ -46,11 +47,7 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - vendor
-
-# Collections for organizing content
-collections:
-  includes:
-    output: false
+  - node_modules
 
 # Default front matter
 defaults:

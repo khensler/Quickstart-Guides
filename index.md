@@ -1,32 +1,20 @@
 ---
-layout: home
+layout: default
 title: Home
 nav_order: 1
-description: "Best practices for NVMe-TCP and iSCSI storage on Linux distributions with Pure Storage FlashArray"
-permalink: /
 ---
 
 # Pure Storage Linux Configuration Guides
-{: .fs-9 }
 
 Best practices for configuring NVMe-TCP and iSCSI storage on Linux distributions with Pure Storage FlashArray.
-{: .fs-6 .fw-300 }
 
-[Get Started](#quick-start){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
-[View on GitHub](https://github.com/){: .btn .fs-5 .mb-4 .mb-md-0 }
-
----
-
-{: .warning }
-> **Disclaimer:** This content is specific to Pure Storage configurations and for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use.
+> **⚠️ Disclaimer:** This content is specific to Pure Storage configurations and for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use.
 
 ---
 
 ## Quick Start
 
 Choose your distribution and protocol to get started:
-
-### Distribution Guides
 
 | Distribution | NVMe-TCP | iSCSI |
 |:-------------|:---------|:------|
@@ -40,8 +28,7 @@ Choose your distribution and protocol to get started:
 
 ## Common Resources
 
-{: .note }
-> These reference documents are included inline throughout the Best Practices guides.
+These reference documents are included inline throughout the Best Practices guides.
 
 - [Storage Terminology Glossary](_includes/glossary.md) - Key terms for iSCSI and NVMe-TCP
 - [Network Architecture Concepts](_includes/network-concepts.md) - Network design and ARP configuration
@@ -53,9 +40,7 @@ Choose your distribution and protocol to get started:
 
 ## Document Types
 
-{: .highlight }
-> **QUICKSTART Guides** - Short, opinionated guides with a single recommended configuration path. Get up and running quickly.
+**QUICKSTART Guides** - Short, opinionated guides with a single recommended configuration path. Get up and running quickly.
 
-{: .highlight }
-> **BEST-PRACTICES Guides** - Comprehensive documentation with multiple options, detailed explanations, diagrams, and troubleshooting information.
+**BEST-PRACTICES Guides** - Comprehensive documentation with multiple options, detailed explanations, diagrams, and troubleshooting information.
 
