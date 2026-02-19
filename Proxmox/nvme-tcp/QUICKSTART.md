@@ -24,9 +24,9 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Proxmox 
 - Dedicated storage network interfaces
 - Root access to all cluster nodes
 
-> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary]({% link _includes/glossary.md %})
+> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
 
-> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({% link _includes/network-concepts.md %}).
+> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({{ site.baseurl }}/common/network-concepts.html).
 
 ## Step 1: Configure Network (All Nodes)
 
@@ -203,7 +203,7 @@ For production deployments, see [NVMe-TCP Best Practices](./BEST-PRACTICES.md) f
 - Proxmox clustering considerations
 
 **Additional Resources:**
-- [Common Network Concepts]({% link _includes/network-concepts.md %})
-- [Performance Tuning]({% link _includes/performance-tuning.md %})
-- [Troubleshooting Guide]({% link _includes/troubleshooting-common.md %})
-- [Storage Terminology Glossary]({% link _includes/glossary.md %})
+- [Common Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Performance Tuning]({{ site.baseurl }}/common/performance-tuning.html)
+- [Troubleshooting Guide]({{ site.baseurl }}/common/troubleshooting-common.html)
+- [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)

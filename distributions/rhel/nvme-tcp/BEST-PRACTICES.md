@@ -1159,9 +1159,9 @@ sudo subscription-manager attach --auto
 - [RHEL 9 Storage Administration Guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/managing_storage_devices/)
 - [RHEL 9 Security Hardening](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/security_hardening/)
 - [Quick Start Guide](./QUICKSTART.md)
-- [Network Concepts]({% link _includes/network-concepts.md %})
-- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
-- [Performance Tuning]({% link _includes/performance-tuning.md %})
+- [Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
+- [Performance Tuning]({{ site.baseurl }}/common/performance-tuning.html)
 
 ---
 

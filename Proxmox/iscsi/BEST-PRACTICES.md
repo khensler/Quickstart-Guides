@@ -967,9 +967,9 @@ pvesm status
 - [Proxmox VE Documentation](https://pve.proxmox.com/wiki/)
 - [Proxmox VE Storage](https://pve.proxmox.com/wiki/Storage)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts]({% link _includes/network-concepts.md %})
-- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
-- [Storage Terminology Glossary]({% link _includes/glossary.md %})
+- [Common Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
+- [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
 
 ---
 

@@ -419,7 +419,7 @@ Result: Each node has 8 paths (2 NICs × 4 portals)
 
 ## High Availability & Redundancy
 
-> **Note:** For detailed multipath concepts and configuration patterns, see [Multipath Concepts]({% link _includes/multipath-concepts.md %}).
+> **Note:** For detailed multipath concepts and configuration patterns, see [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html).
 
 ### Multipath Architecture
 

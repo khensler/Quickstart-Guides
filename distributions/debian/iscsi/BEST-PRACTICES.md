@@ -1178,8 +1178,8 @@ sudo journalctl | grep -i apparmor
 - [Debian Administrator's Handbook](https://debian-handbook.info/)
 - [Ubuntu Server Guide](https://ubuntu.com/server/docs)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts]({% link _includes/network-concepts.md %})
-- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
+- [Common Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
 
 ---
 

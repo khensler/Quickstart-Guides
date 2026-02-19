@@ -1221,9 +1221,9 @@ sudo apt autoclean
 - [Debian Administrator's Handbook](https://debian-handbook.info/)
 - [Ubuntu Server Guide](https://ubuntu.com/server/docs)
 - [Quick Start Guide](./QUICKSTART.md)
-- [Network Concepts]({% link _includes/network-concepts.md %})
-- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
-- [Performance Tuning]({% link _includes/performance-tuning.md %})
+- [Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
+- [Performance Tuning]({{ site.baseurl }}/common/performance-tuning.html)
 
 ---
 

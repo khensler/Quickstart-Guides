@@ -24,9 +24,9 @@ This guide provides a streamlined path to configure iSCSI storage on Proxmox VE.
 - Dedicated storage network interfaces
 - Root access to all cluster nodes
 
-> **📖 New to iSCSI?** See the [Storage Terminology Glossary]({% link _includes/glossary.md %})
+> **📖 New to iSCSI?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
 
-> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({% link _includes/network-concepts.md %}).
+> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({{ site.baseurl }}/common/network-concepts.html).
 
 ## Step 1: Install iSCSI and Multipath Tools
 
@@ -137,7 +137,7 @@ multipath -ll
 
 > **Why `find_multipaths off`?** This ensures ALL paths to storage devices are claimed by multipath immediately, rather than waiting to detect multiple paths. See [iSCSI Best Practices](./BEST-PRACTICES.md#multipath-configuration) for detailed explanation.
 
-> **Note:** For comprehensive multipath concepts and configuration patterns, see [Multipath Concepts]({% link _includes/multipath-concepts.md %}).
+> **Note:** For comprehensive multipath concepts and configuration patterns, see [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html).
 
 ## Step 7: Create LVM
 

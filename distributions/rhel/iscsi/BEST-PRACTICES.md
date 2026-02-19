@@ -1202,8 +1202,8 @@ sudo tuned-adm verify
 
 - [RHEL Storage Administration Guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/managing_storage_devices/)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts]({% link _includes/network-concepts.md %})
-- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
+- [Common Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
 
 ---
 

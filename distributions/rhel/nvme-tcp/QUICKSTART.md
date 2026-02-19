@@ -24,7 +24,7 @@ This guide provides a streamlined path to configure NVMe-TCP storage on RHEL-bas
 - Dedicated storage network interfaces
 - Root or sudo access
 
-> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary]({% link _includes/glossary.md %})
+> **📖 New to NVMe-TCP?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
 
 ## Step 1: Install NVMe Tools
 
@@ -71,7 +71,7 @@ sudo nmcli connection up storage-1
 sudo nmcli connection up storage-2
 ```
 
-> **⚠️ Same-Subnet Multipath:** If both interfaces are on the same subnet, configure ARP settings. See [ARP Configuration]({% link _includes/network-concepts.md %}).
+> **⚠️ Same-Subnet Multipath:** If both interfaces are on the same subnet, configure ARP settings. See [ARP Configuration]({{ site.baseurl }}/common/network-concepts.html).
 
 ## Step 4: Configure Firewall
 
@@ -202,7 +202,7 @@ For production deployments, see [NVMe-TCP Best Practices](./BEST-PRACTICES.md) f
 - High availability considerations
 
 **Additional Resources:**
-- [Common Network Concepts]({% link _includes/network-concepts.md %})
-- [Troubleshooting Guide]({% link _includes/troubleshooting-common.md %})
-- [Storage Terminology Glossary]({% link _includes/glossary.md %})
+- [Common Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Troubleshooting Guide]({{ site.baseurl }}/common/troubleshooting-common.html)
+- [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
 

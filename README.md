@@ -45,13 +45,13 @@ A collection of quick start guides for various technologies and configurations.
 
 ### Common Reference Documentation
 
-- [Storage Terminology Glossary]({% link _includes/glossary.md %}) - Definitions for iSCSI, NVMe-TCP, and storage terms (IQN, NQN, Portal, LUN, Namespace, etc.)
-- [Network Concepts]({% link _includes/network-concepts.md %}) - Network architecture, topology, MTU, and performance tuning
-- [Multipath Concepts]({% link _includes/multipath-concepts.md %}) - Multipath configuration, path selection, and monitoring
-- [Performance Tuning]({% link _includes/performance-tuning.md %}) - CPU/IRQ tuning, kernel parameters, I/O scheduler
-- [Security Best Practices]({% link _includes/security-best-practices.md %}) - Network security, authentication, encryption
-- [Troubleshooting Common Issues]({% link _includes/troubleshooting-common.md %}) - Connection, performance, multipath, boot issues
-- [Monitoring & Maintenance]({% link _includes/monitoring-maintenance.md %}) - Monitoring procedures and maintenance tasks
-- [iSCSI Architecture]({% link _includes/iscsi-architecture.md %}) - iSCSI architecture, concepts, and terminology
-- [iSCSI Multipath Configuration]({% link _includes/iscsi-multipath-config.md %}) - iSCSI multipath configuration and APD handling
-- [iSCSI Performance Tuning]({% link _includes/iscsi-performance-tuning.md %}) - iSCSI-specific performance optimization
+- [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html) - Definitions for iSCSI, NVMe-TCP, and storage terms (IQN, NQN, Portal, LUN, Namespace, etc.)
+- [Network Concepts]({{ site.baseurl }}/common/network-concepts.html) - Network architecture, topology, MTU, and performance tuning
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html) - Multipath configuration, path selection, and monitoring
+- [Performance Tuning]({{ site.baseurl }}/common/performance-tuning.html) - CPU/IRQ tuning, kernel parameters, I/O scheduler
+- [Security Best Practices]({{ site.baseurl }}/common/security-best-practices.html) - Network security, authentication, encryption
+- [Troubleshooting Common Issues]({{ site.baseurl }}/common/troubleshooting-common.html) - Connection, performance, multipath, boot issues
+- [Monitoring & Maintenance]({{ site.baseurl }}/common/monitoring-maintenance.html) - Monitoring procedures and maintenance tasks
+- [iSCSI Architecture]({{ site.baseurl }}/common/iscsi-architecture.html) - iSCSI architecture, concepts, and terminology
+- [iSCSI Multipath Configuration]({{ site.baseurl }}/common/iscsi-multipath-config.html) - iSCSI multipath configuration and APD handling
+- [iSCSI Performance Tuning]({{ site.baseurl }}/common/iscsi-performance-tuning.html) - iSCSI-specific performance optimization

@@ -30,12 +30,12 @@ Comprehensive best practices for deploying NVMe over TCP storage on Oracle Linux
 ---
 
 > **Common Reference Documentation:** This guide references common best practices. See also:
-> - [Network Concepts]({% link _includes/network-concepts.md %})
-> - [Multipath Concepts]({% link _includes/multipath-concepts.md %})
-> - [Performance Tuning]({% link _includes/performance-tuning.md %})
-> - [Security Best Practices]({% link _includes/security-best-practices.md %})
-> - [Monitoring & Maintenance]({% link _includes/monitoring-maintenance.md %})
-> - [Troubleshooting Common Issues]({% link _includes/troubleshooting-common.md %})
+> - [Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+> - [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
+> - [Performance Tuning]({{ site.baseurl }}/common/performance-tuning.html)
+> - [Security Best Practices]({{ site.baseurl }}/common/security-best-practices.html)
+> - [Monitoring & Maintenance]({{ site.baseurl }}/common/monitoring-maintenance.html)
+> - [Troubleshooting Common Issues]({{ site.baseurl }}/common/troubleshooting-common.html)
 
 ## Table of Contents
 

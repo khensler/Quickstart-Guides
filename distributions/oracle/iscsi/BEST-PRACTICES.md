@@ -1273,8 +1273,8 @@ sudo semodule -i iscsi_troubleshoot.pp
 - [UEK Release Notes](https://docs.oracle.com/en/operating-systems/uek/)
 - [Ksplice Documentation](https://docs.oracle.com/en/operating-systems/ksplice/)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts]({% link _includes/network-concepts.md %})
-- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
+- [Common Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
 
 ---
 

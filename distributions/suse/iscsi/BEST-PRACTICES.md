@@ -1068,8 +1068,8 @@ sudo dmsetup status
 - [SUSE Linux Enterprise Server Documentation](https://documentation.suse.com/sles/)
 - [openSUSE Documentation](https://doc.opensuse.org/)
 - [iSCSI Quick Start](./QUICKSTART.md)
-- [Common Network Concepts]({% link _includes/network-concepts.md %})
-- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
+- [Common Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
 
 ---
 

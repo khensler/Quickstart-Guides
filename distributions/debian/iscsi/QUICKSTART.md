@@ -24,9 +24,9 @@ This guide provides a streamlined path to configure iSCSI storage on Debian/Ubun
 - Dedicated storage network interfaces
 - Root or sudo access
 
-> **📖 New to iSCSI?** See the [Storage Terminology Glossary]({% link _includes/glossary.md %})
+> **📖 New to iSCSI?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
 
-> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({% link _includes/network-concepts.md %}).
+> **⚠️ Same-Subnet Multipath:** If using multiple interfaces on the same subnet, configure ARP settings. See [ARP Configuration]({{ site.baseurl }}/common/network-concepts.html).
 
 ## Step 1: Install Packages
 
@@ -221,8 +221,8 @@ For production deployments, see [iSCSI Best Practices](./BEST-PRACTICES.md) for:
 - High availability considerations
 
 **Additional Resources:**
-- [Common Network Concepts]({% link _includes/network-concepts.md %})
-- [Multipath Concepts]({% link _includes/multipath-concepts.md %})
-- [Troubleshooting Guide]({% link _includes/troubleshooting-common.md %})
-- [Storage Terminology Glossary]({% link _includes/glossary.md %})
+- [Common Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
+- [Troubleshooting Guide]({{ site.baseurl }}/common/troubleshooting-common.html)
+- [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
 
