@@ -698,6 +698,8 @@ sudo reboot
 - `rcu_nocbs` - Offload RCU callbacks from isolated CPUs
 - `intel_iommu=on iommu=pt` - Enable IOMMU passthrough
 
+> **⚠️ Note:** These are general CPU and NUMA optimizations that improve overall system performance for I/O-intensive workloads. They do not directly affect NVMe-TCP protocol behavior. Measure baseline performance before and after changes to validate impact in your environment. The `nvme_core.multipath=Y` parameter (if not already set) directly affects NVMe multipath behavior.
+
 ---
 
 ## High Availability

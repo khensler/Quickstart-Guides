@@ -291,6 +291,8 @@ sudo reboot
 - `intel_iommu=on iommu=pt`: Enables IOMMU passthrough for better performance
 - `numa_balancing=disable`: Prevents automatic NUMA balancing which can hurt storage performance
 
+> **⚠️ Note:** These are general CPU and NUMA optimizations that improve overall system performance for I/O-intensive workloads. They do not directly affect iSCSI protocol behavior. Measure baseline performance before and after changes to validate impact in your environment.
+
 ---
 
 ## Network Configuration

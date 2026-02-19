@@ -23,6 +23,8 @@ update-grub
 reboot
 ```
 
+> **⚠️ Note:** CPU isolation (`isolcpus`) is a general system optimization for I/O-intensive workloads. It does not directly affect storage protocol behavior (iSCSI/NVMe-TCP). Measure baseline performance before and after changes to validate impact in your environment.
+
 **Best Practice:**
 - Isolate 2-4 cores per storage NIC
 - Use cores on the same NUMA node as the NIC

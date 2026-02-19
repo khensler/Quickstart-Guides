@@ -161,6 +161,8 @@ update-grub
 reboot
 ```
 
+> **⚠️ Note:** CPU isolation (`isolcpus`) is a general system optimization for I/O-intensive workloads. It does not directly affect iSCSI protocol behavior. Measure baseline performance before and after changes to validate impact in your environment.
+
 ### Read-Ahead Tuning
 
 **Optimize read-ahead for workload:**

@@ -200,8 +200,10 @@ sudo reboot
 
 **Why these parameters:**
 - `intel_iommu=on iommu=pt`: Enables IOMMU passthrough for better performance
-- `nvme_core.multipath=Y`: Ensures NVMe native multipath is enabled
+- `nvme_core.multipath=Y`: Ensures NVMe native multipath is enabled (directly affects NVMe behavior)
 - `numa_balancing=disable`: Prevents automatic NUMA balancing which can hurt storage performance
+
+> **⚠️ Note:** The `intel_iommu` and `numa_balancing` parameters are general CPU and NUMA optimizations that improve overall system performance for I/O-intensive workloads. They do not directly affect NVMe-TCP protocol behavior. Measure baseline performance before and after changes to validate impact in your environment. Only `nvme_core.multipath=Y` directly affects NVMe multipath behavior.
 
 ---
 
