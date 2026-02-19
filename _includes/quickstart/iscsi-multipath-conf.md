@@ -3,7 +3,7 @@ Create `/etc/multipath.conf`:
 ```bash
 sudo tee /etc/multipath.conf > /dev/null <<'EOF'
 defaults {
-    find_multipaths      off
+    find_multipaths      no
     polling_interval     10
     path_selector        "service-time 0"
     path_grouping_policy group_by_prio
