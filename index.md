@@ -29,11 +29,11 @@ Choose your distribution and protocol to get started:
 
 These reference documents are included inline throughout the Best Practices guides.
 
-- [Storage Terminology Glossary](common/glossary.html) - Key terms for iSCSI and NVMe-TCP
-- [Network Architecture Concepts](common/network-concepts.html) - Network design and ARP configuration
-- [Multipath Concepts](common/multipath-concepts.html) - Path management and failover
-- [Security Best Practices](common/security-best-practices.html) - Firewall and access control
-- [Troubleshooting Guide](common/troubleshooting-common.html) - Common issues and solutions
+- [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html) - Key terms for iSCSI and NVMe-TCP
+- [Network Architecture Concepts]({{ site.baseurl }}/common/network-concepts.html) - Network design and ARP configuration
+- [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html) - Path management and failover
+- [Security Best Practices]({{ site.baseurl }}/common/security-best-practices.html) - Firewall and access control
+- [Troubleshooting Guide]({{ site.baseurl }}/common/troubleshooting-common.html) - Common issues and solutions
 
 ---
 

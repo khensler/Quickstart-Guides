@@ -1,8 +1,8 @@
 # Jekyll configuration for GitHub Pages
 title: Pure Storage Linux Configuration Guides
 description: Best practices for NVMe-TCP and iSCSI storage on Linux distributions
-baseurl: "" # subpath of your site, e.g. /Quickstart-Guides
-url: "" # GitHub will fill this in
+baseurl: "/Quickstart-Guides"
+url: "https://khensler.github.io"
 
 # Build settings
 markdown: kramdown
@@ -14,7 +14,11 @@ kramdown:
 # Theme - Minima (built-in GitHub Pages theme)
 theme: minima
 
-# Minima theme settings - only show these pages in header
+# Minima theme settings
+minima:
+  skin: classic
+
+# Only show these pages in header (empty = none)
 header_pages: []
 
 plugins:
