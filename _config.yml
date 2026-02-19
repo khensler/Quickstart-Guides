@@ -11,11 +11,8 @@ kramdown:
   hard_wrap: false
   syntax_highlighter: rouge
 
-# Theme - Just the Docs
-# For local: uses gem "just-the-docs" from Gemfile
-# For GitHub Pages: uses remote_theme
-theme: just-the-docs
-remote_theme: just-the-docs/just-the-docs
+# Theme - Just the Docs (via remote_theme for GitHub Pages compatibility)
+remote_theme: just-the-docs/just-the-docs@v0.8.2
 
 plugins:
   - jekyll-remote-theme
