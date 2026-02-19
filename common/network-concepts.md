@@ -233,10 +233,10 @@ net.ipv4.conf.ens1f0.arp_announce = 2
 net.ipv4.conf.ens1f1.arp_announce = 2
 
 # For VLAN interfaces (uncomment if using VLANs)
-#net.ipv4.conf.ens1f0/100.arp_ignore = 2
-#net.ipv4.conf.ens1f1/100.arp_ignore = 2
-#net.ipv4.conf.ens1f0/100.arp_announce = 2
-#net.ipv4.conf.ens1f1/100.arp_announce = 2
+#net.ipv4.conf.ens1f0.100.arp_ignore = 2
+#net.ipv4.conf.ens1f1.100.arp_ignore = 2
+#net.ipv4.conf.ens1f0.100.arp_announce = 2
+#net.ipv4.conf.ens1f1.100.arp_announce = 2
 
 # Global settings (applies to all interfaces)
 net.ipv4.conf.all.arp_ignore = 2
