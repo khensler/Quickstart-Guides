@@ -352,10 +352,14 @@ class DITAGenerator:
         return f'<fig><image href="{escape_xml_attr(image_path)}" format="svg"><alt>Diagram</alt></image></fig>'
 
     def generate_warehouse_topic(self, include_path: str, content: str) -> str:
-        """Generate a DITA warehouse topic from an include file."""
+        """Generate a DITA warehouse topic from an include file.
+
+        Uses <div> instead of <section> to allow conref in task topics,
+        since <section> is not allowed in <taskbody>.
+        """
         elements = self.parser.parse(content)
         topic_id = 'warehouse_' + sanitize_id(include_path.replace('/', '_').replace('.md', ''))
-        section_id = sanitize_id(include_path.replace('/', '_').replace('.md', '')) + '_content'
+        div_id = sanitize_id(include_path.replace('/', '_').replace('.md', '')) + '_content'
         self.warehouse_ids[include_path] = topic_id
 
         body_content = self._elements_to_dita_warehouse(elements, topic_id)
@@ -365,9 +369,9 @@ class DITAGenerator:
 <topic id="{topic_id}">
     <title>{escape_xml(include_path.replace('.md', '').replace('/', ' - ').title())}</title>
     <body>
-        <section id="{section_id}">
+        <div id="{div_id}">
 {body_content}
-        </section>
+        </div>
     </body>
 </topic>
 '''
@@ -559,11 +563,15 @@ class DITAGenerator:
         return ''
 
     def _generate_conref(self, include_path: str, topic_id: str) -> str:
-        """Generate a conref element for an include."""
+        """Generate a conref element for an include.
+
+        Uses <div> instead of <section> to allow conref in task topics,
+        since <section> is not allowed in <taskbody>.
+        """
         warehouse_id = 'warehouse_' + sanitize_id(include_path.replace('/', '_').replace('.md', ''))
-        section_id = sanitize_id(include_path.replace('/', '_').replace('.md', '')) + '_content'
+        div_id = sanitize_id(include_path.replace('/', '_').replace('.md', '')) + '_content'
         warehouse_file = warehouse_id + '.dita'
-        return f'        <section conref="../warehouse/{warehouse_file}#{warehouse_id}/{section_id}"/>'
+        return f'        <div conref="../warehouse/{warehouse_file}#{warehouse_id}/{div_id}"/>'
 
     def _wrap_section(self, title: str, content: List[str]) -> str:
         """Wrap content in a DITA section."""
