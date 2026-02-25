@@ -1,15 +1,30 @@
-# Quick Start: Manual iSCSI Multipath Configuration
+---
+layout: default
+title: iSCSI on Proxmox VE - Quick Start Guide
+---
 
-This guide shows how to manually configure iSCSI multipath on Proxmox
+# iSCSI on Proxmox VE - Quick Start Guide
+
+This guide provides a streamlined path to configure iSCSI storage on Proxmox VE.
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
+
+---
+
+{% include quickstart/disclaimer.md %}
+
+---
 
 ## Prerequisites
 
-- Proxmox VE 9.x or later
-- ISCSI storage array with:
-  - Portal IP address(es) and port
-  - Target IQN
-- Dedicated network interfaces for storage traffic (recommended)
-- Network connectivity between Proxmox nodes and storage
+- Proxmox VE 8.x or later
+- iSCSI storage array with portal IPs and target IQN
+- Dedicated storage network interfaces
+- Root access to all cluster nodes
+
+{% include quickstart/glossary-link-iscsi.md %}
+
+{% include quickstart/arp-warning.md %}
 
 ## Step 1: Install iSCSI and Multipath Tools
 
@@ -81,7 +96,9 @@ iscsiadm -m session
 
 ## Step 6: Configure Multipath
 
-DM-Multipath configuration is beyond the scope of this guide. For more information see: https://support.purestorage.com/bundle/m_linux/page/Solutions/Oracle/Oracle_on_FlashArray/library/common_content/c_recommended_dmmultipath_settings.html
+{% include quickstart/iscsi-multipath-conf.md %}
+
+> **Note:** For comprehensive multipath concepts and configuration patterns, see [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html).
 
 ## Step 7: Create LVM
 
@@ -89,14 +106,18 @@ DM-Multipath configuration is beyond the scope of this guide. For more informati
 # Find your multipath device
 multipath -ll
 
-# Example output
-3624a93708eabcb40cc4241b202b61a7c dm-8 PURE,FlashArray
-size=5.0T features='1 queue_if_no_path' hwhandler='1 alua' wp=rw
+# Example output (with recommended no_path_retry 0 configuration)
+3624a93708eabcb40cc4241b202b61a7c dm-8 VENDOR,PRODUCT
+size=5.0T features='0' hwhandler='1 alua' wp=rw
 `-+- policy='service-time 0' prio=50 status=active
   |- 20:0:0:254 sdb 8:16 active ready running
   |- 21:0:0:254 sdc 8:32 active ready running
   |- 22:0:0:254 sdd 8:48 active ready running
   `- 23:0:0:254 sde 8:64 active ready running
+
+# Note: features='0' indicates no_path_retry is configured (recommended)
+# If you see features='1 queue_if_no_path', update multipath.conf to use
+# no_path_retry 0 to prevent APD (All Paths Down) hangs
 ```
 
 In the example above the multipath device is `3624a93708eabcb40cc4241b202b61a7c` WWID of the device.  The device name will be different for each environment.  The device name will be the same for each node.  The device name can be used to create the LVM physical volume and volume group.  
@@ -137,3 +158,17 @@ Go to: Datacenter -> Storage.  Click "Add" -> "LVM".
 Name the storage in the ID field.  Select the volume group in the Volume Group drop down.  Check the "Shared" box.  Select the appropriate Content (Disk Image, Container).  Enable the volume on other nodes by either selecting them in the Nodes drop down or by clearing the Nodes field by clicking the "x" to the right of the field.  Click "Add".
 
 ![Configure Storage](./img/disk-configuration-2.png)
+
+---
+
+{% include quickstart/iscsi-quick-reference.md %}
+
+## Next Steps
+
+For production deployments, see [iSCSI Best Practices](./BEST-PRACTICES.md) for:
+- Network design and optimization
+- Multipath configuration details
+- High availability with Proxmox HA
+- Performance tuning
+- Security best practices
+- Monitoring and troubleshooting

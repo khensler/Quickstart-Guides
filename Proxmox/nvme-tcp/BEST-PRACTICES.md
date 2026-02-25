@@ -1,4 +1,21 @@
+---
+layout: default
+title: NVMe-TCP on Proxmox VE - Best Practices Guide
+---
+
 # NVMe-TCP on Proxmox VE - Best Practices Guide
+
+> **Distribution-Specific Guides:** For detailed best practices tailored to specific Linux distributions, see:
+> - [RHEL/Rocky/AlmaLinux Best Practices](../../distributions/rhel/nvme-tcp/BEST-PRACTICES.md)
+> - [Debian/Ubuntu Best Practices](../../distributions/debian/nvme-tcp/BEST-PRACTICES.md)
+> - [SUSE/openSUSE Best Practices](../../distributions/suse/nvme-tcp/BEST-PRACTICES.md)
+> - [Oracle Linux Best Practices](../../distributions/oracle/nvme-tcp/BEST-PRACTICES.md)
+
+---
+
+{% include bestpractices/disclaimer-proxmox.md %}
+
+---
 
 ## Table of Contents
 - [Architecture Overview](#architecture-overview)
@@ -68,17 +85,19 @@ flowchart-elk
     CTRL1 --- NVME
     CTRL2 --- NVME
     
-    style PVE1 fill:#2374ab
-    style PVE2 fill:#2374ab
-    style PVE3 fill:#2374ab
-    style CTRL1 fill:#e67e22
-    style CTRL2 fill:#e67e22
-    style NVME fill:#27ae60
+    style PVE1 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style PVE2 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style PVE3 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style CTRL1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style CTRL2 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style NVME fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ---
 
 ## Network Design
+
+{% include network-concepts.md %}
 
 ### Network Architecture Principles
 
@@ -92,7 +111,7 @@ flowchart-elk
    - *Why*: Prevents noisy neighbor problems; ensures storage performance is not affected by VM traffic spikes; improves security posture; simplifies network troubleshooting
 
 4. **Optimized MTU**: Use jumbo frames (MTU 9000) end-to-end when possible
-   - *Why*: Reduces CPU overhead by ~30%; improves throughput by reducing packet count; lowers interrupt rate; essential for high-performance storage
+   - *Why*: Reduces CPU overhead and improves throughput by reducing packet count; lowers interrupt rate; recommended for high-performance storage (actual gains vary by workload)
 
 ### Network Topology Options
 
@@ -146,12 +165,12 @@ flowchart-elk LR
     SW2 --- P3
     SW2 --- P4
 
-    style NIC1 fill:#3498db
-    style NIC2 fill:#3498db
-    style P1 fill:#e67e22
-    style P2 fill:#e67e22
-    style P3 fill:#e67e22
-    style P4 fill:#e67e22
+    style NIC1 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style NIC2 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style P1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P2 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P3 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P4 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Configuration Example:**
@@ -243,19 +262,19 @@ flowchart-elk
 
     SW1 --- SW2
 
-    style STORAGE1 fill:#e67e22,color:#fff
-    style STORAGE2 fill:#e67e22,color:#fff
-    style NIC1 fill:#95a5a6,color:#fff
-    style NIC2 fill:#95a5a6,color:#fff
-    style BOND fill:#34495e,color:#fff
-    style MGMT fill:#3498db,color:#fff
-    style BRIDGE fill:#2ecc71,color:#fff
-    style P1 fill:#e67e22,color:#fff
-    style P2 fill:#e67e22,color:#fff
-    style P3 fill:#e67e22,color:#fff
-    style P4 fill:#e67e22,color:#fff
-    style SW1 fill:#34495e,color:#fff
-    style SW2 fill:#34495e,color:#fff
+    style STORAGE1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style STORAGE2 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style NIC1 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style NIC2 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style BOND fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
+    style MGMT fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style BRIDGE fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style P1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P2 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P3 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style P4 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style SW1 fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
+    style SW2 fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Configuration Example:**
@@ -344,7 +363,7 @@ iface ens1f1.100 inet static
 
 | Practice | Recommendation | Rationale |
 |----------|---------------|-----------|
-| **MTU Size** | 9000 (Jumbo Frames) | Reduces CPU overhead by ~30%; improves throughput by reducing packet count; lowers interrupt rate; must be configured end-to-end (NICs, switches, storage) |
+| **MTU Size** | 9000 (Jumbo Frames) | Reduces CPU overhead and improves throughput by reducing packet count; lowers interrupt rate; must be configured end-to-end (NICs, switches, storage) |
 | **Number of NICs** | Minimum 2 per node | Provides redundancy (one NIC can fail); enables load distribution across paths; recommended 2-4 NICs depending on performance requirements |
 | **Switch Redundancy** | Minimum 2 switches | Eliminates switch as single point of failure; allows switch firmware updates without downtime; each NIC connects to different switch |
 | **IP Addressing** | Same subnet for all paths | Simplifies routing (no need for static routes); all NICs can reach all portals directly; easier troubleshooting; matches most storage array configurations |
@@ -383,6 +402,8 @@ Result: Each node has 8 paths (2 NICs × 4 portals)
 ---
 
 ## High Availability & Redundancy
+
+> **Note:** For detailed multipath concepts and configuration patterns, see [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html).
 
 ### Multipath Architecture
 
@@ -442,16 +463,16 @@ flowchart-elk
     PORTAL3 --> SUBSYS
     PORTAL4 --> SUBSYS
 
-    style HOST fill:#2374ab
-    style SUBSYS fill:#27ae60
-    style P1 fill:#95a5a6
-    style P2 fill:#95a5a6
-    style P3 fill:#95a5a6
-    style P4 fill:#95a5a6
-    style P5 fill:#95a5a6
-    style P6 fill:#95a5a6
-    style P7 fill:#95a5a6
-    style P8 fill:#95a5a6
+    style HOST fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style SUBSYS fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style P1 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P2 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P3 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P4 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P5 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P6 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P7 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
+    style P8 fill:#5d6d7e,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Key Concepts:**
@@ -546,19 +567,19 @@ graph TB
     PATH7 -.-> STORAGE
     PATH8 -.-> STORAGE
 
-    style APP fill:#3498db,color:#fff
-    style DRIVER fill:#34495e,color:#fff
-    style CHECK fill:#9b59b6,color:#fff
-    style SELECT fill:#27ae60,color:#fff
-    style PATH1 fill:#e67e22,color:#fff
-    style PATH2 fill:#f39c12,color:#fff
-    style PATH3 fill:#c0392b,color:#fff
-    style PATH4 fill:#27ae60,color:#fff
-    style PATH5 fill:#f39c12,color:#fff
-    style PATH6 fill:#e67e22,color:#fff
-    style PATH7 fill:#f39c12,color:#fff
-    style PATH8 fill:#f39c12,color:#fff
-    style STORAGE fill:#2c3e50,color:#fff
+    style APP fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style DRIVER fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
+    style CHECK fill:#7d3c98,stroke:#333,stroke-width:2px,color:#fff
+    style SELECT fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style PATH1 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style PATH2 fill:#d68910,stroke:#333,stroke-width:2px,color:#fff
+    style PATH3 fill:#a93226,stroke:#333,stroke-width:2px,color:#fff
+    style PATH4 fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style PATH5 fill:#d68910,stroke:#333,stroke-width:2px,color:#fff
+    style PATH6 fill:#d35400,stroke:#333,stroke-width:2px,color:#fff
+    style PATH7 fill:#d68910,stroke:#333,stroke-width:2px,color:#fff
+    style PATH8 fill:#d68910,stroke:#333,stroke-width:2px,color:#fff
+    style STORAGE fill:#2c3e50,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Example Scenario:**
@@ -804,7 +825,7 @@ iface ens1f1.100 inet static
 
 **ifupdown2 dependency**
 
-Proxmox uses ifupdown2 for network configuration.  The configuration above is for ifupdown2.  If your distribution uses a different network configuration tool, the configuration will be different.  The principles are the same, but the syntax will be different.  Recent changes to the ifupdown code have resulted in an error when configuring the interfraces of a bridge with other configurations.  Proxmox does not include the version if ifupdown2 that has this behavior.  (https://lore.proxmox.com/pve-devel/20250930140948.265119-1-s.hanreich@proxmox.com/)
+Proxmox uses ifupdown2 for network configuration.  The configuration above is for ifupdown2.  If your distribution uses a different network configuration tool, the configuration will be different.  The principles are the same, but the syntax will be different.  At the time of this writing, recent changes to the ifupdown code have resulted in an error when configuring the interfaces of a bridge with other configurations.  Proxmox does not include the version of ifupdown2 that has this behavior.  (https://lore.proxmox.com/pve-devel/20250930140948.265119-1-s.hanreich@proxmox.com/)
 
 **Apply configuration:**
 ```bash
@@ -835,10 +856,10 @@ net.ipv4.conf.ens1f0.arp_announce = 2
 net.ipv4.conf.ens1f1.arp_announce = 2
 
 # For VLAN interfaces (uncomment if using VLANs instead of physical)
-#net.ipv4.conf.ens1f0/100.arp_ignore = 2
-#net.ipv4.conf.ens1f1/100.arp_ignore = 2
-#net.ipv4.conf.ens1f0/100.arp_announce = 2
-#net.ipv4.conf.ens1f1/100.arp_announce = 2
+#net.ipv4.conf.ens1f0.100.arp_ignore = 2
+#net.ipv4.conf.ens1f1.100.arp_ignore = 2
+#net.ipv4.conf.ens1f0.100.arp_announce = 2
+#net.ipv4.conf.ens1f1.100.arp_announce = 2
 
 # Global settings
 net.ipv4.conf.all.arp_ignore = 2
@@ -1063,7 +1084,7 @@ Set the IO policy to queue-depth for optimal performance.
 # Create udev rule for automatic IO policy configuration
 cat > /etc/udev/rules.d/99-nvme-iopolicy.rules << 'EOF'
 # Set IO policy to queue-depth for all NVMe subsystems
-ACTION=="add|chnage", SUBSYSTEM=="nvme-subsystem", ATTR{iopolicy}="queue-depth"
+ACTION=="add|change", SUBSYSTEM=="nvme-subsystem", ATTR{iopolicy}="queue-depth"
 EOF
 # Why: Udev automatically applies this rule when NVMe subsystem is detected
 
@@ -1221,6 +1242,8 @@ ip neigh flush all
 
 ## Performance Optimization
 
+{% include performance-tuning.md %}
+
 ### Performance Tuning Parameters
 
 #### 1. MTU Configuration
@@ -1231,7 +1254,7 @@ ip neigh flush all
 - Standard MTU (1500) requires more packets for same data
 - Jumbo frames (9000) reduce packet count by ~6x
 - Fewer packets = fewer interrupts = lower CPU usage
-- Can improve throughput by 20-30% for large sequential I/O
+- Improved throughput for large sequential I/O (actual gains vary by workload; validate with benchmarks)
 
 **Important:** MTU must be 9000 on ALL devices in path (NICs, switches, storage)
 
@@ -1358,8 +1381,8 @@ net.ipv4.conf.ens1f0.arp_ignore = 2
 net.ipv4.conf.ens1f1.arp_ignore = 2
 
 # For VLAN interfaces (uncomment if using VLANs)
-#net.ipv4.conf.ens1f0/100.arp_ignore = 2
-#net.ipv4.conf.ens1f1/100.arp_ignore = 2
+#net.ipv4.conf.ens1f0.100.arp_ignore = 2
+#net.ipv4.conf.ens1f1.100.arp_ignore = 2
 
 # Global setting (applies to all interfaces)
 net.ipv4.conf.all.arp_ignore = 2
@@ -1430,6 +1453,8 @@ sysctl -p /etc/sysctl.d/99-nvme-tcp-arp.conf
 
 ## Security Best Practices
 
+{% include security-best-practices.md %}
+
 ### Network Security
 
 #### 1. Network Isolation
@@ -1456,16 +1481,38 @@ graph TB
     NODE ---|Separate NIC| VM
     NODE ---|Storage NIC 1 & 2| STORAGE
 
-    style STORAGE fill:#e74c3c
-    style MGMT fill:#3498db
-    style VM fill:#2ecc71
+    style STORAGE fill:#c0392b,stroke:#333,stroke-width:2px,color:#fff
+    style MGMT fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style VM fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Best Practices:**
 - Never route storage traffic through management network
 - Use dedicated VLANs or physical networks for storage
 - No default gateway on storage interfaces
-- Implement firewall rules to restrict storage network access
+- Disable firewall filtering on storage interfaces (use network-level isolation instead)
+
+#### Firewall Configuration for Storage Interfaces
+
+For dedicated storage networks, **disable firewall filtering** on storage interfaces to eliminate CPU overhead from packet inspection. This is critical for high-throughput NVMe-TCP storage.
+
+```bash
+# Option 1 (Recommended): Add storage interfaces to trusted zone in pve-firewall
+# Edit /etc/pve/firewall/cluster.fw or node-specific firewall
+# Storage interfaces should not have filtering enabled
+
+# Option 2: Use iptables to accept all traffic on storage interfaces
+iptables -A INPUT -i <STORAGE_INTERFACE_1> -j ACCEPT
+iptables -A INPUT -i <STORAGE_INTERFACE_2> -j ACCEPT
+```
+
+**Why disable filtering on storage interfaces:**
+- **CPU overhead**: Firewall packet inspection adds latency and consumes CPU cycles
+- **Performance impact**: At high IOPS (millions with NVMe-TCP), filtering overhead becomes significant
+- **Network isolation**: Dedicated storage VLANs provide security at the network layer
+- **Simplicity**: No port rules to maintain for storage traffic
+
+> **⚠️ Note:** If port filtering is required by security policy, allow ports 4420 (data) and 8009 (discovery). However, this adds CPU overhead for every packet.
 
 #### 2. Access Control
 
@@ -1483,7 +1530,7 @@ cat /etc/nvme/hostnqn
 **Access Control Checklist:**
 - [ ] Only authorized host NQNs registered on storage array
 - [ ] Storage network isolated from public networks
-- [ ] Firewall rules restrict access to storage ports
+- [ ] Firewall filtering disabled on storage interfaces (or ports 4420/8009 allowed if filtering required)
 - [ ] Regular audit of authorized hosts
 
 ### Security Monitoring
@@ -1502,6 +1549,8 @@ ss -tn | grep :4420
 ---
 
 ## Monitoring & Maintenance
+
+{% include monitoring-maintenance.md %}
 
 ### Health Monitoring
 
@@ -1589,6 +1638,8 @@ done
 ```
 
 ## Troubleshooting
+
+{% include troubleshooting-common.md %}
 
 ### Common Issues and Solutions
 
@@ -1770,9 +1821,9 @@ graph TD
     RESOLVED -->|Yes| END[Complete]
     RESOLVED -->|No| ESCALATE[Escalate to<br/>Vendor Support]
 
-    style START fill:#3498db
-    style END fill:#27ae60
-    style ESCALATE fill:#e74c3c
+    style START fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
+    style END fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
+    style ESCALATE fill:#c0392b,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ---

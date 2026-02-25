@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="{{ page.lang | default: site.lang | default: 'en' }}">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {%- seo -%}
+  <link rel="stylesheet" href="{{ '/assets/main.css' | relative_url }}">
+  {%- feed_meta -%}
+  <!-- Custom styles for wider content -->
+  <style>
+    .wrapper {
+      max-width: 1400px;
+      padding-left: 30px;
+      padding-right: 30px;
+    }
+    .page-content .wrapper {
+      max-width: 1400px;
+    }
+    .site-header .wrapper {
+      max-width: 1400px;
+    }
+    .site-footer .wrapper {
+      max-width: 1400px;
+    }
+    /* Ensure content uses full width */
+    .post-content, .home {
+      max-width: 100%;
+    }
+  </style>
+  <!-- Mermaid diagram support -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      // Initialize Mermaid
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: "default",
+        securityLevel: "loose"
+      });
+
+      // Find all code blocks with language-mermaid class and convert them
+      document.querySelectorAll('code.language-mermaid').forEach(function(codeBlock) {
+        // Get the mermaid code
+        var code = codeBlock.textContent;
+
+        // Create a new div for mermaid
+        var div = document.createElement('div');
+        div.className = 'mermaid';
+        div.textContent = code;
+
+        // Replace the pre>code with the div
+        var pre = codeBlock.parentElement;
+        pre.parentElement.replaceChild(div, pre);
+      });
+
+      // Now render all mermaid diagrams
+      mermaid.run();
+    });
+  </script>
+</head>
+<body>
+  {%- include header.html -%}
+  <main class="page-content" aria-label="Content">
+    <div class="wrapper">
+      {{ content }}
+    </div>
+  </main>
+  <footer class="site-footer h-card">
+    <div class="wrapper">
+      <div class="footer-col-wrapper">
+        <div class="footer-col">
+          <p>{{ site.description | escape }}</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
+

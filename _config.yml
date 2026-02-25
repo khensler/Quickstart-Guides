@@ -1,0 +1,48 @@
+# Jekyll configuration for GitHub Pages
+title: Linux Storage Configuration Guides
+description: Best practices for NVMe-TCP and iSCSI storage on Linux distributions
+baseurl: "/Quickstart-Guides"
+url: "https://khensler.github.io"
+
+# Build settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+  syntax_highlighter: rouge
+
+# Theme - Minima (built-in GitHub Pages theme)
+theme: minima
+
+# Minima theme settings
+minima:
+  skin: classic
+
+# Only show these pages in header (empty = none)
+header_pages: []
+
+plugins:
+  - jekyll-seo-tag
+
+# Include directories that Jekyll normally ignores
+include:
+  - common
+  - distributions
+  - Proxmox
+
+# Exclude files from build
+exclude:
+  - LICENSE
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - node_modules
+
+# Default front matter
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+
