@@ -349,7 +349,7 @@ class DITAGenerator:
         # Both warehouse and topics are one level deep, so path is the same
         image_path = f"../images/{filename}"
 
-        return f'<fig><image href="{escape_xml_attr(image_path)}" format="svg"><alt>Diagram</alt></image></fig>'
+        return f'<fig><image href="{escape_xml_attr(image_path)}"><alt>Diagram</alt></image></fig>'
 
     def generate_warehouse_topic(self, include_path: str, content: str) -> str:
         """Generate a DITA warehouse topic from an include file.
@@ -705,8 +705,18 @@ class DITAMapGenerator:
             for proto, proto_topics in sorted(protocols.items()):
                 topicrefs.append(f'        <topichead navtitle="{proto}">')
                 for topic in proto_topics:
-                    href = f"topics/{topic['id']}.dita"
-                    topicrefs.append(f'            <topicref href="{href}"/>')
+                    # Check if this is a parent topic with children (BEST-PRACTICES split by H2)
+                    if topic.get('type') == 'concept-parent' and 'children' in topic:
+                        # Create a topichead for the parent with nested children
+                        parent_title = 'Best Practices' if 'best-practices' in topic['id'].lower() else topic['title']
+                        topicrefs.append(f'            <topichead navtitle="{escape_xml(parent_title)}">')
+                        for child in topic['children']:
+                            child_href = f"topics/{child['id']}.dita"
+                            topicrefs.append(f'                <topicref href="{child_href}" navtitle="{escape_xml(child["title"])}"/>')
+                        topicrefs.append('            </topichead>')
+                    else:
+                        href = f"topics/{topic['id']}.dita"
+                        topicrefs.append(f'            <topicref href="{href}"/>')
                 topicrefs.append('        </topichead>')
 
             topicrefs.append('    </topichead>')
@@ -765,7 +775,14 @@ class MarkdownToDITAConverter:
         print(f"\n✅ Conversion complete! Output written to: {self.config.output_dir}")
 
     def _create_output_dirs(self):
-        """Create output directory structure."""
+        """Create output directory structure, cleaning existing files first."""
+        import shutil
+
+        # Clean existing output directory to remove stale files
+        if self.config.output_dir.exists():
+            print(f"  Cleaning existing output directory: {self.config.output_dir}")
+            shutil.rmtree(self.config.output_dir)
+
         dirs = [
             self.config.output_dir / self.config.warehouse_dir,
             self.config.output_dir / self.config.topics_dir,
@@ -828,19 +845,93 @@ class MarkdownToDITAConverter:
         # Determine topic type and generate DITA
         if 'QUICKSTART' in md_file.name:
             dita_content = self.dita_gen.generate_task_topic(title, content, topic_id)
+
+            # Write output file
+            output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
+            output_file.write_text(dita_content, encoding='utf-8')
+
+            # Track for map generation
+            self.converted_topics.append({
+                'id': topic_id,
+                'title': title,
+                'relative_path': rel_path_str,
+                'type': 'task'
+            })
         else:
-            dita_content = self.dita_gen.generate_concept_topic(title, content, topic_id)
+            # BEST-PRACTICES: Split by H2 sections into separate topics
+            self._convert_best_practices_sections(md_file, content, title, topic_id, rel_path_str)
 
-        # Write output file
-        output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
-        output_file.write_text(dita_content, encoding='utf-8')
+    def _split_by_h2(self, content: str) -> List[Tuple[str, str]]:
+        """Split content by H2 headings. Returns list of (section_title, section_content)."""
+        # Remove YAML front matter
+        content = re.sub(r'^---\n.*?---\n', '', content, flags=re.DOTALL)
 
-        # Track for map generation
+        # Remove the main H1 title
+        content = re.sub(r'^#\s+[^\n]+\n', '', content)
+
+        sections = []
+        # Split by H2 headings
+        h2_pattern = r'^##\s+(.+)$'
+
+        # Find all H2 positions
+        h2_matches = list(re.finditer(h2_pattern, content, re.MULTILINE))
+
+        if not h2_matches:
+            return [('Overview', content.strip())]
+
+        for i, match in enumerate(h2_matches):
+            section_title = match.group(1).strip()
+            start = match.end()
+
+            # Find end (next H2 or end of content)
+            if i + 1 < len(h2_matches):
+                end = h2_matches[i + 1].start()
+            else:
+                end = len(content)
+
+            section_content = content[start:end].strip()
+
+            # Skip empty sections and Table of Contents
+            if section_content and 'table of contents' not in section_title.lower():
+                sections.append((section_title, section_content))
+
+        return sections
+
+    def _convert_best_practices_sections(self, md_file: Path, content: str, main_title: str, base_topic_id: str, rel_path_str: str):
+        """Convert BEST-PRACTICES file into multiple section topics."""
+        sections = self._split_by_h2(content)
+
+        section_topics = []
+
+        for section_title, section_content in sections:
+            # Generate section topic ID
+            section_id = f"{base_topic_id}_{sanitize_id(section_title)}"
+
+            # Generate concept topic for this section
+            dita_content = self.dita_gen.generate_concept_topic(
+                f"{main_title} - {section_title}",
+                section_content,
+                section_id
+            )
+
+            # Write output file
+            output_file = self.config.output_dir / self.config.topics_dir / f"{section_id}.dita"
+            output_file.write_text(dita_content, encoding='utf-8')
+
+            section_topics.append({
+                'id': section_id,
+                'title': section_title,
+                'relative_path': rel_path_str,
+                'type': 'concept'
+            })
+
+        # Track as a parent topic with children for map generation
         self.converted_topics.append({
-            'id': topic_id,
-            'title': title,
+            'id': base_topic_id,
+            'title': main_title,
             'relative_path': rel_path_str,
-            'type': 'task' if 'QUICKSTART' in md_file.name else 'concept'
+            'type': 'concept-parent',
+            'children': section_topics
         })
 
     def _extract_title(self, content: str, default: str) -> str:
