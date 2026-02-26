@@ -970,8 +970,8 @@ graph TD
 
     CHECK_PERF -->|No| CHECK_PERSIST{Persistence<br/>Issue?}
 
-    CHECK_PERSIST -->|Yes| CHECK_SERVICE[Check nvmf-autoconnect<br/>service enabled]
-    CHECK_SERVICE --> CHECK_CONFIG[Verify discovery.conf]
+    CHECK_PERSIST -->|Yes| CHECK_SERVICE[Check nvme-tcp-connect<br/>service enabled]
+    CHECK_SERVICE --> CHECK_CONFIG[Verify systemd service<br/>ExecStart command]
 
     FIX_NET --> RECONNECT[Reconnect:<br/>nvme connect-all]
     LOAD_MOD --> RECONNECT
@@ -1049,6 +1049,56 @@ sudo reboot
 uname -r
 ```
 
+### NVMe-TCP Persistence Issues
+
+> **Important:** On Oracle Linux (and all RHEL-based systems), the standard `nvmf-autoconnect.service` does **not** work for NVMe-TCP connections.
+
+**Issue: Connections not restored after reboot**
+
+The `nvmf-autoconnect.service` is primarily designed for NVMe/FC, not NVMe/TCP. For TCP connections, use a custom systemd service:
+
+```bash
+# Create persistent connection service
+sudo tee /etc/systemd/system/nvme-tcp-connect.service > /dev/null <<'EOF'
+[Unit]
+Description=Connect NVMe-TCP subsystems at boot
+After=network-online.target
+Wants=network-online.target
+After=modprobe@nvme_fabrics.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nvme connect-all -t tcp -a <PORTAL_IP> -s 4420 --ctrl-loss-tmo=-1 --reconnect-delay=5
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable --now nvme-tcp-connect.service
+
+# Verify
+sudo systemctl status nvme-tcp-connect.service
+```
+
+**Issue: Service starts but no connections**
+
+```bash
+# Check service logs
+sudo journalctl -u nvme-tcp-connect.service
+
+# Verify network is ready before NVMe service starts
+sudo systemctl status network-online.target
+
+# Test manual connection
+sudo nvme connect-all -t tcp -a <PORTAL_IP> -s 4420
+
+# Verify Host NQN is registered on storage array
+cat /etc/nvme/hostnqn
+```
+
 ### Oracle Support Integration
 
 **Collecting diagnostic information for Oracle Support:**
@@ -1087,8 +1137,8 @@ sudo sosreport --batch \
 - [ ] Enable jumbo frames (MTU 9000)
 - [ ] Configure firewall rules
 - [ ] Set up NVMe-TCP connections with interface binding
-- [ ] Configure NVMe IO policy (numa)
-- [ ] Set up persistent connections
+- [ ] Configure NVMe IO policy (queue-depth or numa)
+- [ ] Set up persistent connections (custom systemd service, NOT nvmf-autoconnect)
 - [ ] Apply custom tuned profile
 - [ ] Configure SELinux policies
 - [ ] Set up monitoring

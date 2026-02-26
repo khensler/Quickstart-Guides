@@ -17,10 +17,12 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Oracle L
 
 ## Prerequisites
 
-- Oracle Linux 8.x or 9.x with UEK R7 (5.15+) recommended
+- Oracle Linux 9.x with UEK 8 (6.12+) or Oracle Linux 8.x with UEK R7 (5.15+)
 - NVMe-TCP storage array with portal IPs and subsystem NQN
 - Dedicated storage network interfaces
 - Root or sudo access
+
+> **Note:** This guide was validated on Oracle Linux 9.7 with UEK 8 (kernel 6.12). The same configuration applies to Oracle Linux 10 which also uses UEK 8.
 
 {% include quickstart/glossary-link-nvme.md %}
 
@@ -58,7 +60,37 @@ echo "nvme-tcp" | sudo tee /etc/modules-load.d/nvme-tcp.conf
 
 ## Step 7: Configure Persistent Connections
 
-{% include quickstart/nvme-persistent-connections.md %}
+> **Important:** On Oracle Linux (and RHEL-based systems), the standard `nvmf-autoconnect.service` does **not** work for NVMe-TCP connections. A custom systemd service is required.
+
+Create a systemd service to connect NVMe-TCP storage at boot:
+
+```bash
+# Create the systemd service file
+sudo tee /etc/systemd/system/nvme-tcp-connect.service > /dev/null <<EOF
+[Unit]
+Description=Connect NVMe-TCP subsystems at boot
+After=network-online.target
+Wants=network-online.target
+After=modprobe@nvme_fabrics.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nvme connect-all -t tcp -a <PORTAL_IP> -s 4420 --ctrl-loss-tmo=-1 --reconnect-delay=5
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the service
+sudo systemctl daemon-reload
+sudo systemctl enable --now nvme-tcp-connect.service
+
+# Verify the service status
+sudo systemctl status nvme-tcp-connect.service
+```
+
+Replace `<PORTAL_IP>` with one of your NVMe-TCP portal IP addresses. The `connect-all` command will discover and connect to all available subsystems through that portal.
 
 ## Step 8: Create LVM Storage
 
