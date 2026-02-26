@@ -1,4 +1,18 @@
-Connect each host interface to each storage portal:
+**Option A: Connect-all (simplest method)**
+
+Discovers and connects to all available subsystems from a single portal:
+
+```bash
+# Replace <PORTAL_IP_1> with any storage portal IP
+sudo nvme connect-all -t tcp -a <PORTAL_IP_1> -s 4420
+
+# Verify connections
+sudo nvme list-subsys
+```
+
+**Option B: Individual connections (for specific interface binding)**
+
+Use when you need to bind connections to specific host interfaces:
 
 ```bash
 # Replace values: <PORTAL_IP_X>, <SUBSYSTEM_NQN>, <INTERFACE_NAME_X>, <HOST_IP_X>
