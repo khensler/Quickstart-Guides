@@ -43,6 +43,11 @@ A collection of quick start guides for various technologies and configurations.
 - [iSCSI Quick Start](distributions/oracle/iscsi/QUICKSTART.md) - iSCSI configuration for Oracle Linux with UEK
 - [iSCSI Best Practices](distributions/oracle/iscsi/BEST-PRACTICES.md) - iSCSI best practices for Oracle Linux with UEK
 
+### Cloud & Hybrid Infrastructure
+
+**AWS Outposts:**
+- [Pure Storage FlashArray for AWS Outposts](distributions/aws-outposts/QUICKSTART.md) - Connect EC2 instances on AWS Outposts to FlashArray for data and boot volumes (NVMe-TCP and iSCSI)
+
 ### Common Reference Documentation
 
 - [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html) - Definitions for iSCSI, NVMe-TCP, and storage terms (IQN, NQN, Portal, LUN, Namespace, etc.)
