@@ -40,8 +40,8 @@ Before adding iSCSI storage, ensure your storage network interfaces are configur
 2. Go to the **Network** tab
 3. Identify your storage interfaces
 
-<!-- TODO: Add screenshot of XO Host Network tab -->
-> **📸 Screenshot placeholder:** _XO Host Network tab showing storage interfaces_
+![XO Host Network Tab](images/01_iscsi_step_1.png)
+*XO Host Network tab showing storage interfaces*
 
 4. If needed, configure static IPs on storage interfaces via **Network → PIFs**
 
@@ -51,8 +51,8 @@ Before adding iSCSI storage, ensure your storage network interfaces are configur
 2. Select a host → **Networking** tab
 3. Configure storage interfaces with static IPs
 
-<!-- TODO: Add screenshot of XCP-ng Center Networking tab -->
-> **📸 Screenshot placeholder:** _XCP-ng Center Networking configuration_
+
+
 
 ---
 
@@ -66,8 +66,8 @@ Multipathing must be enabled at the pool level before adding iSCSI storage.
 2. Go to the **Advanced** tab
 3. Find **Multipathing** and enable it
 
-<!-- TODO: Add screenshot of XO Pool Advanced tab with Multipathing option -->
-> **📸 Screenshot placeholder:** _XO Pool Advanced tab - Multipathing toggle_
+![XO Pool Multipathing](images/02_iscsi_step_2.png)
+*XO Pool Advanced tab - Multipathing toggle*
 
 4. Click **Save** or apply the changes
 
@@ -117,17 +117,30 @@ systemctl restart multipathd
 
 ## Step 4: Add iSCSI Storage Repository
 
+### Understanding Multi-Subnet Discovery
+
+> **⚠️ CRITICAL for Multi-Subnet/VLAN Architectures:**
+>
+> When your storage array uses **VLAN tagging** or presents iSCSI targets on **multiple subnets**, each discovery query only returns targets from that specific subnet. To discover ALL paths, you must provide at least one IP from EACH subnet in the Target field.
+>
+> **Example:** Pure FlashArray with 2-subnet architecture:
+> - Subnet A (VLAN 30): `10.10.3.10`, `10.10.3.11` (CT0, CT1)
+> - Subnet B (VLAN 31): `10.10.4.10`, `10.10.4.11` (CT0, CT1)
+>
+> Discovering from `10.10.3.10` alone returns only 2 targets (both on VLAN 30).
+> To get all 4 paths, enter: `10.10.3.10,10.10.4.10`
+
 ### Via Xen Orchestra
 
 1. Click **New → Storage** in the top menu
 
-<!-- TODO: Add screenshot of XO New Storage menu -->
-> **📸 Screenshot placeholder:** _XO New Storage dropdown menu_
+![XO New Storage Menu](images/03_iscsi_step_3.png)
+*XO New menu showing Storage option*
 
 2. Select **iSCSI** as the storage type
 
-<!-- TODO: Add screenshot of storage type selection -->
-> **📸 Screenshot placeholder:** _Storage type selection showing iSCSI option_
+![Storage Type Selection](images/04_iscsi_step_4.png)
+*Selecting iSCSI storage type*
 
 3. Fill in the iSCSI connection details:
 
@@ -136,35 +149,36 @@ systemctl restart multipathd
 | **Name** | `Pure-iSCSI-SR` | Descriptive name for the SR |
 | **Description** | `Pure FlashArray iSCSI` | Optional description |
 | **Host** | Select pool master | Initial host for discovery |
-| **Target IPs** | `10.100.1.10,10.100.1.11` | Comma-separated portal IPs |
+| **Target IPs** | `10.10.3.10,10.10.4.10` | **Comma-separated IPs - one from EACH subnet** |
 | **Port** | `3260` | iSCSI port (default: 3260) |
 
-<!-- TODO: Add screenshot of iSCSI connection form -->
-> **📸 Screenshot placeholder:** _iSCSI SR creation form - connection details_
+> **💡 Key Point:** The Target IPs field accepts comma-separated values. For multi-subnet architectures, include one IP from each subnet to ensure XO discovers all available paths.
+
+![iSCSI Connection Form](images/05_iscsi_step_5.png)
+*iSCSI SR creation form with connection details*
 
 4. Click **Discover IQNs** or **Connect**
 
 5. Select the target IQN from the dropdown
 
-<!-- TODO: Add screenshot showing IQN selection -->
-> **📸 Screenshot placeholder:** _Target IQN dropdown selection_
+![IQN Selection](images/06_iscsi_step_6.png)
+*Target IQN selection dropdown*
 
 6. Select the LUN to use
 
-<!-- TODO: Add screenshot showing LUN selection -->
-> **📸 Screenshot placeholder:** _LUN selection for SR creation_
+![LUN Selection](images/07_iscsi_step_7.png)
+*LUN selection for SR creation*
 
 7. If CHAP is required, enter credentials:
    - **Username:** Your CHAP username
    - **Password:** Your CHAP secret
 
-<!-- TODO: Add screenshot of CHAP authentication fields -->
-> **📸 Screenshot placeholder:** _CHAP authentication fields_
+> **Note:** CHAP authentication is optional. Skip if not required.
 
 8. Click **Create**
 
-<!-- TODO: Add screenshot of SR creation success -->
-> **📸 Screenshot placeholder:** _SR creation success message_
+![SR Reattach Dialog](images/08_iscsi_step_8.png)
+*SR reattach confirmation (if existing data found)*
 
 ---
 
@@ -176,16 +190,15 @@ systemctl restart multipathd
 2. Find your new iSCSI SR in the list
 3. Click on it to view details
 
-<!-- TODO: Add screenshot of SR list -->
-> **📸 Screenshot placeholder:** _SR list showing new iSCSI SR_
+![SR Details](images/09_iscsi_step_9.png)
+*SR details page showing status and configuration*
 
 4. Verify the SR shows:
    - **Status:** Connected (green)
    - **Type:** lvmoiscsi
    - **Shared:** Yes (available on all hosts)
 
-<!-- TODO: Add screenshot of SR details page -->
-> **📸 Screenshot placeholder:** _SR details page showing status and configuration_
+
 
 ---
 
@@ -196,8 +209,8 @@ systemctl restart multipathd
 1. In the SR details, check the **Physical Block Devices (PBDs)** section
 2. Each host should show "connected" status
 
-<!-- TODO: Add screenshot of PBD connections -->
-> **📸 Screenshot placeholder:** _PBD connections showing all hosts connected_
+![SR Hosts Tab](images/10_iscsi_step_10.png)
+> ***SR Hosts tab showing multipathing with 4/4 paths per host connected_
 
 ### Via SSH (Verification)
 
@@ -218,8 +231,8 @@ multipath -ll
 #   `- 4:0:0:1 sdd 8:48  active ready running
 ```
 
-<!-- TODO: Add screenshot of multipath -ll output -->
-> **📸 Screenshot placeholder:** _Terminal showing multipath -ll output with multiple active paths_
+![Multipath CLI](images/12_multipath_cli.png)
+> ***Terminal showing multipath -ll with multiple active paths_
 
 ---
 
@@ -231,8 +244,8 @@ multipath -ll
 2. Select your template (e.g., Ubuntu, CentOS)
 3. In the **Disks** section, select your new iSCSI SR
 
-<!-- TODO: Add screenshot of VM creation disk selection -->
-> **📸 Screenshot placeholder:** _VM creation showing iSCSI SR selected for disk storage_
+![VM Disk Selection](images/11_iscsi_step_11.png)
+> ***VM creation showing iSCSI SR selected for disk storage_
 
 4. Complete the VM creation wizard
 5. Start the VM and verify it runs correctly
@@ -258,8 +271,7 @@ multipath -ll
    - Navigate to **Home → Logs**
    - Filter for storage-related events
 
-<!-- TODO: Add screenshot of XO Logs page -->
-> **📸 Screenshot placeholder:** _XO Logs page showing storage events_
+
 
 ### Paths Showing Failed
 

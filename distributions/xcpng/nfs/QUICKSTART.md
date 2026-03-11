@@ -43,17 +43,8 @@ On your NFS server (e.g., `/etc/exports`):
 
 > **Security Note:** `no_root_squash` is required for XCP-ng to manage VM files. Restrict access to your storage network.
 
-### Pure Storage FlashArray NFS
 
-If using Pure Storage FlashArray:
-
-1. Navigate to **Storage → File Systems**
-2. Create a new file system
-3. Configure NFS export rules for your XCP-ng network
-4. Note the NFS mount path
-
-<!-- TODO: Add screenshot of Pure FlashArray NFS configuration -->
-> **📸 Screenshot placeholder:** _Pure FlashArray NFS export configuration_
+> **Note:** This guide assumes you have already configured your Pure FlashArray with NFS exports. See the Pure Storage documentation for array-side setup.
 
 ---
 
@@ -80,8 +71,7 @@ Export list for 10.100.1.50:
 /exports/xcpng-vms 10.100.1.0/24
 ```
 
-<!-- TODO: Add screenshot of showmount output -->
-> **📸 Screenshot placeholder:** _Terminal showing showmount -e output_
+
 
 ---
 
@@ -91,13 +81,13 @@ Export list for 10.100.1.50:
 
 1. Click **New → Storage** in the top menu
 
-<!-- TODO: Add screenshot of XO New Storage menu -->
-> **📸 Screenshot placeholder:** _XO New Storage dropdown menu_
+![XO New Storage Menu](images/01_nfs_new_storage.png)
+*XO New menu showing Storage option*
 
 2. Select **NFS** as the storage type
 
-<!-- TODO: Add screenshot of storage type selection -->
-> **📸 Screenshot placeholder:** _Storage type selection showing NFS option_
+![Storage Type Selection](images/02_nfs_step_2.png)
+*Selecting NFS storage type*
 
 3. Fill in the NFS connection details:
 
@@ -110,24 +100,23 @@ Export list for 10.100.1.50:
 | **Path** | `/exports/xcpng-vms` | NFS export path |
 | **NFS Version** | `3` or `4.1` | Match your server configuration |
 
-<!-- TODO: Add screenshot of NFS connection form -->
-> **📸 Screenshot placeholder:** _NFS SR creation form - connection details_
+![NFS Connection Form](images/03_nfs_step_3.png)
+*NFS SR creation form with connection details*
 
 4. (Optional) Configure mount options:
    - Common options: `tcp,hard,intr,timeo=600,retrans=2`
 
-<!-- TODO: Add screenshot showing mount options field -->
-> **📸 Screenshot placeholder:** _NFS mount options configuration_
+
 
 5. Click **Create**
 
-<!-- TODO: Add screenshot of SR creation progress -->
-> **📸 Screenshot placeholder:** _SR creation in progress_
+![NFS Path Selection](images/04_nfs_step_4.png)
+*Selecting VMs path from NFS export*
 
 6. Wait for the SR to be created and connected
 
-<!-- TODO: Add screenshot of successful SR creation -->
-> **📸 Screenshot placeholder:** _SR creation success message_
+![Create NFS Button](images/05_nfs_step_5.png)
+*NFS SR creation - Click Create*
 
 ---
 
@@ -139,23 +128,22 @@ Export list for 10.100.1.50:
 2. Find your new NFS SR in the list
 3. Click on it to view details
 
-<!-- TODO: Add screenshot of SR list with NFS SR -->
-> **📸 Screenshot placeholder:** _SR list showing new NFS SR_
+![SR Details](images/06_nfs_step_6.png)
+*SR details page showing NFS storage repository*
 
 4. Verify the SR shows:
    - **Status:** Connected (green)
    - **Type:** nfs
    - **Shared:** Yes (available on all hosts)
 
-<!-- TODO: Add screenshot of NFS SR details -->
-> **📸 Screenshot placeholder:** _NFS SR details page_
+
 
 ### Check PBD Connections
 
 In the SR details, verify all hosts show connected PBDs:
 
-<!-- TODO: Add screenshot of PBD status -->
-> **📸 Screenshot placeholder:** _PBD connections showing all hosts connected to NFS SR_
+![SR Hosts Tab](images/07_nfs_step_7.png)
+*SR Hosts tab showing all hosts connected to NFS SR
 
 ---
 
@@ -167,8 +155,7 @@ In the SR details, verify all hosts show connected PBDs:
 2. Select your template (e.g., Ubuntu, CentOS, Windows)
 3. In the **Disks** section, select your new NFS SR
 
-<!-- TODO: Add screenshot of VM creation with NFS SR -->
-> **📸 Screenshot placeholder:** _VM creation showing NFS SR selected for disk storage_
+![VM Disk Selection](images/08_nfs_step_8.png)
 
 4. Complete the VM creation wizard
 5. Start the VM and verify it runs correctly
@@ -181,8 +168,6 @@ After creating the VM, verify the disk is stored on NFS:
 2. Go to the **Disks** tab
 3. Verify the disk shows the NFS SR as its location
 
-<!-- TODO: Add screenshot of VM disk details -->
-> **📸 Screenshot placeholder:** _VM disk details showing NFS SR location_
 
 ---
 
@@ -237,8 +222,6 @@ ls -la /var/run/sr-mount/<SR_UUID>/
 4. **Check export permissions:**
    - Verify XCP-ng host IPs are in the allowed list
 
-<!-- TODO: Add screenshot of troubleshooting in XO logs -->
-> **📸 Screenshot placeholder:** _XO Logs showing NFS connection errors_
 
 ### Mount Failures
 
