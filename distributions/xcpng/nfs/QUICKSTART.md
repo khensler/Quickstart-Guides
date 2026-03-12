@@ -17,7 +17,7 @@ This guide walks you through configuring NFS storage on XCP-ng using **Xen Orche
 
 ## Prerequisites
 
-- XCP-ng 8.2 or later with Xen Orchestra installed
+- XCP-ng 8.3 with Xen Orchestra installed
 - NFS server with:
   - NFS export path configured
   - XCP-ng hosts allowed in export rules
@@ -78,6 +78,8 @@ Export list for 10.10.3.15:
 ## Step 3: Add Pure FlashArray NFS
 
 ### Via Xen Orchestra
+
+> **Important:** Your NFS server or appliance must be set to allow sub-directory mounts, or adding the SR will fail. In FreeNAS/TrueNAS, this is the "All dirs" checkbox in NFS share properties.
 
 1. Click **New → Storage** in the top menu
 
@@ -146,6 +148,8 @@ Export list for 10.10.3.15:
 
 ### Via Xen Orchestra
 
+> **Important:** Your NFS server or appliance must be set to allow sub-directory mounts, or adding the SR will fail. In FreeNAS/TrueNAS, this is the "All dirs" checkbox in NFS share properties.
+
 1. Click **New → VM**
 2. Select your template (e.g., Ubuntu, CentOS, Windows)
 3. In the **Disks** section, select your new NFS SR (in our lab "PureNFS" is the SR)
@@ -166,7 +170,7 @@ After creating the VM, verify the disk is stored on NFS:
 
 ---
 
-## Step 6: Verify via CLI (Optional)
+## Step 5: Verify via CLI (Optional)
 
 Connect to a host via SSH to verify the NFS mount:
 
