@@ -23,7 +23,7 @@ This guide walks you through configuring NFS storage on XCP-ng using **Xen Orche
   - XCP-ng hosts allowed in export rules
   - NFSv3 or NFSv4.1 support
 - Network connectivity between XCP-ng hosts and NFS server
-- NFS server IP address and export path
+- Pure FlashArray NFS file interface IP and export path
 
 > **📖 New to NFS storage?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
 
@@ -38,7 +38,7 @@ Ensure your NFS server has an export configured for XCP-ng.
 On your NFS server (e.g., `/etc/exports`):
 
 ```bash
-/exports/xcpng-vms  10.100.1.0/24(rw,sync,no_subtree_check,no_root_squash)
+/xcp/VMs  10.10.3.0/24(rw,sync,no_subtree_check,no_root_squash)
 ```
 
 > **Security Note:** `no_root_squash` is required for XCP-ng to manage VM files. Restrict access to your storage network.
@@ -67,15 +67,15 @@ showmount -e <NFS_SERVER_IP>
 
 Expected output from `showmount`:
 ```
-Export list for 10.100.1.50:
-/exports/xcpng-vms 10.100.1.0/24
+Export list for 10.10.3.15:
+/xcp/VMs 10.10.3.0/24
 ```
 
 
 
 ---
 
-## Step 3: Add NFS Storage Repository
+## Step 3: Add Pure FlashArray NFS
 
 ### Via Xen Orchestra
 
@@ -84,70 +84,65 @@ Export list for 10.100.1.50:
 ![XO New Storage Menu](images/01_nfs_new_storage.png)
 *XO New menu showing Storage option*
 
-2. Select **NFS** as the storage type
+2. Fill in the initial SR details:
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| **Host** | Select pool master | Initial host for connection |
+| **Name** | `Pure-NFS-SR` | Descriptive name for the SR |
+| **Description** | `Pure FlashArray NFS` | Optional description |
+
+![Initial SR Details](images/02a_nfs_step_2_details.png)
+*Fill in Host, Name, and Description before selecting storage type*
+
+3. Select **NFS** from the storage type dropdown
 
 ![Storage Type Selection](images/02_nfs_step_2.png)
 *Selecting NFS storage type*
 
-3. Fill in the NFS connection details:
+4. Enter the NFS connection details:
 
 | Field | Value | Description |
 |-------|-------|-------------|
-| **Name** | `NFS-Storage-SR` | Descriptive name for the SR |
-| **Description** | `NFS Storage Repository` | Optional description |
-| **Host** | Select pool master | Initial host for connection |
-| **Server** | `10.100.1.50` | NFS server IP address |
-| **Path** | `/exports/xcpng-vms` | NFS export path |
-| **NFS Version** | `3` or `4.1` | Match your server configuration |
+| **Server** | `10.10.3.15` | Pure FlashArray NFS file interface IP |
+| **NFS Version** | `4.1` | NFSv4.1 recommended for Pure |
 
 ![NFS Connection Form](images/03_nfs_step_3.png)
 *NFS SR creation form with connection details*
 
-4. (Optional) Configure mount options:
-   - Common options: `tcp,hard,intr,timeo=600,retrans=2`
+
+5. Configure mount options (recommended for performance):
+   - **Recommended:** `nconnect=8` - enables multiple TCP connections for improved throughput
+
+![NFS Mount Options](images/04_nfs_step_4.png)
+*NFS mount options field with nconnect=8*
 
 
 
-5. Click **Create**
+6. Select the NFS export path
 
-![NFS Path Selection](images/04_nfs_step_4.png)
+![NFS Path Selection](images/06_nfs_select_path.png)
 *Selecting VMs path from NFS export*
 
-6. Wait for the SR to be created and connected
+7. Click **Create**
 
-![Create NFS Button](images/05_nfs_step_5.png)
-*NFS SR creation - Click Create*
+![Create NFS Button](images/07_nfs_click_create.png)
+*Click Create to add the NFS SR*
 
----
+8. Wait for the SR to be created - XO will automatically show the SR summary page
 
-## Step 4: Verify Storage Repository
+![SR Details](images/08_nfs_sr_details.png)
+*SR General tab showing connected NFS storage repository*
 
-### Via Xen Orchestra
+9. Verify host connections in the **Hosts** tab
 
-1. Navigate to **Home → SRs** (Storage Repositories)
-2. Find your new NFS SR in the list
-3. Click on it to view details
-
-![SR Details](images/06_nfs_step_6.png)
-*SR details page showing NFS storage repository*
-
-4. Verify the SR shows:
-   - **Status:** Connected (green)
-   - **Type:** nfs
-   - **Shared:** Yes (available on all hosts)
-
-
-
-### Check PBD Connections
-
-In the SR details, verify all hosts show connected PBDs:
-
-![SR Hosts Tab](images/07_nfs_step_7.png)
-*SR Hosts tab showing all hosts connected to NFS SR
+![SR Hosts Tab](images/09_nfs_hosts_tab.png)
+*SR Hosts tab showing all hosts connected to NFS SR*
 
 ---
 
-## Step 5: Create a Test VM
+
+## Step 4: Create a Test VM
 
 ### Via Xen Orchestra
 
@@ -155,7 +150,7 @@ In the SR details, verify all hosts show connected PBDs:
 2. Select your template (e.g., Ubuntu, CentOS, Windows)
 3. In the **Disks** section, select your new NFS SR
 
-![VM Disk Selection](images/08_nfs_step_8.png)
+![VM Disk Selection](images/10_nfs_step_10.png)
 
 4. Complete the VM creation wizard
 5. Start the VM and verify it runs correctly
