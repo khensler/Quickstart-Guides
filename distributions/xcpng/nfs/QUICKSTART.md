@@ -89,8 +89,8 @@ Export list for 10.10.3.15:
 | Field | Value | Description |
 |-------|-------|-------------|
 | **Host** | Select pool master | Initial host for connection |
-| **Name** | `Pure-NFS-SR` | Descriptive name for the SR |
-| **Description** | `Pure FlashArray NFS` | Optional description |
+| **Name** | `PureNFS` | Descriptive name for the SR |
+| **Description** | `Pure NFS Storage` | Optional description |
 
 ![Initial SR Details](images/02a_nfs_step_2_details.png)
 *Fill in Host, Name, and Description before selecting storage type*
@@ -148,9 +148,9 @@ Export list for 10.10.3.15:
 
 1. Click **New → VM**
 2. Select your template (e.g., Ubuntu, CentOS, Windows)
-3. In the **Disks** section, select your new NFS SR
+3. In the **Disks** section, select your new NFS SR (in our lab "PureNFS" is the SR)
 
-![VM Disk Selection](images/10_nfs_step_10.png)
+![VM Disk Selection](images/10_nfs_vm_disk_select.png)
 
 4. Complete the VM creation wizard
 5. Start the VM and verify it runs correctly
