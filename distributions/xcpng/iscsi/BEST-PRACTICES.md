@@ -96,6 +96,43 @@ flowchart TB
     style LUN fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
+### VLAN-Tagged Multi-Subnet Architecture (Pure FlashArray Example)
+
+Many enterprise storage arrays, including Pure FlashArray, use **VLAN tagging** to present iSCSI targets on multiple subnets from the same physical ports. This architecture requires special consideration for iSCSI discovery.
+
+**Key Concept:** When VLAN tagging is enabled, each controller presents iSCSI targets on multiple VLANs. Discovery from any single IP only returns targets on that VLAN's subnet.
+
+**Example Pure FlashArray Configuration:**
+
+| Controller | VLAN 30 (Subnet A) | VLAN 31 (Subnet B) |
+|------------|-------------------|-------------------|
+| CT0 | 10.10.3.10 | 10.10.4.10 |
+| CT1 | 10.10.3.11 | 10.10.4.11 |
+
+**Discovery Behavior:**
+- Querying `10.10.3.10` returns: `10.10.3.10` (CT0) and `10.10.3.11` (CT1) — 2 targets
+- Querying `10.10.4.10` returns: `10.10.4.10` (CT0) and `10.10.4.11` (CT1) — 2 targets
+- **To get all 4 targets:** Query both subnets using comma-separated IPs
+
+**GUI Configuration (Xen Orchestra):**
+
+In the XO iSCSI SR wizard, enter comma-separated IPs from each subnet:
+```
+Target: 10.10.3.10,10.10.4.10
+```
+
+**CLI Configuration:**
+```bash
+# Discovery from both subnets
+iscsiadm -m discovery -t sendtargets -p 10.10.3.10:3260
+iscsiadm -m discovery -t sendtargets -p 10.10.4.10:3260
+
+# Create SR with multiple targets
+xe sr-create name-label="Pure-iSCSI-SR" type=lvmoiscsi shared=true     device-config:target=10.10.3.10,10.10.4.10     device-config:targetIQN=iqn.2010-06.com.purestorage:flasharray.xxxx     device-config:SCSIid=3624a9370xxxxxxxxx
+```
+
+**Result:** 4 active paths (2 per controller, across 2 subnets)
+
 ---
 
 ## XCP-ng-Specific Considerations
@@ -110,7 +147,7 @@ flowchart TB
 - Uses Open vSwitch for networking by default
 
 **Recommended Versions:**
-- **XCP-ng**: 8.2 or later
+- **XCP-ng**: 8.3
 - **Kernel**: XCP-ng default kernel (includes required iSCSI and multipath modules)
 
 ### Package Management

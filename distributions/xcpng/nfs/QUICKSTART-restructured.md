@@ -17,18 +17,38 @@ This guide walks you through configuring NFS storage on XCP-ng using **Xen Orche
 
 ## Prerequisites
 
-- XCP-ng 8.3 with Xen Orchestra installed
-- Pure FlashArray with:
-  - NFS file interface configured
-  - NFS export policy created with NFSv4.1 enabled (recommended) and no root squash enabled
-  - Export path created (e.g., `/xcp/VMs`)
-  - NFS export quota policy created
-- Network connectivity between XCP-ng hosts and Pure FlashArray NFS interface
+- XCP-ng 8.2 or later with Xen Orchestra installed
+- NFS server with:
+  - NFS export path configured
+  - XCP-ng hosts allowed in export rules
+  - NFSv3 or NFSv4.1 support
+- Network connectivity between XCP-ng hosts and NFS server
+- Pure FlashArray NFS file interface IP and export path
+
+> **📖 New to NFS storage?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
 
 ---
 
+## Step 1: Prepare NFS Server
 
-## Step 1: Verify Network Connectivity
+Ensure your NFS server has an export configured for XCP-ng.
+
+### Example NFS Export Configuration
+
+On your NFS server (e.g., `/etc/exports`):
+
+```bash
+/xcp/VMs  10.10.3.0/24(rw,sync,no_subtree_check,no_root_squash)
+```
+
+> **Security Note:** `no_root_squash` is required for XCP-ng to manage VM files. Restrict access to your storage network.
+
+
+> **Note:** This guide assumes you have already configured your Pure FlashArray with NFS exports. See the Pure Storage documentation for array-side setup.
+
+---
+
+## Step 2: Verify Network Connectivity
 
 Before adding NFS storage, verify connectivity from each XCP-ng host.
 
@@ -55,11 +75,9 @@ Export list for 10.10.3.15:
 
 ---
 
-## Step 2: Add Pure FlashArray NFS
+## Step 3: Add Pure FlashArray NFS
 
 ### Via Xen Orchestra
-
-> **Important:** Your NFS server or appliance must be set to allow sub-directory mounts, or adding the SR will fail. In FreeNAS/TrueNAS, this is the "All dirs" checkbox in NFS share properties.
 
 1. Click **New → Storage** in the top menu
 
@@ -71,11 +89,8 @@ Export list for 10.10.3.15:
 | Field | Value | Description |
 |-------|-------|-------------|
 | **Host** | Select pool master | Initial host for connection |
-| **Name** | `PureNFS` | Descriptive name for the SR |
-| **Description** | `Pure NFS Storage` | Optional description |
-
-![Initial SR Details](images/02a_nfs_step_2_details.png)
-*Fill in Host, Name, and Description before selecting storage type*
+| **Name** | `Pure-NFS-SR` | Descriptive name for the SR |
+| **Description** | `Pure FlashArray NFS` | Optional description |
 
 3. Select **NFS** from the storage type dropdown
 
@@ -93,41 +108,46 @@ Export list for 10.10.3.15:
 *NFS SR creation form with connection details*
 
 
+5. Configure mount options (recommended for performance):
+   - **Recommended:** `nconnect=8` - enables multiple TCP connections for improved throughput
+
+![NFS Mount Options](images/04_nfs_step_4.png)
+*NFS mount options field with nconnect=8*
 
 
 
-5. Select the NFS export path
+6. Select the NFS export path
 
-![NFS Path Selection](images/05_nfs_select_path.png)
+![NFS Path Selection](images/05_nfs_step_5.png)
 *Selecting VMs path from NFS export*
 
-6. Click **Create**
+7. Click **Create**
 
-![Create NFS Button](images/07_nfs_click_create.png)
+![Create NFS Button](images/06_nfs_step_6.png)
 *Click Create to add the NFS SR*
 
-7. Wait for the SR to be created - XO will automatically show the SR summary page
+8. Wait for the SR to be created - XO will automatically show the SR summary page
 
-![SR Details](images/08_nfs_sr_details.png)
+![SR Details](images/07_nfs_step_7.png)
 *SR General tab showing connected NFS storage repository*
 
-8. Verify host connections in the **Hosts** tab
+9. Verify host connections in the **Hosts** tab
 
-![SR Hosts Tab](images/09_nfs_hosts_tab.png)
+![SR Hosts Tab](images/08_nfs_step_8.png)
 *SR Hosts tab showing all hosts connected to NFS SR*
 
 ---
 
 
-## Step 3: Create a Test VM
+## Step 4: Create a Test VM
 
 ### Via Xen Orchestra
 
 1. Click **New → VM**
 2. Select your template (e.g., Ubuntu, CentOS, Windows)
-3. In the **Disks** section, select your new NFS SR (in our lab "PureNFS" is the SR)
+3. In the **Disks** section, select your new NFS SR
 
-![VM Disk Selection](images/10_nfs_vm_disk_select.png)
+![VM Disk Selection](images/09_nfs_step_9.png)
 
 4. Complete the VM creation wizard
 5. Start the VM and verify it runs correctly
@@ -143,7 +163,7 @@ After creating the VM, verify the disk is stored on NFS:
 
 ---
 
-## Step 4: Verify via CLI (Optional)
+## Step 6: Verify via CLI (Optional)
 
 Connect to a host via SSH to verify the NFS mount:
 
