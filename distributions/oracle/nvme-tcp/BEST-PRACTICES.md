@@ -126,7 +126,7 @@ flowchart LR
 - **8 paths** (2 NICs × 4 portals) for maximum redundancy
 - **UEK kernel** for optimized NVMe-TCP performance
 
-{% include diagrams-storage-topology.md %}
+{% include diagrams-storage-topology-nvme.md %}
 
 {% include diagrams-network-architecture.md %}
 
@@ -209,7 +209,7 @@ sudo reboot
 
 ## Network Configuration
 
-{% include network-concepts.md %}
+{% include network-concepts-nvme.md %}
 
 ### Oracle Linux Network Best Practices
 
@@ -408,7 +408,7 @@ flowchart TB
 
 {% include diagrams-nvme-multipath.md %}
 
-{% include diagrams-failover.md %}
+{% include diagrams-failover-nvme.md %}
 
 ### Ksplice Overview
 
@@ -684,7 +684,7 @@ sudo systemctl enable --now irqbalance
 
 ## Security
 
-{% include security-best-practices.md %}
+{% include security-best-practices-nvme.md %}
 
 ### SELinux Configuration
 
@@ -826,7 +826,7 @@ sudo systemctl enable --now auditd
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-nvme.md %}
 
 ### Oracle Linux Monitoring Tools
 
@@ -988,9 +988,9 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-{% include diagrams-troubleshooting.md %}
+{% include diagrams-troubleshooting-nvme.md %}
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-nvme.md %}
 
 ### UEK-Specific Issues
 

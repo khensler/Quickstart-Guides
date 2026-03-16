@@ -124,7 +124,7 @@ graph TB
 - **dm-multipath** aggregates all paths into single device
 - **UEK kernel** for optimized iSCSI performance
 
-{% include diagrams-storage-topology.md %}
+{% include diagrams-storage-topology-iscsi.md %}
 
 {% include diagrams-iscsi-multipath.md %}
 
@@ -744,7 +744,7 @@ sequenceDiagram
     Path1->>DM: Path reinstated
 ```
 
-{% include diagrams-failover.md %}
+{% include diagrams-failover-iscsi.md %}
 
 ### What is Ksplice?
 
@@ -818,7 +818,7 @@ OnCalendar=Sun 02:00
 
 {% include iscsi-performance-tuning.md %}
 
-{% include performance-tuning.md %}
+{% include performance-tuning-iscsi.md %}
 
 ### Oracle Linux-Specific Tuning
 
@@ -923,7 +923,7 @@ sudo tuned-adm active
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-iscsi.md %}
 
 ### Oracle Linux-Specific Monitoring
 
@@ -1039,7 +1039,7 @@ echo "0 */6 * * * /usr/local/bin/iscsi-health-check-oracle.sh >> /var/log/iscsi-
 
 ## Security
 
-{% include security-best-practices.md %}
+{% include security-best-practices-iscsi.md %}
 
 ### Oracle Linux-Specific Security
 
@@ -1142,9 +1142,9 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-{% include diagrams-troubleshooting.md %}
+{% include diagrams-troubleshooting-iscsi.md %}
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-iscsi.md %}
 
 ### Oracle Linux-Specific Troubleshooting
 
