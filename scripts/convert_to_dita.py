@@ -481,7 +481,8 @@ class DITAGenerator:
     def _elements_to_task_body(self, elements: List[MarkdownElement], topic_id: str) -> str:
         """Convert parsed elements to DITA task body with steps."""
         output = []
-        prereq_items = []
+        prereq_list_items = []  # List items for the <ul>
+        prereq_conrefs = []     # Conrefs go after the list
         steps = []
         current_step = None
         in_prereq = False
@@ -503,26 +504,31 @@ class DITAGenerator:
                     current_step = {'title': elem.content, 'content': []}
             elif elem.type == 'include':
                 if in_prereq:
-                    prereq_items.append(self._generate_conref(elem.content, topic_id))
+                    # Conrefs in prereq go after the list, not inside it
+                    prereq_conrefs.append(self._generate_conref(elem.content, topic_id))
                 elif current_step:
                     current_step['content'].append(self._generate_conref(elem.content, topic_id))
                 else:
                     output.append(self._generate_conref(elem.content, topic_id))
             elif in_prereq and elem.type == 'unordered_list':
                 for item in elem.items:
-                    prereq_items.append(f'            <li>{self.parser.convert_inline(escape_xml(item))}</li>')
+                    prereq_list_items.append(f'            <li>{self.parser.convert_inline(escape_xml(item))}</li>')
             elif current_step:
                 current_step['content'].append(self._element_to_dita(elem))
 
         if current_step:
             steps.append(current_step)
 
-        # Build prerequisites
-        if prereq_items:
+        # Build prerequisites - list items first, then conrefs
+        if prereq_list_items or prereq_conrefs:
             output.append('        <prereq>')
-            output.append('            <ul>')
-            output.extend(prereq_items)
-            output.append('            </ul>')
+            if prereq_list_items:
+                output.append('            <ul>')
+                output.extend(prereq_list_items)
+                output.append('            </ul>')
+            # Add conrefs after the list (still inside prereq, but not in ul)
+            for conref in prereq_conrefs:
+                output.append(conref)
             output.append('        </prereq>')
 
         # Build steps
@@ -817,8 +823,8 @@ class MarkdownToDITAConverter:
 
     def _convert_main_docs(self):
         """Convert main documentation files to DITA topics."""
-        # Find all QUICKSTART and BEST-PRACTICES files
-        for pattern in ['**/QUICKSTART.md', '**/BEST-PRACTICES.md']:
+        # Find all QUICKSTART, GUI-QUICKSTART, and BEST-PRACTICES files
+        for pattern in ['**/QUICKSTART.md', '**/GUI-QUICKSTART.md', '**/BEST-PRACTICES.md']:
             for md_file in self.config.input_dir.glob(pattern):
                 # Skip files in _includes, common, etc.
                 rel_path = md_file.relative_to(self.config.input_dir)

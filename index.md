@@ -22,6 +22,7 @@ Choose your distribution and protocol to get started:
 | **SUSE/openSUSE** | [Quickstart](distributions/suse/nvme-tcp/QUICKSTART.md) \| [Best Practices](distributions/suse/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](distributions/suse/iscsi/QUICKSTART.md) \| [Best Practices](distributions/suse/iscsi/BEST-PRACTICES.md) |
 | **Oracle Linux** | [Quickstart](distributions/oracle/nvme-tcp/QUICKSTART.md) \| [Best Practices](distributions/oracle/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](distributions/oracle/iscsi/QUICKSTART.md) \| [Best Practices](distributions/oracle/iscsi/BEST-PRACTICES.md) |
 | **Proxmox VE** | [Quickstart](Proxmox/nvme-tcp/QUICKSTART.md) \| [Best Practices](Proxmox/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](Proxmox/iscsi/QUICKSTART.md) \| [Best Practices](Proxmox/iscsi/BEST-PRACTICES.md) |
+| **XCP-ng** | [Quickstart](distributions/xcpng/nvme-tcp/QUICKSTART.md) \| [Best Practices](distributions/xcpng/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](distributions/xcpng/iscsi/QUICKSTART.md) \| [Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) \| [GUI Guide](distributions/xcpng/iscsi/GUI-QUICKSTART.md) \| [NFS Guide](distributions/xcpng/nfs/QUICKSTART.md) |
 
 ---
 
