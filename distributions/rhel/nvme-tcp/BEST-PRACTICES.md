@@ -1066,7 +1066,7 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-{% include diagrams-troubleshooting.md %}
+{% include diagrams-troubleshooting-nvme.md %}
 
 {% include troubleshooting-common-nvme.md %}
 
