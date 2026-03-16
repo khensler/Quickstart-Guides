@@ -296,12 +296,6 @@ purevol copy golden-rhel9-boot.golden-v1 ec2-instance-01-boot
 purehost connect --vol ec2-instance-01-boot ec2-instance-01
 ```
 
-### Resources
-
-- [AWS Blog: Deploying external boot volumes with AWS Outposts](https://aws.amazon.com/blogs/compute/deploying-external-boot-volumes-with-aws-outposts/)
-- [AWS re:Invent 2024: Third-party storage integration](https://aws.amazon.com/blogs/compute/new-simplifying-the-use-of-third-party-block-storage-with-aws-outposts/)
-- [AWS VM Import/Export](https://aws.amazon.com/ec2/vm-import/)
-
 ---
 
 ## Architecture Diagram
@@ -417,10 +411,10 @@ For production deployments:
 - Configure multiple portal IPs for multipath redundancy
 - Enable Everpure SafeMode Snapshots for ransomware protection
 - Set up ActiveDR replication for disaster recovery
-- Review [Everpure FlashArray documentation](https://support.purestorage.com/)
-
-**Additional Resources:**
+**Resources:**
 - [AWS Outposts External Storage Documentation](https://docs.aws.amazon.com/outposts/latest/userguide/external-storage.html)
+- [AWS Blog: Deploying external boot volumes with AWS Outposts](https://aws.amazon.com/blogs/compute/deploying-external-boot-volumes-with-aws-outposts/)
+- [AWS VM Import/Export](https://aws.amazon.com/ec2/vm-import/)
 - [Everpure FlashArray for AWS Outposts Blog](https://blog.purestorage.com/solutions/pure-storage-flasharray-aws-outposts-boot-volumes/)
-- [AWS re:Invent 2024 Announcement](https://aws.amazon.com/blogs/compute/new-simplifying-the-use-of-third-party-block-storage-with-aws-outposts/)
+- [Everpure FlashArray Documentation](https://support.purestorage.com/)
 
