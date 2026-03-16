@@ -6,10 +6,10 @@ title: NVMe-TCP on Proxmox VE - Best Practices Guide
 # NVMe-TCP on Proxmox VE - Best Practices Guide
 
 > **Distribution-Specific Guides:** For detailed best practices tailored to specific Linux distributions, see:
-> - [RHEL/Rocky/AlmaLinux Best Practices](../../distributions/rhel/nvme-tcp/BEST-PRACTICES.md)
-> - [Debian/Ubuntu Best Practices](../../distributions/debian/nvme-tcp/BEST-PRACTICES.md)
-> - [SUSE/openSUSE Best Practices](../../distributions/suse/nvme-tcp/BEST-PRACTICES.md)
-> - [Oracle Linux Best Practices](../../distributions/oracle/nvme-tcp/BEST-PRACTICES.md)
+> - [RHEL/Rocky/AlmaLinux Best Practices](../../rhel/nvme-tcp/BEST-PRACTICES.md)
+> - [Debian/Ubuntu Best Practices](../../debian/nvme-tcp/BEST-PRACTICES.md)
+> - [SUSE/openSUSE Best Practices](../../suse/nvme-tcp/BEST-PRACTICES.md)
+> - [Oracle Linux Best Practices](../../oracle/nvme-tcp/BEST-PRACTICES.md)
 
 ---
 
