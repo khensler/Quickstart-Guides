@@ -11,9 +11,11 @@ Key features:
 - Creates appropriate DITA topic types (concept, task, reference)
 - Generates a DITA map for navigation
 - Handles code blocks, tables, lists, and other Markdown elements
+- Optional inline mode: embeds include content directly (no external references)
 
 Usage:
     python convert_to_dita.py [--input-dir PATH] [--output-dir PATH]
+    python convert_to_dita.py --inline-includes   # Inline mode (no warehouse topics)
 """
 
 import os
@@ -44,8 +46,8 @@ class ConversionConfig:
     topics_dir: str = "topics"        # Directory for main topics
     maps_dir: str = "maps"            # Directory for DITA maps
     images_dir: str = "images"        # Directory for downloaded images
-    inline_includes: bool = False     # If True, inline include content instead of using conref
-    skip_diagrams: bool = False        # If True, skip downloading Mermaid diagrams (faster for testing)
+    inline_includes: bool = False     # If True, inline include content instead of conref
+    skip_diagrams: bool = False       # If True, skip downloading Mermaid diagrams (faster for testing)
 
     # DITA DOCTYPE declarations
     concept_doctype: str = '<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">'
@@ -350,7 +352,7 @@ class DITAGenerator:
             self._include_cache[include_path] = content
             return content
         else:
-            print(f"  Warning: Include file not found: {include_path}")
+            print(f"    Warning: Include file not found: {include_path}")
             return ""
 
     def _inline_include_to_dita(self, include_path: str, indent: str = '        ') -> str:
@@ -867,11 +869,11 @@ class MarkdownToDITAConverter:
     def _convert_includes(self):
         """Convert Jekyll include files to DITA warehouse topics.
 
-        In inline mode, this step is skipped as includes are resolved
-        directly into the main topics.
+        When inline_includes mode is enabled, this step is skipped since
+        include content is embedded directly in the main topics.
         """
         if self.config.inline_includes:
-            print("  Skipping warehouse generation (inline mode enabled)")
+            print("  Skipped: Inline mode enabled - includes will be embedded in topics")
             return
 
         includes_dir = self.config.input_dir / '_includes'
@@ -1053,6 +1055,7 @@ Examples:
     python convert_to_dita.py
     python convert_to_dita.py --input-dir . --output-dir dita_output
     python convert_to_dita.py -i /path/to/docs -o /path/to/output
+    python convert_to_dita.py --inline-includes  # Embed includes instead of conref
         '''
     )
 
@@ -1068,6 +1071,12 @@ Examples:
         type=Path,
         default=Path('dita_output'),
         help='Output directory for DITA files (default: dita_output)'
+    )
+
+    parser.add_argument(
+        '--inline-includes',
+        action='store_true',
+        help='Inline include content directly instead of using conref (no warehouse topics created)'
     )
 
     parser.add_argument(

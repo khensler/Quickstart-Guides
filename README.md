@@ -51,6 +51,11 @@ A collection of quick start guides for various technologies and configurations.
 - [iSCSI Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) - Production best practices for iSCSI on XCP-ng
 - [NFS Quick Start (GUI)](distributions/xcpng/nfs/QUICKSTART.md) - NFS storage setup with Xen Orchestra
 
+### Cloud & Hybrid Infrastructure
+
+**AWS Outposts:**
+- [Everpure FlashArray for AWS Outposts](distributions/aws-outposts/QUICKSTART.md) - Connect EC2 instances on AWS Outposts to FlashArray for data and boot volumes (NVMe-TCP and iSCSI)
+
 ### Common Reference Documentation
 
 - [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html) - Definitions for iSCSI, NVMe-TCP, and storage terms (IQN, NQN, Portal, LUN, Namespace, etc.)
