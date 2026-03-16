@@ -23,6 +23,7 @@ Choose your distribution and protocol to get started:
 | **Oracle Linux** | [Quickstart](distributions/oracle/nvme-tcp/QUICKSTART.md) \| [Best Practices](distributions/oracle/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](distributions/oracle/iscsi/QUICKSTART.md) \| [Best Practices](distributions/oracle/iscsi/BEST-PRACTICES.md) | — |
 | **Proxmox VE** | [Quickstart](Proxmox/nvme-tcp/QUICKSTART.md) \| [Best Practices](Proxmox/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](Proxmox/iscsi/QUICKSTART.md) \| [Best Practices](Proxmox/iscsi/BEST-PRACTICES.md) | — |
 | **XCP-ng** | [Quickstart](distributions/xcpng/nvme-tcp/QUICKSTART.md) \| [Best Practices](distributions/xcpng/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](distributions/xcpng/iscsi/QUICKSTART.md) \| [Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) \| [GUI Guide](distributions/xcpng/iscsi/GUI-QUICKSTART.md) | [Quickstart](distributions/xcpng/nfs/QUICKSTART.md) |
+| **AWS Outposts** | [Quickstart](distributions/aws-outposts/QUICKSTART.md) | [Quickstart](distributions/aws-outposts/QUICKSTART.md) | — |
 
 ---
 
