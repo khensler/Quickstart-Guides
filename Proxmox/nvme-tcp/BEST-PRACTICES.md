@@ -97,7 +97,7 @@ flowchart-elk
 
 ## Network Design
 
-{% include network-concepts.md %}
+{% include network-concepts-nvme.md %}
 
 ### Network Architecture Principles
 
@@ -1453,7 +1453,7 @@ sysctl -p /etc/sysctl.d/99-nvme-tcp-arp.conf
 
 ## Security Best Practices
 
-{% include security-best-practices.md %}
+{% include security-best-practices-nvme.md %}
 
 ### Network Security
 
@@ -1550,7 +1550,7 @@ ss -tn | grep :4420
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-nvme.md %}
 
 ### Health Monitoring
 
@@ -1639,7 +1639,7 @@ done
 
 ## Troubleshooting
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-nvme.md %}
 
 ### Common Issues and Solutions
 

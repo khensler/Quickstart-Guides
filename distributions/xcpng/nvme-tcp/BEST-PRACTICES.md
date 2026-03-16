@@ -151,7 +151,7 @@ cat /sys/module/nvme_core/parameters/multipath
 
 ## Network Design
 
-{% include network-concepts.md %}
+{% include network-concepts-nvme.md %}
 
 ### Network Architecture Principles
 
@@ -440,7 +440,7 @@ echo 'options nvme_tcp nr_poll_queues=4' >> /etc/modprobe.d/nvme-tcp.conf
 
 ## Security Best Practices
 
-{% include security-best-practices.md %}
+{% include security-best-practices-nvme.md %}
 
 ### Network Isolation
 
@@ -465,7 +465,7 @@ uname -r
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-nvme.md %}
 
 ### Health Check Script
 
@@ -528,7 +528,7 @@ journalctl -k | grep -i "nvme\|tcp" | tail -50
 
 ## Troubleshooting
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-nvme.md %}
 
 ### Service Status
 

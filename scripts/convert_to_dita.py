@@ -44,6 +44,8 @@ class ConversionConfig:
     topics_dir: str = "topics"        # Directory for main topics
     maps_dir: str = "maps"            # Directory for DITA maps
     images_dir: str = "images"        # Directory for downloaded images
+    inline_includes: bool = False     # If True, inline include content instead of using conref
+    skip_diagrams: bool = False        # If True, skip downloading Mermaid diagrams (faster for testing)
 
     # DITA DOCTYPE declarations
     concept_doctype: str = '<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">'
@@ -333,6 +335,59 @@ class DITAGenerator:
         self.warehouse_ids = {}  # Maps include paths to warehouse IDs
         self.images_dir = config.output_dir / config.images_dir
         self.diagram_counter = 0  # Counter for unique diagram filenames
+        self._include_cache = {}  # Cache for resolved include content
+
+    def _resolve_include(self, include_path: str) -> str:
+        """Resolve and return the content of an include file."""
+        if include_path in self._include_cache:
+            return self._include_cache[include_path]
+
+        includes_dir = self.config.input_dir / '_includes'
+        include_file = includes_dir / include_path
+
+        if include_file.exists():
+            content = include_file.read_text(encoding='utf-8')
+            self._include_cache[include_path] = content
+            return content
+        else:
+            print(f"  Warning: Include file not found: {include_path}")
+            return ""
+
+    def _inline_include_to_dita(self, include_path: str, indent: str = '        ') -> str:
+        """Convert an include file's content to inline DITA elements."""
+        content = self._resolve_include(include_path)
+        if not content:
+            return f'{indent}<!-- Include not found: {include_path} -->'
+
+        elements = self.parser.parse(content)
+        output = []
+
+        for elem in elements:
+            if elem.type == 'heading':
+                output.append(f'{indent}<p><b>{escape_xml(elem.content)}</b></p>')
+            elif elem.type == 'paragraph':
+                output.append(f'{indent}<p>{self.parser.convert_inline(escape_xml(elem.content))}</p>')
+            elif elem.type == 'code_block':
+                if elem.language == 'mermaid':
+                    image_elem = self._handle_mermaid_diagram(elem.content, from_warehouse=False)
+                    output.append(f'{indent}{image_elem}')
+                else:
+                    lang_attr = f' outputclass="{elem.language}"' if elem.language else ''
+                    output.append(f'{indent}<codeblock{lang_attr}>{escape_xml(elem.content)}</codeblock>')
+            elif elem.type == 'note':
+                note_type = self._detect_note_type(elem.content)
+                output.append(f'{indent}<note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(elem.content))}</p></note>')
+            elif elem.type == 'unordered_list':
+                output.append(self._generate_ul(elem.items, indent=indent))
+            elif elem.type == 'ordered_list':
+                output.append(self._generate_ol(elem.items, indent=indent))
+            elif elem.type == 'table':
+                output.append(self._generate_table(elem.content))
+            elif elem.type == 'include':
+                # Recursively inline nested includes
+                output.append(self._inline_include_to_dita(elem.content, indent))
+
+        return '\n'.join(output)
 
     def _handle_mermaid_diagram(self, mermaid_code: str, from_warehouse: bool = False) -> str:
         """
@@ -344,6 +399,11 @@ class DITAGenerator:
                            If False, use path for main topics (../images/)
         """
         self.diagram_counter += 1
+
+        if self.config.skip_diagrams:
+            # Return a placeholder comment for testing runs
+            return f'<!-- Mermaid diagram {self.diagram_counter} (skipped) -->'
+
         filename = download_mermaid_image(mermaid_code, self.images_dir, self.diagram_counter)
 
         # Both warehouse and topics are one level deep, so path is the same
@@ -569,15 +629,20 @@ class DITAGenerator:
         return ''
 
     def _generate_conref(self, include_path: str, topic_id: str) -> str:
-        """Generate a conref element for an include.
+        """Generate a conref element or inline content for an include.
 
-        Uses <div> instead of <section> to allow conref in task topics,
-        since <section> is not allowed in <taskbody>.
+        If inline_includes is True, resolves and inlines the content directly.
+        Otherwise, uses <div> conref for deferred resolution.
         """
-        warehouse_id = 'warehouse_' + sanitize_id(include_path.replace('/', '_').replace('.md', ''))
-        div_id = sanitize_id(include_path.replace('/', '_').replace('.md', '')) + '_content'
-        warehouse_file = warehouse_id + '.dita'
-        return f'        <div conref="../warehouse/{warehouse_file}#{warehouse_id}/{div_id}"/>'
+        if self.config.inline_includes:
+            # Inline the content directly
+            return self._inline_include_to_dita(include_path)
+        else:
+            # Use conref for deferred resolution
+            warehouse_id = 'warehouse_' + sanitize_id(include_path.replace('/', '_').replace('.md', ''))
+            div_id = sanitize_id(include_path.replace('/', '_').replace('.md', '')) + '_content'
+            warehouse_file = warehouse_id + '.dita'
+            return f'        <div conref="../warehouse/{warehouse_file}#{warehouse_id}/{div_id}"/>'
 
     def _wrap_section(self, title: str, content: List[str]) -> str:
         """Wrap content in a DITA section."""
@@ -800,7 +865,15 @@ class MarkdownToDITAConverter:
             print(f"  Created: {d}")
 
     def _convert_includes(self):
-        """Convert Jekyll include files to DITA warehouse topics."""
+        """Convert Jekyll include files to DITA warehouse topics.
+
+        In inline mode, this step is skipped as includes are resolved
+        directly into the main topics.
+        """
+        if self.config.inline_includes:
+            print("  Skipping warehouse generation (inline mode enabled)")
+            return
+
         includes_dir = self.config.input_dir / '_includes'
         if not includes_dir.exists():
             print(f"  Warning: _includes directory not found at {includes_dir}")
@@ -1003,6 +1076,18 @@ Examples:
         help='Enable verbose output'
     )
 
+    parser.add_argument(
+        '--inline-includes',
+        action='store_true',
+        help='Inline include content directly into topics instead of using conref references'
+    )
+
+    parser.add_argument(
+        '--skip-diagrams',
+        action='store_true',
+        help='Skip downloading Mermaid diagrams (faster for testing runs)'
+    )
+
     args = parser.parse_args()
 
     # Validate input directory
@@ -1013,7 +1098,9 @@ Examples:
     # Create configuration
     config = ConversionConfig(
         input_dir=args.input_dir.resolve(),
-        output_dir=args.output_dir.resolve()
+        output_dir=args.output_dir.resolve(),
+        inline_includes=args.inline_includes,
+        skip_diagrams=args.skip_diagrams
     )
 
     # Run conversion

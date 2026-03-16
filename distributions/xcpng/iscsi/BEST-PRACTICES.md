@@ -483,7 +483,7 @@ multipath -ll
 
 ## Performance Optimization
 
-{% include performance-tuning.md %}
+{% include performance-tuning-iscsi.md %}
 
 ### Kernel Parameters
 
@@ -548,7 +548,7 @@ chmod +x /usr/local/bin/tune-storage-nics.sh
 
 ## Security Best Practices
 
-{% include security-best-practices.md %}
+{% include security-best-practices-iscsi.md %}
 
 ### CHAP Authentication
 
@@ -578,7 +578,7 @@ xe sr-create name-label="iSCSI Storage" type=lvmoiscsi shared=true \
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-iscsi.md %}
 
 ### Health Check Script
 
@@ -649,7 +649,7 @@ Access via: **Dashboard → Health** or **SR → Details**
 
 ## Troubleshooting
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-iscsi.md %}
 
 ### Service Status
 
