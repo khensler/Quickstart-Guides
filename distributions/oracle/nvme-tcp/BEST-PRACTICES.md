@@ -684,7 +684,7 @@ sudo systemctl enable --now irqbalance
 
 ## Security
 
-{% include security-best-practices.md %}
+{% include security-best-practices-nvme.md %}
 
 ### SELinux Configuration
 
@@ -826,7 +826,7 @@ sudo systemctl enable --now auditd
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-nvme.md %}
 
 ### Oracle Linux Monitoring Tools
 
@@ -990,7 +990,7 @@ graph TD
 
 {% include diagrams-troubleshooting.md %}
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-nvme.md %}
 
 ### UEK-Specific Issues
 

@@ -934,7 +934,7 @@ sudo systemctl enable --now check-nvme-paths.timer
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-nvme.md %}
 
 ### RHEL-Specific Monitoring Tools
 
@@ -980,7 +980,7 @@ sudo insights-client
 
 ## Security
 
-{% include security-best-practices.md %}
+{% include security-best-practices-nvme.md %}
 
 ### RHEL-Specific Security
 
@@ -1068,7 +1068,7 @@ graph TD
 
 {% include diagrams-troubleshooting.md %}
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-nvme.md %}
 
 ### RHEL-Specific Issues
 

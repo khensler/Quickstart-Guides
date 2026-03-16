@@ -858,7 +858,7 @@ sudo systemctl enable --now check-nvme-paths.timer
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-nvme.md %}
 
 ### SUSE-Specific Monitoring Tools
 
@@ -898,7 +898,7 @@ sudo systemctl enable --now prometheus-node_exporter
 
 ## Security
 
-{% include security-best-practices.md %}
+{% include security-best-practices-nvme.md %}
 
 ### SUSE-Specific Security
 
@@ -986,7 +986,7 @@ graph TD
 
 {% include diagrams-troubleshooting.md %}
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-nvme.md %}
 
 ### SUSE-Specific Issues
 

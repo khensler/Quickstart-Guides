@@ -961,7 +961,7 @@ sudo systemctl enable --now check-nvme-paths.timer
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-nvme.md %}
 
 ### Debian/Ubuntu-Specific Monitoring Tools
 
@@ -1012,7 +1012,7 @@ sudo systemctl enable --now prometheus-node-exporter
 
 ## Security
 
-{% include security-best-practices.md %}
+{% include security-best-practices-nvme.md %}
 
 ### Debian/Ubuntu-Specific Security
 
@@ -1132,7 +1132,7 @@ graph TD
 
 {% include diagrams-troubleshooting.md %}
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-nvme.md %}
 
 ### Debian/Ubuntu-Specific Issues
 
