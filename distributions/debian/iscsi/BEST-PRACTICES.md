@@ -121,7 +121,7 @@ graph TB
 - **Dual controller array** for storage HA
 - **dm-multipath** aggregates all paths into single device
 
-{% include diagrams-storage-topology.md %}
+{% include diagrams-storage-topology-iscsi.md %}
 
 {% include diagrams-iscsi-multipath.md %}
 
@@ -641,7 +641,7 @@ sudo multipath -ll
 
 {% include iscsi-performance-tuning.md %}
 
-{% include performance-tuning.md %}
+{% include performance-tuning-iscsi.md %}
 
 ### Debian/Ubuntu-Specific Tuning
 
@@ -804,7 +804,7 @@ sequenceDiagram
     Path1->>DM: Path reinstated
 ```
 
-{% include diagrams-failover.md %}
+{% include diagrams-failover-iscsi.md %}
 
 ### Cluster Configuration with Pacemaker
 
@@ -886,7 +886,7 @@ sudo crm status
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-iscsi.md %}
 
 ### Debian/Ubuntu-Specific Monitoring
 
@@ -976,7 +976,7 @@ echo "0 */6 * * * /usr/local/bin/iscsi-health-check.sh >> /var/log/iscsi-health.
 
 ## Security
 
-{% include security-best-practices.md %}
+{% include security-best-practices-iscsi.md %}
 
 ### Debian/Ubuntu-Specific Security
 
@@ -1071,9 +1071,9 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-{% include diagrams-troubleshooting.md %}
+{% include diagrams-troubleshooting-iscsi.md %}
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-iscsi.md %}
 
 ### Debian/Ubuntu-Specific Troubleshooting
 

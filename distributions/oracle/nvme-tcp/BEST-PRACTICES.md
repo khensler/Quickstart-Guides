@@ -126,7 +126,7 @@ flowchart LR
 - **8 paths** (2 NICs × 4 portals) for maximum redundancy
 - **UEK kernel** for optimized NVMe-TCP performance
 
-{% include diagrams-storage-topology.md %}
+{% include diagrams-storage-topology-nvme.md %}
 
 {% include diagrams-network-architecture.md %}
 
@@ -209,7 +209,7 @@ sudo reboot
 
 ## Network Configuration
 
-{% include network-concepts.md %}
+{% include network-concepts-nvme.md %}
 
 ### Oracle Linux Network Best Practices
 
@@ -408,7 +408,7 @@ flowchart TB
 
 {% include diagrams-nvme-multipath.md %}
 
-{% include diagrams-failover.md %}
+{% include diagrams-failover-nvme.md %}
 
 ### Ksplice Overview
 

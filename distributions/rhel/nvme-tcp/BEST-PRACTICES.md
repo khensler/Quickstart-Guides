@@ -117,7 +117,7 @@ flowchart LR
 - **Dual controller array** for storage HA
 - **8 paths** (2 NICs × 4 portals) for maximum redundancy
 
-{% include diagrams-storage-topology.md %}
+{% include diagrams-storage-topology-nvme.md %}
 
 {% include diagrams-network-architecture.md %}
 
@@ -794,7 +794,7 @@ sequenceDiagram
 
 {% include diagrams-nvme-multipath.md %}
 
-{% include diagrams-failover.md %}
+{% include diagrams-failover-nvme.md %}
 
 ### Native NVMe Multipath Configuration for HA
 

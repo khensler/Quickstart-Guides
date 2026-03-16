@@ -121,7 +121,7 @@ graph TB
 - **Dual controller array** for storage HA
 - **dm-multipath** aggregates all paths into single device
 
-{% include diagrams-storage-topology.md %}
+{% include diagrams-storage-topology-iscsi.md %}
 
 {% include diagrams-iscsi-multipath.md %}
 
@@ -592,7 +592,7 @@ sudo yast iscsi-client connect target=<target_iqn> portal=<portal_ip>:3260
 
 {% include iscsi-performance-tuning.md %}
 
-{% include performance-tuning.md %}
+{% include performance-tuning-iscsi.md %}
 
 ### SUSE-Specific Tuning
 
@@ -770,7 +770,7 @@ sequenceDiagram
     Path1->>DM: Path reinstated
 ```
 
-{% include diagrams-failover.md %}
+{% include diagrams-failover-iscsi.md %}
 
 ### Cluster Configuration with Pacemaker
 
@@ -830,7 +830,7 @@ sudo crm status
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-iscsi.md %}
 
 ### SUSE-Specific Monitoring
 
@@ -880,7 +880,7 @@ sudo yast logs
 
 ## Security
 
-{% include security-best-practices.md %}
+{% include security-best-practices-iscsi.md %}
 
 ### SUSE-Specific Security
 
@@ -978,9 +978,9 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-{% include diagrams-troubleshooting.md %}
+{% include diagrams-troubleshooting-iscsi.md %}
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-iscsi.md %}
 
 ### SUSE-Specific Troubleshooting
 

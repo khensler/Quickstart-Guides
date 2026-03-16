@@ -597,7 +597,7 @@ multipath -ll
 
 ## Performance Optimization
 
-{% include performance-tuning.md %}
+{% include performance-tuning-iscsi.md %}
 
 {% include iscsi-performance-tuning.md %}
 
@@ -720,7 +720,7 @@ cat /proc/interrupts | grep -E "ens1f"
 
 ## Security Best Practices
 
-{% include security-best-practices.md %}
+{% include security-best-practices-iscsi.md %}
 
 ### CHAP Authentication
 
@@ -768,7 +768,7 @@ ls -la /etc/iscsi/
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-iscsi.md %}
 
 ### Health Check Script
 
@@ -844,7 +844,7 @@ EOF
 
 ## Troubleshooting
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-iscsi.md %}
 
 ### Service Status
 
