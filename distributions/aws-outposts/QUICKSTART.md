@@ -7,7 +7,7 @@ title: Everpure FlashArray for AWS Outposts - Quick Start Guide
 
 This guide covers connecting EC2 instances on AWS Outposts to Everpure FlashArray for both data and boot volumes using NVMe-TCP or iSCSI protocols.
 
-> **📘 For detailed explanations and troubleshooting:** See the [AWS Outposts external storage documentation](https://docs.aws.amazon.com/outposts/latest/userguide/external-storage.html)
+> **For detailed explanations and troubleshooting:** See the [AWS Outposts external storage documentation](https://docs.aws.amazon.com/outposts/latest/userguide/external-storage.html)
 
 ---
 
@@ -57,31 +57,59 @@ AWS Outposts (Racks and 2U Servers) now support external block storage from Ever
 
 ## Step 1: Configure FlashArray
 
-### Create Host Entry
+Configure the FlashArray to recognize the EC2 instance and provision storage. You can use either the GUI or CLI.
 
+### Option A: Via FlashArray GUI
+
+**Create Host Entry:**
 1. Log into Everpure FlashArray GUI
 2. Navigate to **Storage → Hosts**
 3. Create a new host with the EC2 instance identifier
 
-### For NVMe-TCP Connections
+**For NVMe-TCP:**
+- Set **Personality** to `NVMe`
+- Add the **Initiator NQN** (format: `nqn.2014-08.org.nvmexpress:uuid:<unique-id>`)
+- Note the **Target NQN** and **Target Portal IPs** (port 4420)
 
-1. Set the host **Personality** to `NVMe`
-2. Add the **Initiator NQN** that will be used for the EC2 instance
-   - Format: `nqn.2014-08.org.nvmexpress:uuid:<unique-id>`
-3. Note the **Target NQN** and **Target Portal IPs** (ports 4420)
+**For iSCSI:**
+- Set **Personality** to `iSCSI`
+- Add the **Initiator IQN** (format: `iqn.YYYY-MM.com.amazon:<identifier>`)
+- Note the **Target IQN** and **Target Portal IPs** (port 3260)
 
-### For iSCSI Connections
-
-1. Set the host **Personality** to `iSCSI`
-2. Add the **Initiator IQN** that will be used for the EC2 instance
-   - Generate or use format: `iqn.YYYY-MM.com.amazon:<identifier>`
-3. Note the **Target IQN** and **Target Portal IPs** (port 3260 or 4420)
-
-### Create and Map Volumes
-
+**Create and Map Volumes:**
 1. Navigate to **Storage → Volumes**
 2. Create volume(s) with appropriate size
-3. Connect volume(s) to the host entry created above
+3. Connect volume(s) to the host entry
+
+### Option B: Via Pure CLI
+
+Run these commands from any workstation with SSH access to the FlashArray management IP.
+
+```bash
+# SSH to FlashArray (or use pureuser@<array-ip>)
+ssh pureuser@10.21.148.130
+
+# Create host with NVMe-TCP personality
+purehost create --personality nvme \
+  --nqnlist nqn.2014-08.org.nvmexpress:uuid:ec2-instance-01 \
+  ec2-instance-01
+
+# Or create host with iSCSI personality
+purehost create --personality iscsi \
+  --iqnlist iqn.2024-01.com.amazon:ec2-instance-01 \
+  ec2-instance-01
+
+# Create a data volume (e.g., 100GB)
+purevol create --size 100G ec2-instance-01-data
+
+# Connect volume to host
+purehost connect --vol ec2-instance-01-data ec2-instance-01
+
+# Verify connection
+purevol list --connect ec2-instance-01-data
+```
+
+> **Tip:** You can also use the [Pure Storage Python SDK](https://pypi.org/project/py-pure-client/) or REST API from your workstation for automation.
 
 ---
 
@@ -157,51 +185,40 @@ Get-IscsiSession
 
 ## Boot Volume Configuration
 
-Boot volume support requires specific image preparation. AWS provides sample tooling at:
-- **GitHub Repository**: [aws-samples/sample-outposts-third-party-storage-integration](https://github.com/aws-samples/sample-outposts-third-party-storage-integration)
+AWS Outposts supports booting EC2 instances from Everpure FlashArray volumes. The **AWS Console handles iPXE user-data generation automatically** when you configure external boot volumes during instance launch—no manual iPXE scripting required.
 
-### SANboot (Direct Boot from FlashArray)
+**AWS Sample Tooling:** [aws-samples/sample-outposts-third-party-storage-integration](https://github.com/aws-samples/sample-outposts-third-party-storage-integration)
 
-SANboot uses iPXE to boot EC2 instances directly from iSCSI volumes on FlashArray. The instance boots over the network from storage on the FlashArray.
+### Boot Methods
 
-**Workflow:** Image Preparation → Export with `--install-sanbootable` → Write to FlashArray → Launch with iPXE Helper AMI → Boot from External Volume
+| Method | Description | Use Case |
+|--------|-------------|----------|
+| **SANboot** | Direct boot from FlashArray via iPXE/iSCSI | Persistent VMs, databases, production |
+| **Localboot** | Copies volume to local instance storage at boot | VDI, dev/test, ephemeral workloads |
 
-**Benefits**:
+**SANboot Benefits:**
 - Persistent storage across instance stop/start
 - Full Everpure features (snapshots, replication, SafeMode)
 - Consistent boot environment
 
-### Localboot (Hydrated Local Storage)
-
-Localboot copies the boot volume from FlashArray to local instance storage at boot time. The instance runs from local NVMe but sources the image from FlashArray.
-
-**Workflow:** Image Preparation → Export in RAW format → Write to FlashArray (Golden Image) → Launch with Localboot AMI → Copy to Local NVMe → Boot Locally
-
-> **Important:** Windows instances do **not** support LocalBoot via NVMe-over-TCP. This combination is only supported for Linux instances.
-
-**Benefits**:
-- Local NVMe performance
+**Localboot Benefits:**
+- Local NVMe performance after initial hydration
 - Source volume unchanged (golden image pattern)
-- Suitable for VDI, dev/test, ephemeral workloads
+- Note: Local storage is ephemeral—data lost on instance stop/terminate
 
-**Note**: Local instance storage is ephemeral - data is lost on instance stop/terminate
+> **Important:** Windows instances do **not** support Localboot via NVMe-over-TCP. Use iSCSI for Windows Localboot.
 
 ### Boot Image Preparation
 
-You can prepare boot images from multiple sources:
+#### Step 1: Export or Convert Image
 
-| Source | Format | Notes |
-|--------|--------|-------|
-| AWS Marketplace AMI | AMI | Use existing vendor-published AMIs |
-| Custom AMI | AMI | Your own AMIs in the region |
-| Raw disk image | RAW | Direct disk images |
-| QCOW2 image | QCOW2 | Convert to RAW before use |
-
-#### Option A: Use Existing AMI
-
-Export an existing AMI to RAW format for FlashArray:
-
+**From an existing AMI:**
 ```bash
+# Clone the AWS sample repo (run from your workstation)
+git clone https://github.com/aws-samples/sample-outposts-third-party-storage-integration.git
+cd sample-outposts-third-party-storage-integration
+pip install -e .
+
 # Export AMI to RAW format (for Localboot)
 python3 -m vmie export --region us-west-2 --s3-bucket <bucket-name> \
   --ami-id ami-XXXXXXXXXXXX
@@ -211,50 +228,78 @@ python3 -m vmie export --region us-west-2 --s3-bucket <bucket-name> \
   --ami-id ami-XXXXXXXXXXXX --install-sanbootable
 ```
 
-#### Option B: Use Raw/QCOW2 Image
-
+**From QCOW2 image:**
 ```bash
-# Convert QCOW2 to RAW (if needed)
+# Convert to RAW (requires qemu-img on your workstation)
 qemu-img convert -f qcow2 -O raw ./image.qcow2 ./image.raw
 ```
 
-#### Write Image to FlashArray Volume
+#### Step 2: Create Boot Volume on FlashArray
 
-Run these commands from a host (physical or VM) that has iSCSI or NVMe-TCP connectivity to the FlashArray and the boot volume mapped. This can be any Linux or Windows system on the same network as the FlashArray.
+```bash
+# SSH to FlashArray from your workstation
+ssh pureuser@10.21.148.130
+
+# Create boot volume sized for your image (e.g., 20GB for typical Linux)
+purevol create --size 20G golden-rhel9-boot
+
+# Connect to a "provisioning host" for image writing
+purehost connect --vol golden-rhel9-boot provisioning-host
+```
+
+#### Step 3: Write Image to FlashArray Volume
+
+Connect the boot volume to a Linux or Windows system on the same network as the FlashArray. This can be your workstation if it has iSCSI connectivity, or any other system with storage network access.
 
 **Linux:**
 ```bash
-# Download exported RAW image (if using AMI export)
+# Download exported RAW image from S3
 aws s3 cp "s3://<bucket>/exports/<export-path>/export-ami-XXX.raw" ./image.raw
 
-# Check image size and provision matching FlashArray volume
+# Check image size
 ls -lsh ./image.raw
 
-# Write to FlashArray volume (via multipath device)
+# Write to FlashArray volume (replace mpathX with your multipath device)
 sudo dd if=./image.raw of=/dev/mapper/mpathX bs=8M status=progress oflag=sync
+
+# Disconnect when done
+sudo multipath -f mpathX
 ```
 
 **Windows (PowerShell as Administrator):**
 ```powershell
-# Download exported RAW image (if using AMI export)
+# Download exported RAW image
 aws s3 cp "s3://<bucket>/exports/<export-path>/export-ami-XXX.raw" .\image.raw
 
-# Check image size
-Get-Item .\image.raw | Select-Object Name, Length
-
-# Identify the FlashArray disk number (offline disk mapped via iSCSI)
+# Identify the FlashArray disk (offline disk)
 Get-Disk | Where-Object OperationalStatus -eq 'Offline'
 
-# Write RAW image to FlashArray volume (replace X with disk number)
-# Using dd for Windows (install via Git Bash, Cygwin, or WSL)
+# Write RAW image (replace X with disk number; requires dd via Git Bash/WSL)
 dd if=.\image.raw of=\\.\PhysicalDriveX bs=8M
 ```
 
-> **Tip:** On Windows, you can also use tools like [Rufus](https://rufus.ie/) or [Win32 Disk Imager](https://sourceforge.net/projects/win32diskimager/) to write RAW images to the mapped FlashArray volume.
+> **Tip:** On Windows, [Win32 Disk Imager](https://sourceforge.net/projects/win32diskimager/) can also write RAW images.
+
+#### Step 4: Create Golden Image Snapshot
+
+After writing the image, create a snapshot for fast provisioning of new boot volumes:
+
+```bash
+# SSH to FlashArray
+ssh pureuser@10.21.148.130
+
+# Create snapshot of the golden image
+purevol snap --suffix golden-v1 golden-rhel9-boot
+
+# Clone new boot volumes from snapshot
+purevol copy golden-rhel9-boot.golden-v1 ec2-instance-01-boot
+purehost connect --vol ec2-instance-01-boot ec2-instance-01
+```
 
 ### Resources
 
 - [AWS Blog: Deploying external boot volumes with AWS Outposts](https://aws.amazon.com/blogs/compute/deploying-external-boot-volumes-with-aws-outposts/)
+- [AWS re:Invent 2024: Third-party storage integration](https://aws.amazon.com/blogs/compute/new-simplifying-the-use-of-third-party-block-storage-with-aws-outposts/)
 - [AWS VM Import/Export](https://aws.amazon.com/ec2/vm-import/)
 
 ---
