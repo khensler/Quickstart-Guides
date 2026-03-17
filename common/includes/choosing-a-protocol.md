@@ -52,6 +52,7 @@ flowchart TD
 | **Kernel Version** | 5.0+ | Any | Any |
 | **Protocol Maturity** | Newer | Mature | Mature |
 | **Multipath** | Native (ANA) | dm-multipath | VIP failover |
+| **Controller Failover** | Immediate (ANA) | Immediate (ALUA) | 10-30 seconds (VIP) |
 
 *\*Block multi-host access requires thick LVM, clustered LVM (lvmlockd), and cluster filesystems (GFS2/OCFS2)—significantly more complex than NFS.*
 
@@ -200,7 +201,7 @@ flowchart TD
 
 #### Option 2: Cluster Filesystem (GFS2/OCFS2)
 
-**May not be supported by hypervio
+**May not be supported by hypervisor vendor**
 
 For concurrent file access from multiple hosts (not hypervisor VMs), a full cluster stack is required:
 
@@ -330,6 +331,32 @@ flowchart TD
 - Running latency-sensitive databases (use block protocols)
 - Maximum single-stream throughput is critical
 - Application requires raw block device access
+
+#### NFS Controller Failover
+
+Unlike block protocols (NVMe-TCP/iSCSI) which use multipath with immediate path failover, NFS uses a **Virtual IP (VIP)** that migrates between controllers:
+
+| Event | FlashArray Target | I/O Behavior |
+|-------|-------------------|--------------|
+| **Planned failover (NDO)** | < 15 seconds | I/O pauses, then resumes |
+| **Unplanned failover** | < 30 seconds | I/O pauses, then resumes |
+
+**What happens during failover:**
+- NFS clients using `hard` mounts queue I/O operations (no errors returned)
+- VIP migrates to standby controller
+- NFSv4.1 session state (locks, opens) is recovered automatically
+- Queued I/O completes in order once VIP is available
+
+**Recommended mount options for failover resilience:**
+```
+vers=4.1,hard,timeo=300,retrans=2
+```
+
+- `hard` — Retry indefinitely (critical for failover)
+- `timeo=300` — 30-second timeout (deciseconds)
+- `retrans=2` — ~90 seconds total before major timeout, exceeds 30s failover target
+
+> **Note:** VMs using NFS storage will experience a brief I/O pause during failover. With `hard` mounts, no errors are returned to applications—I/O simply queues and resumes automatically.
 
 ---
 
