@@ -40,14 +40,7 @@ A production-grade NFS deployment consists of:
 - **NFS Storage Array**: Everpure FlashArray with NFSv4.1 support
 - **Redundant Network Paths**: Bonded NICs for failover
 
-### NFS Virtual IP (VIP) and Controller Failover
-
-Everpure FlashArray uses a **Virtual IP (VIP)** for NFS services:
-
-1. **Single Active Controller**: The NFS VIP is hosted on one controller at a time
-2. **Automatic Failover**: If the active controller fails, the VIP migrates to the standby
-3. **Client Transparency**: NFS clients connect to the VIP—failover is transparent
-4. **TCP Session Recovery**: NFSv4.1 supports session recovery after failover
+{% include nfs-vip-failover.md %}
 
 ---
 
@@ -143,13 +136,7 @@ sudo nmcli connection modify bond0 \
 sudo nmcli connection up bond0
 ```
 
-### Understanding LACP Load Balancing
-
-LACP uses hash-based distribution—there's no guarantee of balanced traffic:
-
-- Each flow (source/dest IP+port) uses a single link
-- Single NFS mount may use only one link
-- Use `nconnect` to create multiple TCP connections that may hash to different links
+{% include nfs-lacp-load-balancing.md %}
 
 ### Firewall Configuration
 
@@ -168,23 +155,13 @@ sudo firewall-cmd --list-services
 
 ## NFS Configuration
 
-### Mount Options
-
-**Recommended mount options:**
-
-| Option | Value | Description |
-|--------|-------|-------------|
-| `vers` | `4.1` | NFSv4.1 for improved locking |
-| `nconnect` | `4-8` | Multiple TCP connections |
-| `noatime` | — | Don't update access times |
-| `nodiratime` | — | Don't update directory access times |
-| `_netdev` | — | Wait for network before mounting |
+{% include nfs-mount-options-table.md %}
 
 ### Persistent Mount via fstab
 
 ```bash
 # Add to /etc/fstab
-<NFS_SERVER_IP>:/data/oracle /mnt/pure-nfs nfs4 vers=4.1,nconnect=4,noatime,nodiratime,_netdev 0 0
+<NFS_SERVER_IP>:/data/oracle /mnt/pure-nfs nfs4 vers=4.1,hard,timeo=300,retrans=2,nconnect=4,noatime,nodiratime,_netdev 0 0
 ```
 
 ### Persistent Mount via autofs
@@ -197,7 +174,7 @@ sudo dnf install -y autofs
 echo '/mnt/nfs /etc/auto.nfs --timeout=300' | sudo tee -a /etc/auto.master
 
 # Configure /etc/auto.nfs
-echo 'pure-nfs -fstype=nfs4,vers=4.1,nconnect=4,noatime,nodiratime <NFS_SERVER_IP>:/data/oracle' | sudo tee /etc/auto.nfs
+echo 'pure-nfs -fstype=nfs4,vers=4.1,hard,timeo=300,retrans=2,nconnect=4,noatime,nodiratime <NFS_SERVER_IP>:/data/oracle' | sudo tee /etc/auto.nfs
 
 # Enable autofs
 sudo systemctl enable --now autofs
@@ -207,37 +184,9 @@ sudo systemctl enable --now autofs
 
 ## Performance Optimization
 
-### nconnect for Improved Throughput
+{% include nfs-nconnect.md %}
 
-The `nconnect` option creates multiple TCP connections per mount:
-
-| Network Speed | nconnect Value |
-|---------------|----------------|
-| 10 GbE | 2-4 |
-| 25 GbE | 4-8 |
-| 100 GbE | 8-16 |
-
-**Verify nconnect:**
-```bash
-mount | grep nconnect
-cat /proc/fs/nfsfs/servers
-```
-
-### Kernel Tuning
-
-```bash
-cat > /etc/sysctl.d/99-nfs-tuning.conf << 'EOF'
-# NFS performance tuning
-net.core.rmem_max = 16777216
-net.core.wmem_max = 16777216
-net.core.rmem_default = 1048576
-net.core.wmem_default = 1048576
-net.ipv4.tcp_rmem = 4096 1048576 16777216
-net.ipv4.tcp_wmem = 4096 1048576 16777216
-EOF
-
-sudo sysctl -p /etc/sysctl.d/99-nfs-tuning.conf
-```
+{% include nfs-kernel-tuning.md %}
 
 ### Tuned Profile
 
@@ -337,60 +286,21 @@ echo "OK: NFS healthy"
 
 ## Troubleshooting
 
-### Common Issues
+{% include nfs-troubleshooting-common.md %}
 
-| Issue | Solution |
-|-------|----------|
-| Mount fails | Check `showmount -e <server>`, verify firewall |
-| Stale handle | Force unmount: `umount -f <mount>` |
-| Slow performance | Verify nconnect, check UEK version |
-| Permission denied | Check export permissions, root_squash settings |
-
-### Diagnostic Commands
-
+**Oracle Linux-specific:**
 ```bash
-# NFS statistics
-nfsstat -c
-nfsstat -m
+# Check SELinux
+getenforce
+sudo setsebool -P use_nfs_home_dirs 1
 
-# Check RPC services
-rpcinfo -p <NFS_SERVER_IP>
-
-# Test connectivity
-showmount -e <NFS_SERVER_IP>
-
-# Check kernel
+# Check kernel (UEK recommended)
 uname -r
 ```
 
 ---
 
-## Quick Reference
-
-### Essential Commands
-
-```bash
-# Mount operations
-mount -t nfs4 -o vers=4.1,nconnect=4 <server>:<export> <mount>
-umount <mount>
-
-# Status
-mount | grep nfs
-nfsstat -c
-nfsstat -m
-
-# Troubleshooting
-showmount -e <server>
-rpcinfo -p <server>
-```
-
-### Configuration Files
-
-| File | Purpose |
-|------|---------|
-| `/etc/fstab` | Persistent mount configuration |
-| `/etc/sysctl.d/99-nfs-tuning.conf` | Kernel tuning |
-| `/etc/auto.master`, `/etc/auto.nfs` | Autofs configuration |
+{% include bestpractices/nfs-quick-reference.md %}
 
 ---
 

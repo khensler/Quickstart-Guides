@@ -32,16 +32,7 @@ This guide provides a streamlined path to configure NFS storage on Proxmox VE.
 
 Before adding NFS storage, verify connectivity from each Proxmox node.
 
-```bash
-# Test connectivity to NFS server
-ping -c 3 <NFS_SERVER_IP>
-
-# Test NFS port (2049)
-nc -zv <NFS_SERVER_IP> 2049
-
-# List available exports
-showmount -e <NFS_SERVER_IP>
-```
+{% include quickstart/nfs-verify-connectivity.md %}
 
 Expected output from `showmount`:
 ```
@@ -97,8 +88,8 @@ cat /proc/fs/nfsd/versions
 5. **Set recommended mount options via CLI** (the GUI does not expose these options):
 
 ```bash
-# Add recommended NFS options
-pvesm set pure-nfs --options "vers=4.1,nconnect=4,noatime,nodiratime"
+# Add recommended NFS options (includes failover-optimized settings)
+pvesm set pure-nfs --options "vers=4.1,hard,timeo=300,retrans=2,nconnect=4,noatime,nodiratime"
 ```
 
 > **⚠️ Note:** After setting mount options, you may need to disable and re-enable the storage (or remount on each node) for changes to take effect.
@@ -111,16 +102,13 @@ pvesm add nfs pure-nfs \
     --server <NFS_SERVER_IP> \
     --export /proxmox/VMs \
     --content images,rootdir,vztmpl,iso \
-    --options vers=4.1,nconnect=4,noatime,nodiratime
+    --options vers=4.1,hard,timeo=300,retrans=2,nconnect=4,noatime,nodiratime
 
 # Verify storage was added
 pvesm status
 ```
 
-> **📘 Recommended Options:**
-> - `vers=4.1` — NFSv4.1 for improved locking and session recovery
-> - `nconnect=4` — Multiple TCP connections for improved throughput (values 4-8 recommended)
-> - `noatime,nodiratime` — Don't update access times, reducing metadata I/O
+{% include quickstart/nfs-mount-options.md %}
 
 ---
 

@@ -43,16 +43,7 @@ sudo systemctl enable --now rpcbind
 
 ## Step 2: Verify Network Connectivity
 
-```bash
-# Test connectivity to NFS server
-ping -c 3 <NFS_SERVER_IP>
-
-# Test NFS port (2049)
-nc -zv <NFS_SERVER_IP> 2049
-
-# List available exports
-showmount -e <NFS_SERVER_IP>
-```
+{% include quickstart/nfs-verify-connectivity.md %}
 
 ---
 
@@ -91,7 +82,7 @@ Add to `/etc/fstab` for automatic mounting at boot:
 
 ```bash
 # Add fstab entry
-echo '<NFS_SERVER_IP>:/data/rhel /mnt/pure-nfs nfs4 vers=4.1,nconnect=4,noatime,nodiratime,_netdev 0 0' | sudo tee -a /etc/fstab
+echo '<NFS_SERVER_IP>:/data/rhel /mnt/pure-nfs nfs4 vers=4.1,hard,timeo=300,retrans=2,nconnect=4,noatime,nodiratime,_netdev 0 0' | sudo tee -a /etc/fstab
 
 # Test fstab entry
 sudo umount /mnt/pure-nfs
@@ -101,68 +92,30 @@ sudo mount -a
 mount | grep nfs
 ```
 
-> **📘 Recommended Options:**
-> - `vers=4.1` — NFSv4.1 for improved locking and session recovery
-> - `nconnect=4` — Multiple TCP connections for improved throughput (values 4-8 recommended)
-> - `noatime,nodiratime` — Don't update access times, reducing metadata I/O
-> - `_netdev` — Wait for network before mounting
+{% include quickstart/nfs-mount-options.md %}
 
 ---
 
 ## Step 6: Verify NFS Mount
 
-```bash
-# Check mount options
-mount | grep nfs
-
-# Verify nconnect is active
-cat /proc/fs/nfsfs/servers
-
-# Test read/write
-echo "NFS test" | sudo tee /mnt/pure-nfs/test.txt
-cat /mnt/pure-nfs/test.txt
-sudo rm /mnt/pure-nfs/test.txt
-```
+{% include quickstart/nfs-verify-mount.md %}
 
 ---
 
 ## Quick Reference
 
-| Task | Command |
-|------|---------|
-| List NFS mounts | `mount \| grep nfs` |
-| Show exports | `showmount -e <server>` |
-| Mount NFS | `mount -t nfs4 <server>:<export> <mountpoint>` |
-| Unmount NFS | `umount <mountpoint>` |
-| NFS statistics | `nfsstat -c` |
-| Mount info | `nfsstat -m` |
+{% include quickstart/nfs-quick-reference.md %}
 
 ---
 
 ## Troubleshooting
 
-### Mount Fails
+{% include quickstart/nfs-troubleshooting.md %}
 
+**SELinux-specific:**
 ```bash
-# Check network connectivity
-ping <NFS_SERVER_IP>
-nc -zv <NFS_SERVER_IP> 2049
-
-# Check exports
-showmount -e <NFS_SERVER_IP>
-
 # Check SELinux (if enabled)
 sudo setsebool -P use_nfs_home_dirs 1
-```
-
-### Performance Issues
-
-```bash
-# Check NFS version and options
-nfsstat -m
-
-# Verify nconnect
-cat /proc/fs/nfsfs/servers
 ```
 
 ---

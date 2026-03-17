@@ -101,31 +101,7 @@ flowchart TB
     style FS fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-### NFS Virtual IP (VIP) and Controller Failover
-
-Everpure FlashArray uses a **Virtual IP (VIP)** for NFS services. Understanding how the VIP works is critical for designing a resilient NFS deployment:
-
-**How VIP Failover Works:**
-
-1. **Single Active Controller**: The NFS VIP is hosted on one controller at a time (active controller)
-2. **Automatic Failover**: If the active controller fails or undergoes maintenance, the VIP automatically migrates to the standby controller
-3. **Client Transparency**: NFS clients connect to the VIP, not individual controller IPs—failover is transparent to clients
-4. **TCP Session Recovery**: NFSv4.1 supports session trunking and state recovery, allowing clients to resume operations after failover with minimal disruption
-
-**Failover Behavior:**
-
-| Event | Behavior | Client Impact |
-|-------|----------|---------------|
-| Controller failure | VIP moves to standby controller | Brief pause (seconds), automatic recovery |
-| Planned maintenance | Graceful VIP migration | Minimal impact with NFSv4.1 |
-| Network path failure | VIP remains on current controller | Bonded NICs provide redundancy |
-
-**Best Practices for VIP Configuration:**
-
-- **Use NFSv4.1**: Provides better session recovery than NFSv3
-- **Configure appropriate timeouts**: Ensure NFS client timeouts allow for failover completion
-- **Bond host NICs**: Network redundancy on the client side complements storage-side VIP failover
-- **Monitor VIP location**: Use FlashArray monitoring to track which controller hosts the VIP
+{% include nfs-vip-failover.md %}
 
 ```bash
 # Verify NFS mount is using the VIP
@@ -248,29 +224,9 @@ iface bond0 inet static
     mtu 9000
 ```
 
-### Understanding LACP Load Balancing
+{% include nfs-lacp-load-balancing.md %}
 
-LACP (802.3ad) bonding uses a **hash-based algorithm** to distribute traffic across member links. It's important to understand its limitations:
-
-**How LACP Hashing Works:**
-- The `xmit_hash_policy` (e.g., `layer3+4`) determines which packet fields are used to compute a hash
-- Each unique flow (source/destination IP + port combination) is assigned to a single link based on the hash result
-- **All packets for a given flow use the same link**—there is no per-packet load balancing
-
-**Key Limitations:**
-
-| Consideration | Impact |
-|---------------|--------|
-| **No guaranteed balance** | Traffic distribution depends entirely on the hash; a single NFS mount to one VIP may use only one link |
-| **Flow-based, not packet-based** | Individual TCP connections cannot exceed single-link bandwidth |
-| **Hash collisions** | Multiple flows may hash to the same link, causing imbalance |
-
-**Practical Implications for NFS:**
-- A single NFS mount from one Proxmox host to the FlashArray VIP typically uses **one link** regardless of bonding
-- Multiple Proxmox hosts mounting the same export will likely distribute across links (different source IPs)
-- Use `nconnect` to create multiple TCP connections, which may hash to different links and improve throughput
-
-**Verify traffic distribution:**
+**Verify traffic distribution on Proxmox:**
 ```bash
 # Check per-interface statistics on the bond
 cat /proc/net/bonding/bond0
@@ -335,7 +291,7 @@ pvesm add nfs pure-nfs \
     --server <NFS_SERVER_IP> \
     --export /proxmox/vms \
     --content images,rootdir,vztmpl,iso,backup,snippets \
-    --options vers=4.1,nconnect=4,noatime,nodiratime
+    --options vers=4.1,hard,timeo=300,retrans=2,nconnect=4,noatime,nodiratime
 
 # Verify
 pvesm status
@@ -359,7 +315,7 @@ mount | grep <storage_id>
 
 **Configure via pvesm:**
 ```bash
-pvesm set pure-nfs --options "vers=4.1,nconnect=4,noatime,nodiratime"
+pvesm set pure-nfs --options "vers=4.1,hard,timeo=300,retrans=2,nconnect=4,noatime,nodiratime"
 ```
 
 ### nconnect for Improved Throughput
@@ -386,10 +342,10 @@ pvesm add nfs pure-nfs \
     --server <NFS_SERVER_IP> \
     --export /proxmox/vms \
     --content images,rootdir,vztmpl,iso,backup,snippets \
-    --options vers=4.1,nconnect=4,noatime,nodiratime
+    --options vers=4.1,hard,timeo=300,retrans=2,nconnect=4,noatime,nodiratime
 
 # Update existing storage
-pvesm set pure-nfs --options "vers=4.1,nconnect=4,noatime,nodiratime"
+pvesm set pure-nfs --options "vers=4.1,hard,timeo=300,retrans=2,nconnect=4,noatime,nodiratime"
 ```
 
 **Verify nconnect is active:**
