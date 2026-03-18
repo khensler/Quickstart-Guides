@@ -14,17 +14,17 @@ This guide helps you select the right storage protocol—**NVMe-TCP**, **iSCSI**
 ```mermaid
 flowchart LR
     START([Start]) --> Q1{Shared file access?}
-    Q1 -->|Yes| NFS[**NFS**]
+    Q1 -->|Yes| NFS[NFS]
     Q1 -->|No| Q2{Minimize ops?}
     Q2 -->|Yes| Q2a{Perf critical?}
     Q2 -->|No| Q3{Kernel 5.0+?}
     Q2a -->|No| NFS
     Q2a -->|Yes| Q3
     Q3 -->|Yes| Q4{Max perf?}
-    Q4 -->|Yes| NVME[**NVMe-TCP**]
+    Q4 -->|Yes| NVME[NVMe-TCP]
     Q4 -->|No| Q5{Existing iSCSI?}
     Q5 -->|No| NVME
-    Q5 -->|Yes| ISCSI[**iSCSI**]
+    Q5 -->|Yes| ISCSI[iSCSI]
     Q3 -->|No| ISCSI
     style NFS fill:#4a9eff,color:#fff
     style ISCSI fill:#50c878,color:#fff
