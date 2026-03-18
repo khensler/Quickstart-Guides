@@ -12,27 +12,20 @@ This guide helps you select the right storage protocol—**NVMe-TCP**, **iSCSI**
 ## Quick Decision Flowchart
 
 ```mermaid
-flowchart TD
-    START([Start]) --> Q1{Need shared<br/>file access?}
-
-    Q1 -->|Yes| NFS[**NFS**<br/>File protocol<br/>No LVM needed]
-    Q1 -->|No| Q2{Minimize ops<br/>overhead?}
-
-    Q2 -->|Yes| Q2a{Performance<br/>critical?}
-    Q2 -->|No| Q3{Kernel supports<br/>NVMe-TCP?}
-
+flowchart LR
+    START([Start]) --> Q1{Shared file access?}
+    Q1 -->|Yes| NFS[**NFS**]
+    Q1 -->|No| Q2{Minimize ops?}
+    Q2 -->|Yes| Q2a{Perf critical?}
+    Q2 -->|No| Q3{Kernel 5.0+?}
     Q2a -->|No| NFS
     Q2a -->|Yes| Q3
-
-    Q3 -->|Yes| Q4{Need maximum<br/>performance?}
-    Q3 -->|No| ISCSI[**iSCSI**<br/>Block protocol<br/>LVM required]
-
-    Q4 -->|Yes| NVME[**NVMe-TCP**<br/>High-perf block<br/>LVM required]
-    Q4 -->|No| Q5{Existing iSCSI<br/>infrastructure?}
-
-    Q5 -->|Yes| ISCSI
+    Q3 -->|Yes| Q4{Max perf?}
+    Q4 -->|Yes| NVME[**NVMe-TCP**]
+    Q4 -->|No| Q5{Existing iSCSI?}
     Q5 -->|No| NVME
-
+    Q5 -->|Yes| ISCSI[**iSCSI**]
+    Q3 -->|No| ISCSI
     style NFS fill:#4a9eff,color:#fff
     style ISCSI fill:#50c878,color:#fff
     style NVME fill:#ff6b6b,color:#fff
@@ -54,7 +47,7 @@ flowchart TD
 | **Multipath** | Native (ANA) | dm-multipath | VIP failover |
 | **Controller Failover** | Immediate (ANA) | Immediate (ALUA) | 10-30 seconds (VIP) |
 
-*\*Block multi-host access requires thick LVM, clustered LVM (lvmlockd), and cluster filesystems (GFS2/OCFS2)—significantly more complex than NFS.*
+*\*Block multi-host access requires thick LVM, clustered LVM (lvmlockd), and/or cluster filesystems (GFS2/OCFS2)—significantly more complex than NFS.*
 
 ---
 
@@ -274,6 +267,7 @@ flowchart TD
 | **Array limits** | Volume count limits apply | Fewer objects, higher scale |
 | **Monitoring** | Per-volume metrics | Per-export metrics |
 | **Multi-host access** | Requires thick LVM + cluster FS + DLM | Native, no extra components |
+| **Controller failover** | Immediate (multipath) | 10-30 seconds (VIP migration) |
 
 ---
 
