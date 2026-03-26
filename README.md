@@ -44,8 +44,6 @@ A collection of quick start guides for various technologies and configurations.
 - [iSCSI Best Practices](distributions/oracle/iscsi/BEST-PRACTICES.md) - iSCSI best practices for Oracle Linux with UEK
 
 **XCP-ng:**
-- [NVMe-TCP Quick Start](distributions/xcpng/nvme-tcp/QUICKSTART.md) - NVMe-TCP configuration for XCP-ng (experimental)
-- [NVMe-TCP Best Practices](distributions/xcpng/nvme-tcp/BEST-PRACTICES.md) - Production best practices for NVMe-TCP on XCP-ng
 - [iSCSI Quick Start (CLI)](distributions/xcpng/iscsi/QUICKSTART.md) - iSCSI configuration via xe CLI
 - [iSCSI Quick Start (GUI)](distributions/xcpng/iscsi/GUI-QUICKSTART.md) - iSCSI setup with Xen Orchestra and multipathing
 - [iSCSI Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) - Production best practices for iSCSI on XCP-ng
