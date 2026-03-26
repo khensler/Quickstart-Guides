@@ -350,19 +350,50 @@ class MarkdownParser:
                 ))
                 continue
 
-            # Check for ordered list
+            # Check for ordered list (with nested unordered sublists support)
             ol_match = self.ordered_list_pattern.match(line)
             if ol_match:
-                items = []
-                while i < len(lines) and self.ordered_list_pattern.match(lines[i]):
-                    match = self.ordered_list_pattern.match(lines[i])
-                    items.append(match.group(2).strip())
-                    i += 1
-                elements.append(MarkdownElement(
-                    type='ordered_list',
-                    content='',
-                    items=items
-                ))
+                # Parse ordered list with potential nested bullet items
+                ol_items = []  # List of tuples: (item_text, [nested_bullet_items])
+
+                while i < len(lines):
+                    current_line = lines[i]
+
+                    # Check if this is an ordered list item (at root level, no indent)
+                    ol_item_match = self.ordered_list_pattern.match(current_line)
+                    if ol_item_match and ol_item_match.group(1) == '':  # No leading whitespace
+                        item_text = ol_item_match.group(2).strip()
+                        nested_items = []
+                        i += 1
+
+                        # Collect any nested unordered list items (indented bullets)
+                        while i < len(lines):
+                            nested_line = lines[i]
+                            # Check for indented bullet (starts with spaces then - or *)
+                            nested_match = re.match(r'^(\s+)[-*]\s+(.+)$', nested_line)
+                            if nested_match and len(nested_match.group(1)) >= 2:
+                                nested_items.append(nested_match.group(2).strip())
+                                i += 1
+                            elif nested_line.strip() == '':
+                                # Empty line - check if next line continues the list
+                                i += 1
+                            else:
+                                # Not a nested item, break out
+                                break
+
+                        ol_items.append((item_text, nested_items))
+                    else:
+                        # Not an ordered list item at root level, stop collecting
+                        break
+
+                if ol_items:
+                    elements.append(MarkdownElement(
+                        type='ordered_list_nested',
+                        content='',
+                        items=[item[0] for item in ol_items],  # Main item texts
+                        children=[MarkdownElement(type='nested_ul', content='', items=item[1])
+                                  for item in ol_items]  # Nested bullet lists
+                    ))
                 continue
 
             # Check for table
@@ -536,6 +567,9 @@ class DITAGenerator:
                 output.append(self._generate_ul(elem.items, indent=indent))
             elif elem.type == 'ordered_list':
                 output.append(self._generate_ol(elem.items, indent=indent))
+            elif elem.type == 'ordered_list_nested':
+                nested_items = [child.items for child in elem.children]
+                output.append(self._generate_ol(elem.items, indent=indent, nested_items=nested_items))
             elif elem.type == 'table':
                 output.append(self._generate_table(elem.content))
             elif elem.type == 'include':
@@ -622,61 +656,18 @@ class DITAGenerator:
                 output.append(self._generate_ul(elem.items, indent='            '))
             elif elem.type == 'ordered_list':
                 output.append(self._generate_ol(elem.items, indent='            '))
+            elif elem.type == 'ordered_list_nested':
+                nested_items = [child.items for child in elem.children]
+                output.append(self._generate_ol(elem.items, indent='            ', nested_items=nested_items))
             elif elem.type == 'table':
                 output.append(self._generate_table(elem.content).replace('        ', '            '))
 
         return '\n'.join(output)
 
     def _generate_prolog(self, topic_id: str, doc_type: str) -> str:
-        """Generate DITA prolog with metadata for Heretto CCMS.
-
-        Extracts platform and protocol from the source context.
-        """
-        context = self._current_source_context  # e.g., "rhel-nvme-tcp-quickstart"
-        parts = context.split('-')
-
-        # Extract platform (distribution)
-        platform = parts[0] if parts else 'linux'
-        platform_map = {
-            'rhel': 'Red Hat Enterprise Linux',
-            'suse': 'SUSE Linux Enterprise',
-            'debian': 'Debian',
-            'oracle': 'Oracle Linux',
-            'proxmox': 'Proxmox VE',
-            'xcpng': 'XCP-ng',
-            'aws': 'AWS Outposts',
-            'common': 'All Platforms'
-        }
-        platform_full = platform_map.get(platform, platform.title())
-
-        # Extract protocol
-        protocol = 'storage'
-        if 'nvme-tcp' in context or 'nvme' in context:
-            protocol = 'NVMe-TCP'
-        elif 'iscsi' in context:
-            protocol = 'iSCSI'
-        elif 'nfs' in context:
-            protocol = 'NFS'
-
-        # Generate keywords
-        keywords = [platform_full, protocol, 'FlashArray', 'Pure Storage']
-        if doc_type == 'task':
-            keywords.append('quickstart')
-        elif doc_type == 'concept':
-            keywords.append('best practices')
-
-        keywords_xml = '\n                '.join(f'<keyword>{escape_xml(kw)}</keyword>' for kw in keywords)
-
-        return f'''    <prolog>
-        <metadata>
-            <keywords>
-                {keywords_xml}
-            </keywords>
-            <prodinfo>
-                <prodname>FlashArray</prodname>
-                <platform>{escape_xml(platform_full)}</platform>
-            </prodinfo>
-        </metadata>
+        """Generate DITA prolog with empty metadata block."""
+        return '''    <prolog>
+        <metadata/>
     </prolog>'''
 
     def generate_task_topic(self, title: str, content: str, topic_id: str) -> str:
@@ -748,6 +739,9 @@ class DITAGenerator:
                 section_content.append(self._generate_ul(elem.items))
             elif elem.type == 'ordered_list':
                 section_content.append(self._generate_ol(elem.items))
+            elif elem.type == 'ordered_list_nested':
+                nested_items = [child.items for child in elem.children]
+                section_content.append(self._generate_ol(elem.items, nested_items=nested_items))
             elif elem.type == 'table':
                 section_content.append(self._generate_table(elem.content))
 
@@ -914,6 +908,9 @@ class DITAGenerator:
             return self._generate_ul(elem.items, indent='                    ')
         elif elem.type == 'ordered_list':
             return self._generate_ol(elem.items, indent='                    ')
+        elif elem.type == 'ordered_list_nested':
+            nested_items = [child.items for child in elem.children]
+            return self._generate_ol(elem.items, indent='                    ', nested_items=nested_items)
         elif elem.type == 'note':
             note_type = self._detect_note_type(elem.content)
             cleaned_content = self._strip_note_prefix(elem.content, note_type)
@@ -1006,10 +1003,40 @@ class DITAGenerator:
         li_items = '\n'.join([f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>' for item in items])
         return f'{indent}<ul>\n{li_items}\n{indent}</ul>'
 
-    def _generate_ol(self, items: List[str], indent: str = '        ') -> str:
-        """Generate a DITA ordered list with proper <p> wrapping."""
-        li_items = '\n'.join([f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>' for item in items])
-        return f'{indent}<ol>\n{li_items}\n{indent}</ol>'
+    def _generate_ol(self, items: List[str], indent: str = '        ', nested_items: List[List[str]] = None) -> str:
+        """Generate a DITA ordered list with proper <p> wrapping and nested <ul> support.
+
+        Args:
+            items: List of main ordered list item texts
+            indent: Indentation string
+            nested_items: List of lists, where each inner list contains the nested bullet items
+                         for the corresponding main item. Can be None or empty lists for items
+                         without nested bullets.
+        """
+        if nested_items is None:
+            nested_items = [[] for _ in items]
+
+        li_elements = []
+        for idx, item in enumerate(items):
+            nested = nested_items[idx] if idx < len(nested_items) else []
+
+            if nested:
+                # Item with nested ul
+                li_content = f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p>\n'
+                # Generate nested ul
+                nested_ul_items = '\n'.join([
+                    f'{indent}            <li><p>{self.parser.convert_inline(escape_xml(n))}</p></li>'
+                    for n in nested
+                ])
+                li_content += f'{indent}        <ul>\n{nested_ul_items}\n{indent}        </ul>\n'
+                li_content += f'{indent}    </li>'
+            else:
+                # Simple item without nested list
+                li_content = f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>'
+
+            li_elements.append(li_content)
+
+        return f'{indent}<ol>\n' + '\n'.join(li_elements) + f'\n{indent}</ol>'
 
     def _generate_table(self, content: str) -> str:
         """Generate a DITA table from Markdown table content."""
