@@ -136,39 +136,44 @@ Configure storage interfaces with VLAN 2230:
 
 7. **iSCSI `sendtargets` returns ALL portals — filter before login.** When running `iscsiadm -m discovery -t sendtargets` against a Pure FlashArray, the array responds with **every** portal IP it knows about, including portals on VLANs/subnets you are not using (e.g., VLAN 2245 / 10.21.245.x in our case). If you then run `iscsiadm -m node -l`, it attempts to login to all of them — the unreachable ones time out and clutter the output with errors.
 
-   **Fix — delete unwanted nodes before login:**
+   **Complete iSCSI setup procedure — run on EACH host (vme-1, vme-2, vme-3):**
    ```bash
-   # After discovery, delete nodes on the unused subnet BEFORE logging in
+   ssh -o StrictHostKeyChecking=no treeves@10.21.146.104
+
+   # Clean up
+   sudo iscsiadm -m node -u 2>/dev/null
+   sudo iscsiadm -m node -o delete 2>/dev/null
+
+   # Create iface bindings (verify interface names with: ip addr show | grep 2230)
+   sudo iscsiadm -m iface -I ens1f0np0.2230 --op=new
+   sudo iscsiadm -m iface -I ens1f0np0.2230 --op=update -n iface.net_ifacename -v ens1f0np0.2230
+   sudo iscsiadm -m iface -I ens1f1np1.2230 --op=new
+   sudo iscsiadm -m iface -I ens1f1np1.2230 --op=update -n iface.net_ifacename -v ens1f1np1.2230
+
+   # Discover
+   sudo iscsiadm -m discovery -t sendtargets -p 192.168.0.11:3260 -I ens1f0np0.2230
+   sudo iscsiadm -m discovery -t sendtargets -p 192.168.0.12:3260 -I ens1f0np0.2230
+   sudo iscsiadm -m discovery -t sendtargets -p 192.168.1.11:3260 -I ens1f1np1.2230
+   sudo iscsiadm -m discovery -t sendtargets -p 192.168.1.12:3260 -I ens1f1np1.2230
+
+   # Delete the unwanted 10.21.245.x nodes BEFORE login
    sudo iscsiadm -m node -o delete -p 10.21.245.18:3260
    sudo iscsiadm -m node -o delete -p 10.21.245.19:3260
    sudo iscsiadm -m node -o delete -p 10.21.245.20:3260
    sudo iscsiadm -m node -o delete -p 10.21.245.21:3260
 
-   # Now login — only the correct 192.168.x.x portals remain
+   # Login only to 192.168.x.x targets
    sudo iscsiadm -m node -l
-   ```
 
-   **Alternative — login to specific portals only:**
-   ```bash
-   sudo iscsiadm -m node -T <target_iqn> -p 192.168.0.11:3260 -l
-   sudo iscsiadm -m node -T <target_iqn> -p 192.168.0.12:3260 -l
-   sudo iscsiadm -m node -T <target_iqn> -p 192.168.1.11:3260 -l
-   sudo iscsiadm -m node -T <target_iqn> -p 192.168.1.12:3260 -l
-   ```
+   # Set auto-login on boot
+   sudo iscsiadm -m node -o update -n node.startup -v automatic
 
-   **Also use iface bindings** to pin each NIC to its own subnet and prevent cross-fabric login attempts:
-   ```bash
-   sudo iscsiadm -m iface -I ens1f0np0.2230 --op=new
-   sudo iscsiadm -m iface -I ens1f0np0.2230 --op=update -n iface.net_ifacename -v ens1f0np0.2230
-   sudo iscsiadm -m iface -I ens1f1np1.2230 --op=new
-   sudo iscsiadm -m iface -I ens1f1np1.2230 --op=update -n iface.net_ifacename -v ens1f1np1.2230
-   ```
-
-   **Verify — should show only 4 sessions on 192.168.x.x with 4 active multipath paths:**
-   ```bash
+   # Verify
    sudo iscsiadm -m session
    sudo multipath -ll
    ```
+
+   Should show 4 active sessions on 192.168.x.x and 4 multipath paths to the Pure volume.
 
 8. **All cluster hosts must have iSCSI/multipath configured before adding a GFS2 datastore.** The VME Manager UI will **not** show the multipath device in the datastore creation wizard until **every host** in the cluster can see it. If you configure iSCSI and multipath on only one or two hosts, the disk simply won't appear when you go to Infrastructure > Clusters > [Cluster] > Storage > Data Stores > ADD > GFS2 Pool. Complete Steps 1–6 (iface binding, discovery, portal cleanup, login, multipath verification) on **all 3 hosts** before attempting to create the datastore in the UI.
 

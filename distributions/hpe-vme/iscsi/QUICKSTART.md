@@ -183,56 +183,49 @@ cat /proc/net/bonding/bond1
 
 ## Step 5: Discover and Login to iSCSI Targets
 
-### 5a: Create iface Bindings (Recommended for Dual-Fabric)
+> ⚠️ **Run this procedure on EACH cluster host** (all 3 for GFS2). The VME Manager will not show the multipath device until every host has completed these steps.
 
-If you have separate storage NICs on separate subnets (e.g., VLAN-tagged interfaces), bind each NIC to its own iface so iSCSI sessions stay on the correct fabric:
+**Complete iSCSI setup — run on each host (adjust SSH target IP per host):**
 
 ```bash
-# Create iface for each storage NIC (adjust interface names to match your environment)
+ssh -o StrictHostKeyChecking=no treeves@10.21.146.104
+
+# Clean up
+sudo iscsiadm -m node -u 2>/dev/null
+sudo iscsiadm -m node -o delete 2>/dev/null
+
+# Create iface bindings (verify interface names with: ip addr show | grep 2230)
 sudo iscsiadm -m iface -I ens1f0np0.2230 --op=new
 sudo iscsiadm -m iface -I ens1f0np0.2230 --op=update -n iface.net_ifacename -v ens1f0np0.2230
-
 sudo iscsiadm -m iface -I ens1f1np1.2230 --op=new
 sudo iscsiadm -m iface -I ens1f1np1.2230 --op=update -n iface.net_ifacename -v ens1f1np1.2230
-```
 
-### 5b: Discover Targets
+# Discover
+sudo iscsiadm -m discovery -t sendtargets -p 192.168.0.11:3260 -I ens1f0np0.2230
+sudo iscsiadm -m discovery -t sendtargets -p 192.168.0.12:3260 -I ens1f0np0.2230
+sudo iscsiadm -m discovery -t sendtargets -p 192.168.1.11:3260 -I ens1f1np1.2230
+sudo iscsiadm -m discovery -t sendtargets -p 192.168.1.12:3260 -I ens1f1np1.2230
 
-```bash
-# Discover targets on each portal, binding to the appropriate iface
-sudo iscsiadm -m discovery -t sendtargets -p <portal1_ip>:3260 -I <iface_name>
-sudo iscsiadm -m discovery -t sendtargets -p <portal2_ip>:3260 -I <iface_name>
-```
+# Delete the unwanted 10.21.245.x nodes BEFORE login
+sudo iscsiadm -m node -o delete -p 10.21.245.18:3260
+sudo iscsiadm -m node -o delete -p 10.21.245.19:3260
+sudo iscsiadm -m node -o delete -p 10.21.245.20:3260
+sudo iscsiadm -m node -o delete -p 10.21.245.21:3260
 
-### 5c: Delete Unwanted Portal Nodes Before Login
-
-> **⚠️ Important — Pure Storage Arrays:** `sendtargets` returns **all** portal IPs the array knows about, including portals on subnets you are not using. If you run `iscsiadm -m node -l` without cleaning these up first, it will attempt to login to every portal — the unreachable ones will time out and produce errors.
-
-```bash
-# List all discovered nodes
-sudo iscsiadm -m node
-
-# Delete nodes on any subnet you are NOT using (example: 10.21.245.x)
-sudo iscsiadm -m node -o delete -p <unwanted_portal_ip>:3260
-
-# Repeat for each unwanted portal IP
-```
-
-### 5d: Login
-
-```bash
-# Login to remaining (correct) targets only
+# Login only to 192.168.x.x targets
 sudo iscsiadm -m node -l
 
-# OR login to specific portals individually for maximum control:
-# sudo iscsiadm -m node -T <target_iqn> -p <portal_ip>:3260 -l
-
-# Set automatic login on boot
+# Set auto-login on boot
 sudo iscsiadm -m node -o update -n node.startup -v automatic
 
-# Verify active sessions — should show only your intended portals
+# Verify
 sudo iscsiadm -m session
+sudo multipath -ll
 ```
+
+Should show 4 active sessions on 192.168.x.x and 4 multipath paths to the Pure volume.
+
+> **⚠️ Important — Pure Storage Arrays:** `sendtargets` returns **all** portal IPs the array knows about, including portals on subnets you are not using (e.g., VLAN 2245 / 10.21.245.x). If you skip the delete step and run `iscsiadm -m node -l`, it will attempt to login to every portal — the unreachable ones will time out and produce errors.
 
 ## Step 6: Configure Multipath
 
