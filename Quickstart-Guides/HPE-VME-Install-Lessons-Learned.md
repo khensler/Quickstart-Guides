@@ -140,8 +140,8 @@ Configure storage interfaces with VLAN 2230:
    ```bash
    # SSH to each host in turn:
    #   vme-1: ssh -o StrictHostKeyChecking=no admin@10.21.146.102
-   #   vme-2: ssh -o StrictHostKeyChecking=no admin@10.21.146.105
-   #   vme-3: ssh -o StrictHostKeyChecking=no admin@10.21.146.108
+   #   vme-2: ssh -o StrictHostKeyChecking=no admin@10.21.146.104
+   #   vme-3: ssh -o StrictHostKeyChecking=no admin@10.21.146.206
 
    # Clean up
    sudo iscsiadm -m node -u 2>/dev/null
@@ -188,8 +188,8 @@ Configure storage interfaces with VLAN 2230:
 | Host | IP |
 |------|-----|
 | vme-1 | 10.21.146.102 |
-| vme-2 | 10.21.146.105 |
-| vme-3 | 10.21.146.108 |
+| vme-2 | 10.21.146.104 |
+| vme-3 | 10.21.146.206 |
 | VME Manager | 10.21.146.100 |
 | Gateway | (your gateway) |
 
