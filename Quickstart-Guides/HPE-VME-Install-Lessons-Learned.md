@@ -170,6 +170,10 @@ Configure storage interfaces with VLAN 2230:
    sudo multipath -ll
    ```
 
+8. **All cluster hosts must have iSCSI/multipath configured before adding a GFS2 datastore.** The VME Manager UI will **not** show the multipath device in the datastore creation wizard until **every host** in the cluster can see it. If you configure iSCSI and multipath on only one or two hosts, the disk simply won't appear when you go to Infrastructure > Clusters > [Cluster] > Storage > Data Stores > ADD > GFS2 Pool. Complete Steps 1–6 (iface binding, discovery, portal cleanup, login, multipath verification) on **all 3 hosts** before attempting to create the datastore in the UI.
+
+   Additionally, the VME Manager's built-in iSCSI discovery (under the cluster Storage > iSCSI tab) is a basic `sendtargets` convenience feature. It does **not** support iface binding or portal filtering, so for dual-fabric / multi-VLAN storage environments (like Pure Storage), CLI configuration on each host is a **mandatory prerequisite** — the UI alone cannot handle this topology.
+
 ---
 
 ## Network IPs

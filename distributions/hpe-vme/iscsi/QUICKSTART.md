@@ -260,6 +260,10 @@ sudo multipath -ll
 
 ## Step 7: Add GFS2 Datastore in HPE VME Manager
 
+> ⚠️ **IMPORTANT:** Steps 1–6 must be completed on **ALL cluster hosts** (minimum 3 for GFS2) before proceeding. The VME Manager will not display the multipath device in the datastore wizard until every host in the cluster can see it. If the disk does not appear in the dropdown below, go back and verify `multipath -ll` shows the device on each host.
+
+> **Note:** The VME Manager's built-in iSCSI discovery (cluster Storage > iSCSI tab) does **not** support iface binding or portal filtering. For multi-VLAN / dual-fabric storage (e.g., Pure Storage), the CLI steps above are mandatory — the UI alone cannot handle this topology.
+
 1. Navigate to **Infrastructure > Clusters > [Your Cluster] > Storage**
 2. Select the **Data Stores** subtab
 3. Click **ADD**
@@ -320,6 +324,7 @@ sudo iscsiadm -m session --rescan
 - [ ] Unwanted portal nodes deleted before login (e.g., unused VLANs/subnets)
 - [ ] iSCSI sessions established to correct portals only
 - [ ] Multipath configured and showing all paths
+- [ ] **All cluster hosts** verified with `multipath -ll` showing the device
 - [ ] GFS2 datastore added in HPE VME Manager
 - [ ] Datastore shows Online status
 - [ ] Test VM provisioned successfully
