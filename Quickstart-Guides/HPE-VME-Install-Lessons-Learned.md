@@ -184,6 +184,27 @@ Configure storage interfaces with VLAN 2230:
 
 ---
 
+## Current Status (2026-04-09)
+
+| Host | Management IP | iSCSI / Multipath Status |
+|------|---------------|--------------------------|
+| vme-1 | 10.21.146.102 | ✅ Done — 4 iSCSI sessions, 4 multipath paths active |
+| vme-2 | 10.21.146.104 | ✅ Done — 4 iSCSI sessions, 4 multipath paths active |
+| vme-3 | 10.21.146.206 | ❌ **BLOCKED** — Storage NICs not communicating, iSCSI target connection times out |
+
+### Next Steps (pick up here)
+1. **Troubleshoot vme-3 storage network connectivity:**
+   - SSH to vme-3: `ssh -o StrictHostKeyChecking=no admin@10.21.146.206`
+   - Verify storage interfaces are up: `ip addr show | grep 2230`
+   - Test basic connectivity to Pure portals: `ping -I ens1f0np0.2230 192.168.0.11` and `ping -I ens1f1np1.2230 192.168.1.11`
+   - Check switch port config / cabling for vme-3 storage NICs
+   - Verify VLAN 2230 is trunked on the switch ports connected to vme-3's ens1f0np0 and ens1f1np1
+2. **Once vme-3 storage NICs are reachable**, run the full iSCSI setup procedure from lesson #7 on vme-3
+3. **Verify `multipath -ll` shows the Pure volume on all 3 hosts**
+4. **Add GFS2 datastore** in VME Manager UI: Infrastructure > Clusters > [Cluster] > Storage > Data Stores > ADD > GFS2 Pool
+
+---
+
 ## Network IPs
 | Host | IP |
 |------|-----|
