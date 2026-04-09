@@ -1,0 +1,183 @@
+# HPE VME Unified Installer - Lessons Learned
+
+## Host Configuration
+- **Host:** vme-3
+- **Date:** 2026-03-20
+
+## Hardware Overview
+| Interface | Type | Purpose |
+|-----------|------|---------|
+| eno1, eno2 | Intel X550-TX 10GbE LOM | NOT USED |
+| enp177s0f0np0, enp177s0f1np1 | Mellanox ConnectX-7 25GbE | Management Bond |
+| enp177s0f2np2, enp177s0f3np3 | Mellanox ConnectX-7 25GbE | Compute Bond |
+| ens1f0np0, ens1f1np1 | Mellanox ConnectX-6 Dx | Storage (VLAN 2230) |
+
+---
+
+## Step 1: Ubuntu Network Configuration (from HVM ISO)
+
+### 1.1 Create Management Bond (bond0)
+
+**Screenshot: Create bond dialog**
+
+```
+Name: bond0
+
+Devices Selected:
+  [X] enp177s0f0np0
+  [X] enp177s0f1np1
+  [ ] enp177s0f2np2
+  [ ] enp177s0f3np3
+  [ ] ens1f0np0
+  [ ] ens1f1np1
+
+Bond mode:        [ active-backup ]
+XMIT hash policy: [ layer2 ]
+LACP rate:        [ slow ]
+```
+
+**Click [ Create ]**
+
+---
+
+### 1.2 Create Compute Bond (bond1)
+
+**Screenshot: Create bond dialog for bond1**
+
+```
+Name: bond1
+
+Devices Selected:
+  [ ] eno1
+  [ ] eno2
+  [ ] enp177s0f0np0
+  [ ] enp177s0f1np1
+  [X] enp177s0f2np2
+  [X] enp177s0f3np3
+  [ ] ens1f0np0
+  [ ] ens1f1np1
+
+Bond mode:        [ active-backup ]
+XMIT hash policy: [ layer2 ]
+LACP rate:        [ slow ]
+```
+
+**Click [ Create ]**
+
+---
+
+### 1.3 Configure VLANs
+
+**Management VLAN on bond0:**
+- VLAN ID: (your mgmt VLAN)
+- Static IP: (your host IP)
+- Gateway: (your gateway)
+- DNS: (your DNS)
+
+**Compute VLAN on bond1:**
+- VLAN ID: (your compute VLAN)
+- No IP needed (used for VM traffic)
+
+---
+
+### 1.4 Storage Network Configuration
+
+Configure storage interfaces with VLAN 2230:
+- ens1f0np0.2230
+- ens1f1np1.2230
+
+---
+
+## Step 2: Create Cluster from VME Manager GUI
+
+**Important:** Do NOT use `hpe-vm` console to add workers. Use the VME Manager GUI instead.
+
+### 2.1 Prepare All Hosts First
+- Install Ubuntu from HVM ISO on all 3 hosts
+- Configure bonds and VLANs on each host during Ubuntu install
+- Ensure all hosts have static IPs and can reach each other
+
+### 2.2 Create Cluster with All 3 Hosts at Once
+1. Log into VME Manager: https://10.21.146.100
+2. Go to **Infrastructure > Clusters**
+3. Click **+ ADD CLUSTER** and select **HPE VM**
+4. Select **non-HCI Layout** (since using external Pure storage, not Ceph)
+5. Add all 3 hosts in the wizard:
+   - SSH Host: IP address of each host
+   - SSH Username/Password: user with sudo access
+   - SSH Key: (optional)
+6. Configure network interfaces:
+   - Management Interface: bond0 (or bond0.VLAN)
+   - Compute Interface: bond1 (or bond1.VLAN)
+   - Storage Interface: (leave empty, Pure added later)
+   - Data Device: (leave empty for non-HCI)
+7. Set Compute VLANs as needed
+8. Click Create
+
+### 2.3 Add Pure Storage Later
+- Add Pure FlashArray as external datastore after cluster is created
+- Storage interfaces (ens1f0np0, ens1f1np1) used for Pure connectivity
+
+---
+
+## Key Lessons Learned
+
+1. **Add all hosts via VME Manager GUI** - Do NOT use `hpe-vm` console "Install VME Worker". Use Infrastructure > Clusters > + ADD CLUSTER and add all hosts at once.
+
+2. **Non-HCI for external storage** - Select non-HCI Layout when using Pure storage (no Ceph needed)
+
+3. **Verify network connectivity** between all hosts BEFORE proceeding with VME setup
+
+4. **Separate bonds for mgmt/compute** is cleaner than converged networking
+
+5. **Management switch ports must be access mode on VLAN 2146** - NOT trunk mode. Compute switch ports must be trunked for VLAN 2244 tagging. Verify with Arista `show interfaces switchport` on the specific breakout sub-interface (e.g., Ethernet49/1), not just the parent port.
+
+6. **VME Manager goes on management network** - same subnet as host management IPs
+
+7. **iSCSI `sendtargets` returns ALL portals — filter before login.** When running `iscsiadm -m discovery -t sendtargets` against a Pure FlashArray, the array responds with **every** portal IP it knows about, including portals on VLANs/subnets you are not using (e.g., VLAN 2245 / 10.21.245.x in our case). If you then run `iscsiadm -m node -l`, it attempts to login to all of them — the unreachable ones time out and clutter the output with errors.
+
+   **Fix — delete unwanted nodes before login:**
+   ```bash
+   # After discovery, delete nodes on the unused subnet BEFORE logging in
+   sudo iscsiadm -m node -o delete -p 10.21.245.18:3260
+   sudo iscsiadm -m node -o delete -p 10.21.245.19:3260
+   sudo iscsiadm -m node -o delete -p 10.21.245.20:3260
+   sudo iscsiadm -m node -o delete -p 10.21.245.21:3260
+
+   # Now login — only the correct 192.168.x.x portals remain
+   sudo iscsiadm -m node -l
+   ```
+
+   **Alternative — login to specific portals only:**
+   ```bash
+   sudo iscsiadm -m node -T <target_iqn> -p 192.168.0.11:3260 -l
+   sudo iscsiadm -m node -T <target_iqn> -p 192.168.0.12:3260 -l
+   sudo iscsiadm -m node -T <target_iqn> -p 192.168.1.11:3260 -l
+   sudo iscsiadm -m node -T <target_iqn> -p 192.168.1.12:3260 -l
+   ```
+
+   **Also use iface bindings** to pin each NIC to its own subnet and prevent cross-fabric login attempts:
+   ```bash
+   sudo iscsiadm -m iface -I ens1f0np0.2230 --op=new
+   sudo iscsiadm -m iface -I ens1f0np0.2230 --op=update -n iface.net_ifacename -v ens1f0np0.2230
+   sudo iscsiadm -m iface -I ens1f1np1.2230 --op=new
+   sudo iscsiadm -m iface -I ens1f1np1.2230 --op=update -n iface.net_ifacename -v ens1f1np1.2230
+   ```
+
+   **Verify — should show only 4 sessions on 192.168.x.x with 4 active multipath paths:**
+   ```bash
+   sudo iscsiadm -m session
+   sudo multipath -ll
+   ```
+
+---
+
+## Network IPs
+| Host | IP |
+|------|-----|
+| vme-1 | 10.21.146.102 |
+| vme-2 | 10.21.146.105 |
+| vme-3 | 10.21.146.108 |
+| VME Manager | 10.21.146.100 |
+| Gateway | (your gateway) |
+
