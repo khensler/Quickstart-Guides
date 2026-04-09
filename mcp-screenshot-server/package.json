@@ -1,0 +1,34 @@
+{
+  "name": "mcp-screenshot-server",
+  "version": "1.0.0",
+  "description": "MCP server for capturing screenshots from lab environments using Playwright",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-screenshot-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "prepare": "npm run build",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "mcp",
+    "screenshot",
+    "playwright",
+    "automation",
+    "lab"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
+

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "screenshot": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/mcp-screenshot-server/dist/index.js"
+      ],
+      "env": {}
+    }
+  }
+}
+

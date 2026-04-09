@@ -188,7 +188,7 @@ cat /proc/net/bonding/bond1
 **Complete iSCSI setup — run on each host (adjust SSH target IP per host):**
 
 ```bash
-ssh -o StrictHostKeyChecking=no treeves@10.21.146.104
+ssh -o StrictHostKeyChecking=no admin@10.21.146.104
 
 # Clean up
 sudo iscsiadm -m node -u 2>/dev/null

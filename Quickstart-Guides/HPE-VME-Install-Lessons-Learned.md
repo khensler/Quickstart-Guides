@@ -138,7 +138,7 @@ Configure storage interfaces with VLAN 2230:
 
    **Complete iSCSI setup procedure — run on EACH host (vme-1, vme-2, vme-3):**
    ```bash
-   ssh -o StrictHostKeyChecking=no treeves@10.21.146.104
+   ssh -o StrictHostKeyChecking=no admin@10.21.146.104
 
    # Clean up
    sudo iscsiadm -m node -u 2>/dev/null
