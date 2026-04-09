@@ -185,10 +185,13 @@ cat /proc/net/bonding/bond1
 
 > ⚠️ **Run this procedure on EACH cluster host** (all 3 for GFS2). The VME Manager will not show the multipath device until every host has completed these steps.
 
-**Complete iSCSI setup — run on each host (adjust SSH target IP per host):**
+**Complete iSCSI setup — run on each host:**
 
 ```bash
-ssh -o StrictHostKeyChecking=no admin@10.21.146.104
+# SSH to each host in turn:
+#   vme-1: ssh -o StrictHostKeyChecking=no admin@10.21.146.102
+#   vme-2: ssh -o StrictHostKeyChecking=no admin@10.21.146.105
+#   vme-3: ssh -o StrictHostKeyChecking=no admin@10.21.146.108
 
 # Clean up
 sudo iscsiadm -m node -u 2>/dev/null
