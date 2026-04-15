@@ -191,7 +191,7 @@ cat /proc/net/bonding/bond1
 # SSH to each host in turn:
 #   vme-1: ssh -o StrictHostKeyChecking=no admin@10.21.146.102
 #   vme-2: ssh -o StrictHostKeyChecking=no admin@10.21.146.104
-#   vme-3: ssh -o StrictHostKeyChecking=no admin@10.21.146.206
+#   vme-3: ssh -o StrictHostKeyChecking=no admin@10.21.146.106
 
 # Clean up
 sudo iscsiadm -m node -u 2>/dev/null
