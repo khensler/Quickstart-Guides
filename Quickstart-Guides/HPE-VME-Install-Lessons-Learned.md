@@ -184,24 +184,44 @@ Configure storage interfaces with VLAN 2230:
 
 ---
 
-## Current Status (2026-04-09)
+## Current Status (2026-04-15)
 
 | Host | Management IP | iSCSI / Multipath Status |
 |------|---------------|--------------------------|
 | vme-1 | 10.21.146.102 | ✅ Done — 4 iSCSI sessions, 4 multipath paths active |
 | vme-2 | 10.21.146.104 | ✅ Done — 4 iSCSI sessions, 4 multipath paths active |
-| vme-3 | 10.21.146.206 | ❌ **BLOCKED** — Storage NICs not communicating, iSCSI target connection times out |
+| vme-3 | 10.21.146.206 | ✅ Done — 4 iSCSI sessions, 4 multipath paths active |
 
-### Next Steps (pick up here)
-1. **Troubleshoot vme-3 storage network connectivity:**
-   - SSH to vme-3: `ssh -o StrictHostKeyChecking=no admin@10.21.146.206`
-   - Verify storage interfaces are up: `ip addr show | grep 2230`
-   - Test basic connectivity to Pure portals: `ping -I ens1f0np0.2230 192.168.0.11` and `ping -I ens1f1np1.2230 192.168.1.11`
-   - Check switch port config / cabling for vme-3 storage NICs
-   - Verify VLAN 2230 is trunked on the switch ports connected to vme-3's ens1f0np0 and ens1f1np1
-2. **Once vme-3 storage NICs are reachable**, run the full iSCSI setup procedure from lesson #7 on vme-3
-3. **Verify `multipath -ll` shows the Pure volume on all 3 hosts**
-4. **Add GFS2 datastore** in VME Manager UI: Infrastructure > Clusters > [Cluster] > Storage > Data Stores > ADD > GFS2 Pool
+### Lesson #9 — VME UI Cannot See Block Device After CLI iSCSI Setup
+
+**Problem:** After configuring iSCSI and multipath at the CLI level on all 3 hosts, the VME Manager UI does not show the Pure block device in the GFS2 Pool "BLOCK DEVICE" dropdown — only local disks appear.
+
+**Root Cause:** The VME Manager does not automatically rescan hosts for new block devices. The `morpheus-node-agent` service does **not** exist on HVM hypervisor hosts (that agent is only for guest VMs). You must force an iSCSI session rescan on each host.
+
+**Fix — run on ALL 3 hosts:**
+```bash
+sudo iscsiadm -m session --rescan
+```
+
+**Then in the VME Manager UI:**
+1. Infrastructure > Clusters > [Cluster] > Storage > Data Stores > ADD
+2. Type: **GFS2 Pool (Global File System 2)**
+3. The **BLOCK DEVICE** dropdown should now show `/dev/mapper/<wwid>` (the Pure multipath device)
+
+**Also verify `multipath.conf`** on all hosts matches the HPE requirement:
+```
+defaults {
+    find_multipaths yes
+    user_friendly_names no
+}
+```
+
+> **Note:** Newer VME versions (8.0.x+) have an **iSCSI tab** under Infrastructure > Clusters > [Cluster] > Storage > iSCSI where you can register iSCSI target IPs directly from the UI. Using this path may automatically trigger discovery and avoid this issue.
+
+### Next Steps
+1. Run `sudo iscsiadm -m session --rescan` on all 3 hosts
+2. Verify `/dev/mapper/` device appears in the GFS2 Pool BLOCK DEVICE dropdown
+3. Create the GFS2 datastore and confirm it mounts on all 3 cluster nodes
 
 ---
 
