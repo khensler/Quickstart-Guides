@@ -43,6 +43,12 @@ A collection of quick start guides for various technologies and configurations.
 - [iSCSI Quick Start](distributions/oracle/iscsi/QUICKSTART.md) - iSCSI configuration for Oracle Linux with UEK
 - [iSCSI Best Practices](distributions/oracle/iscsi/BEST-PRACTICES.md) - iSCSI best practices for Oracle Linux with UEK
 
+**HPE VM Essentials:**
+- [iSCSI Quick Start](distributions/hpe-vme/iscsi/QUICKSTART.md) - iSCSI with GFS2 datastores for HPE VME clusters
+- [iSCSI Best Practices](distributions/hpe-vme/iscsi/BEST-PRACTICES.md) - iSCSI best practices for HPE VME with dual-fabric multipath
+- [NFS Quick Start](distributions/hpe-vme/nfs/QUICKSTART.md) - NFS datastore and ISO repository configuration for HPE VME
+- [NFS Best Practices](distributions/hpe-vme/nfs/BEST-PRACTICES.md) - NFS best practices for HPE VME (NFSv3 required)
+
 ### Common Reference Documentation
 
 - [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html) - Definitions for iSCSI, NVMe-TCP, and storage terms (IQN, NQN, Portal, LUN, Namespace, etc.)
