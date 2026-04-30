@@ -36,6 +36,13 @@ Choose your distribution and protocol to get started:
 
 ---
 
+## OpenStack Distributions
+
+**Platform9 PCD:**
+- [ Platform9 PCD Integration Guide](distributions/pcd/iscsi/GUIDE.md) — Integrate Pure Storage FlashArray with Platform9 PCD using iSCSI and DM-Multipath
+
+---
+
 ## Common Resources
 
 These reference documents are included inline throughout the Best Practices guides.
