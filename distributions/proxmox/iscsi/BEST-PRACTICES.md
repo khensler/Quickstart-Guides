@@ -8,10 +8,10 @@ title: iSCSI on Proxmox VE - Best Practices Guide
 Comprehensive best practices for deploying iSCSI storage on Proxmox VE in production environments.
 
 > **Distribution-Specific Guides:** For detailed best practices tailored to specific Linux distributions, see:
-> - [RHEL/Rocky/AlmaLinux Best Practices](../../distributions/rhel/iscsi/BEST-PRACTICES.md)
-> - [Debian/Ubuntu Best Practices](../../distributions/debian/iscsi/BEST-PRACTICES.md)
-> - [SUSE/openSUSE Best Practices](../../distributions/suse/iscsi/BEST-PRACTICES.md)
-> - [Oracle Linux Best Practices](../../distributions/oracle/iscsi/BEST-PRACTICES.md)
+> - [RHEL/Rocky/AlmaLinux Best Practices](../../rhel/iscsi/BEST-PRACTICES.md)
+> - [Debian/Ubuntu Best Practices](../../debian/iscsi/BEST-PRACTICES.md)
+> - [SUSE/openSUSE Best Practices](../../suse/iscsi/BEST-PRACTICES.md)
+> - [Oracle Linux Best Practices](../../oracle/iscsi/BEST-PRACTICES.md)
 
 ---
 
@@ -597,7 +597,7 @@ multipath -ll
 
 ## Performance Optimization
 
-{% include performance-tuning.md %}
+{% include performance-tuning-iscsi.md %}
 
 {% include iscsi-performance-tuning.md %}
 
@@ -720,7 +720,7 @@ cat /proc/interrupts | grep -E "ens1f"
 
 ## Security Best Practices
 
-{% include security-best-practices.md %}
+{% include security-best-practices-iscsi.md %}
 
 ### CHAP Authentication
 
@@ -768,7 +768,7 @@ ls -la /etc/iscsi/
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-iscsi.md %}
 
 ### Health Check Script
 
@@ -844,7 +844,7 @@ EOF
 
 ## Troubleshooting
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-iscsi.md %}
 
 ### Service Status
 

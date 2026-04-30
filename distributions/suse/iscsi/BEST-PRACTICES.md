@@ -74,54 +74,7 @@ flowchart TB
     style SW2 fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-### dm-multipath Architecture
-
-```mermaid
-graph TB
-    subgraph "Application Layer"
-        APP[Application]
-        FS["Filesystem<br/>mpathX"]
-    end
-
-    subgraph "Device Mapper - Multipath"
-        DM[dm-multipath<br/>multipathd daemon]
-        POLICY{Path Selection<br/>service-time 0}
-    end
-
-    subgraph "SCSI Layer"
-        SDA["sda<br/>Path 1"]
-        SDB["sdb<br/>Path 2"]
-        SDC["sdc<br/>Path 3"]
-        SDD["sdd<br/>Path 4"]
-    end
-
-    subgraph "iSCSI Sessions"
-        ISCSI[iSCSI Initiator<br/>iscsid]
-    end
-
-    APP --> FS
-    FS --> DM
-    DM --> POLICY
-    POLICY --> SDA
-    POLICY --> SDB
-    POLICY --> SDC
-    POLICY --> SDD
-    SDA --> ISCSI
-    SDB --> ISCSI
-    SDC --> ISCSI
-    SDD --> ISCSI
-
-    style DM fill:#1a5490,stroke:#333,stroke-width:2px,color:#fff
-    style FS fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
-```
-
-**Key Design Principles:**
-- **Dual switches** for network redundancy
-- **Minimum 2 NICs per host** for multipath
-- **Dual controller array** for storage HA
-- **dm-multipath** aggregates all paths into single device
-
-{% include diagrams-storage-topology.md %}
+{% include diagrams-storage-topology-iscsi.md %}
 
 {% include diagrams-iscsi-multipath.md %}
 
@@ -592,7 +545,7 @@ sudo yast iscsi-client connect target=<target_iqn> portal=<portal_ip>:3260
 
 {% include iscsi-performance-tuning.md %}
 
-{% include performance-tuning.md %}
+{% include performance-tuning-iscsi.md %}
 
 ### SUSE-Specific Tuning
 
@@ -770,7 +723,7 @@ sequenceDiagram
     Path1->>DM: Path reinstated
 ```
 
-{% include diagrams-failover.md %}
+{% include diagrams-failover-iscsi.md %}
 
 ### Cluster Configuration with Pacemaker
 
@@ -830,7 +783,7 @@ sudo crm status
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-iscsi.md %}
 
 ### SUSE-Specific Monitoring
 
@@ -880,7 +833,7 @@ sudo yast logs
 
 ## Security
 
-{% include security-best-practices.md %}
+{% include security-best-practices-iscsi.md %}
 
 ### SUSE-Specific Security
 
@@ -978,9 +931,9 @@ graph TD
     style VERIFY fill:#1e8449,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-{% include diagrams-troubleshooting.md %}
+{% include diagrams-troubleshooting-iscsi.md %}
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-iscsi.md %}
 
 ### SUSE-Specific Troubleshooting
 

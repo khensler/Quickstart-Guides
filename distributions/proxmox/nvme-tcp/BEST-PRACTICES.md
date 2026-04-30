@@ -6,10 +6,10 @@ title: NVMe-TCP on Proxmox VE - Best Practices Guide
 # NVMe-TCP on Proxmox VE - Best Practices Guide
 
 > **Distribution-Specific Guides:** For detailed best practices tailored to specific Linux distributions, see:
-> - [RHEL/Rocky/AlmaLinux Best Practices](../../distributions/rhel/nvme-tcp/BEST-PRACTICES.md)
-> - [Debian/Ubuntu Best Practices](../../distributions/debian/nvme-tcp/BEST-PRACTICES.md)
-> - [SUSE/openSUSE Best Practices](../../distributions/suse/nvme-tcp/BEST-PRACTICES.md)
-> - [Oracle Linux Best Practices](../../distributions/oracle/nvme-tcp/BEST-PRACTICES.md)
+> - [RHEL/Rocky/AlmaLinux Best Practices](../../rhel/nvme-tcp/BEST-PRACTICES.md)
+> - [Debian/Ubuntu Best Practices](../../debian/nvme-tcp/BEST-PRACTICES.md)
+> - [SUSE/openSUSE Best Practices](../../suse/nvme-tcp/BEST-PRACTICES.md)
+> - [Oracle Linux Best Practices](../../oracle/nvme-tcp/BEST-PRACTICES.md)
 
 ---
 
@@ -97,7 +97,7 @@ flowchart-elk
 
 ## Network Design
 
-{% include network-concepts.md %}
+{% include network-concepts-nvme.md %}
 
 ### Network Architecture Principles
 
@@ -1453,7 +1453,7 @@ sysctl -p /etc/sysctl.d/99-nvme-tcp-arp.conf
 
 ## Security Best Practices
 
-{% include security-best-practices.md %}
+{% include security-best-practices-nvme.md %}
 
 ### Network Security
 
@@ -1550,7 +1550,7 @@ ss -tn | grep :4420
 
 ## Monitoring & Maintenance
 
-{% include monitoring-maintenance.md %}
+{% include monitoring-maintenance-nvme.md %}
 
 ### Health Monitoring
 
@@ -1639,7 +1639,7 @@ done
 
 ## Troubleshooting
 
-{% include troubleshooting-common.md %}
+{% include troubleshooting-common-nvme.md %}
 
 ### Common Issues and Solutions
 
