@@ -62,16 +62,16 @@ A collection of quick start guides for various technologies and configurations.
 - [iSCSI Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) - Production best practices for iSCSI on XCP-ng
 - [NFS Quickstart (GUI)](distributions/xcpng/nfs/QUICKSTART.md) - Configure NFS storage with Xen Orchestra
 
-### Cloud & Hybrid Infrastructure
-
-**AWS Outposts:**
-- [Everpure FlashArray for AWS Outposts](distributions/aws-outposts/QUICKSTART.md) - Connect EC2 instances on AWS Outposts to FlashArray for data and boot volumes (NVMe-TCP and iSCSI)
-
 **HPE VM Essentials:**
 - [iSCSI Quick Start](distributions/hpe-vme/iscsi/QUICKSTART.md) - iSCSI with GFS2 datastores for HPE VME clusters
 - [iSCSI Best Practices](distributions/hpe-vme/iscsi/BEST-PRACTICES.md) - iSCSI best practices for HPE VME with dual-fabric multipath
 - [NFS Quick Start](distributions/hpe-vme/nfs/QUICKSTART.md) - NFS datastore and ISO repository configuration for HPE VME
 - [NFS Best Practices](distributions/hpe-vme/nfs/BEST-PRACTICES.md) - NFS best practices for HPE VME (NFSv3 required)
+
+### Cloud & Hybrid Infrastructure
+
+**AWS Outposts:**
+- [Everpure FlashArray for AWS Outposts](distributions/aws-outposts/QUICKSTART.md) - Connect EC2 instances on AWS Outposts to FlashArray for data and boot volumes (NVMe-TCP and iSCSI)
 
 ### Common Reference Documentation
 
