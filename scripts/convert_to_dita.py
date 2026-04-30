@@ -179,8 +179,11 @@ def get_kroki_url(mermaid_code: str) -> str:
     Generate a Kroki URL for Mermaid code.
 
     Kroki is a diagram rendering service that supports Mermaid.
+    A white background init directive is prepended so PNGs are never transparent.
     """
-    code = mermaid_code.strip()
+    # Prepend Mermaid init to force a white background on every diagram
+    bg_init = "%%{init: {'theme': 'default', 'themeVariables': {'background': '#ffffff', 'mainBkg': '#ffffff'}}}%%"
+    code = bg_init + "\n" + mermaid_code.strip()
 
     # Kroki uses deflate compression + base64
     compressed = zlib.compress(code.encode('utf-8'), 9)
@@ -216,23 +219,31 @@ def download_mermaid_image(mermaid_code: str, images_dir: Path, source_context: 
     # Generate Kroki URL
     url = get_kroki_url(code)
 
-    try:
-        # Download the PNG
-        req = urllib.request.Request(url, headers={'User-Agent': 'DITA-Converter/1.0'})
-        with urllib.request.urlopen(req, timeout=30) as response:
-            png_content = response.read()
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'DITA-Converter/1.0'})
+            with urllib.request.urlopen(req, timeout=60) as response:
+                png_content = response.read()
 
-        # Save to file
-        filepath.write_bytes(png_content)
-        print(f"    Downloaded: {filename}")
-        return filename
+            filepath.write_bytes(png_content)
+            print(f"    Downloaded: {filename}")
+            return filename
 
-    except urllib.error.URLError as e:
-        print(f"    Warning: Failed to download diagram: {e}")
-        return f"{source_context}-diagram-{diagram_num:02d}-error.png"
-    except Exception as e:
-        print(f"    Warning: Error processing diagram: {e}")
-        return f"{source_context}-diagram-{diagram_num:02d}-error.png"
+        except urllib.error.URLError as e:
+            if attempt < max_retries:
+                print(f"    Retry {attempt}/{max_retries - 1}: {e}")
+            else:
+                print(f"    Warning: Failed to download diagram after {max_retries} attempts: {e}")
+                return f"{source_context}-diagram-{diagram_num:02d}-error.png"
+        except Exception as e:
+            if attempt < max_retries:
+                print(f"    Retry {attempt}/{max_retries - 1}: {e}")
+            else:
+                print(f"    Warning: Error processing diagram after {max_retries} attempts: {e}")
+                return f"{source_context}-diagram-{diagram_num:02d}-error.png"
+
+    return f"{source_context}-diagram-{diagram_num:02d}-error.png"
 
 
 # ============================================================================
@@ -1340,6 +1351,9 @@ class MarkdownToDITAConverter:
             include_path = str(relative_path).replace('\\', '/')
 
             print(f"  Converting: {include_path}")
+
+            # Set source context so diagrams get meaningful filenames instead of "unknown-diagram-XX.png"
+            self.dita_gen.set_source_context(f"_includes/{include_path}")
 
             content = md_file.read_text(encoding='utf-8')
             dita_content = self.dita_gen.generate_warehouse_topic(include_path, content)
