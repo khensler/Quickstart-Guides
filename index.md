@@ -25,7 +25,6 @@ Choose your distribution and protocol to get started:
 | **Oracle Linux** | [Quickstart](distributions/oracle/nvme-tcp/QUICKSTART.md) \| [Best Practices](distributions/oracle/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](distributions/oracle/iscsi/QUICKSTART.md) \| [Best Practices](distributions/oracle/iscsi/BEST-PRACTICES.md) | [Quickstart](distributions/oracle/nfs/QUICKSTART.md) \| [Best Practices](distributions/oracle/nfs/BEST-PRACTICES.md) |
 | **Proxmox VE** | [Quickstart](distributions/proxmox/nvme-tcp/QUICKSTART.md) \| [Best Practices](distributions/proxmox/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](distributions/proxmox/iscsi/QUICKSTART.md) \| [Best Practices](distributions/proxmox/iscsi/BEST-PRACTICES.md) | [Quickstart](distributions/proxmox/nfs/QUICKSTART.md) \| [Best Practices](distributions/proxmox/nfs/BEST-PRACTICES.md) |
 | **XCP-ng** | — | [Quickstart](distributions/xcpng/iscsi/QUICKSTART.md) \| [Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) \| [GUI Guide](distributions/xcpng/iscsi/GUI-QUICKSTART.md) | [Quickstart](distributions/xcpng/nfs/QUICKSTART.md) |
-| **HPE VM Essentials** | — | [Quickstart](distributions/hpe-vme/iscsi/QUICKSTART.md) \| [Best Practices](distributions/hpe-vme/iscsi/BEST-PRACTICES.md) | [Quickstart](distributions/hpe-vme/nfs/QUICKSTART.md) \| [Best Practices](distributions/hpe-vme/nfs/BEST-PRACTICES.md) |
 
 ---
 
