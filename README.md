@@ -57,10 +57,8 @@ A collection of quick start guides for various technologies and configurations.
 - [NFS Best Practices](distributions/oracle/nfs/BEST-PRACTICES.md) - NFS best practices with UEK and nconnect
 
 **XCP-ng:**
-- [NVMe-TCP Quickstart](distributions/xcpng/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for XCP-ng (experimental)
-- [NVMe-TCP Best Practices](distributions/xcpng/nvme-tcp/BEST-PRACTICES.md) - Production best practices for NVMe-TCP on XCP-ng
-- [iSCSI Quickstart (CLI)](distributions/xcpng/iscsi/QUICKSTART.md) - Configure iSCSI via xe CLI
-- [iSCSI Quickstart (GUI)](distributions/xcpng/iscsi/GUI-QUICKSTART.md) - Configure iSCSI with Xen Orchestra and multipathing
+- [iSCSI Quick Start (CLI)](distributions/xcpng/iscsi/QUICKSTART.md) - iSCSI configuration via xe CLI
+- [iSCSI Quick Start (GUI)](distributions/xcpng/iscsi/GUI-QUICKSTART.md) - iSCSI setup with Xen Orchestra and multipathing
 - [iSCSI Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) - Production best practices for iSCSI on XCP-ng
 - [NFS Quickstart (GUI)](distributions/xcpng/nfs/QUICKSTART.md) - Configure NFS storage with Xen Orchestra
 

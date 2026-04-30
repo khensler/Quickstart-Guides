@@ -1,4 +1,5 @@
 dita_output/
 validation/
 external docs/
+.DS_Store
 dita_output*
