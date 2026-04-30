@@ -9,45 +9,58 @@ A collection of quick start guides for various technologies and configurations.
 
 ## Guides
 
+### Getting Started
+
+- [Choosing a Storage Protocol](common/choosing-a-protocol.md) - Compare NVMe-TCP, iSCSI, and NFS to select the right protocol for your workload
+
 ### Distribution-Specific Guides
 
 **Proxmox VE:**
-
-- [NVMe-TCP Setup Guide](Proxmox/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for Proxmox VE
-- [NVMe-TCP Best Practices](Proxmox/nvme-tcp/BEST-PRACTICES.md) - Production deployment best practices with architectural diagrams
-- [iSCSI Setup Guide](Proxmox/iscsi/QUICKSTART.md) - Configure iSCSI for Proxmox VE
-- [iSCSI Best Practices](Proxmox/iscsi/BEST-PRACTICES.md) - Production deployment best practices for iSCSI on Proxmox VE
-- [VMware to Proxmox Migration Guide (Pure Storage vVols)](Proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Pure Storage vVols (vendor-specific guide)
+- [NVMe-TCP Quickstart](distributions/proxmox/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for Proxmox VE
+- [NVMe-TCP Best Practices](distributions/proxmox/nvme-tcp/BEST-PRACTICES.md) - Production deployment best practices with architectural diagrams
+- [iSCSI Quickstart](distributions/proxmox/iscsi/QUICKSTART.md) - Configure iSCSI for Proxmox VE
+- [iSCSI Best Practices](distributions/proxmox/iscsi/BEST-PRACTICES.md) - Production deployment best practices for iSCSI on Proxmox VE
+- [NFS Quickstart](distributions/proxmox/nfs/QUICKSTART.md) - Configure NFS storage for Proxmox VE
+- [NFS Best Practices](distributions/proxmox/nfs/BEST-PRACTICES.md) - Production deployment best practices for NFS on Proxmox VE
+- [VMware to Proxmox Migration Guide](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Pure Storage vVols
 
 **RHEL/Rocky/AlmaLinux:**
-- [NVMe-TCP Quick Start](distributions/rhel/nvme-tcp/QUICKSTART.md) - Quick start guide for RHEL-based distributions
+- [NVMe-TCP Quickstart](distributions/rhel/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for RHEL-based distributions
 - [NVMe-TCP Best Practices](distributions/rhel/nvme-tcp/BEST-PRACTICES.md) - Best practices with SELinux, firewalld, and tuned profiles
-- [iSCSI Quick Start](distributions/rhel/iscsi/QUICKSTART.md) - iSCSI configuration for RHEL-based distributions
+- [iSCSI Quickstart](distributions/rhel/iscsi/QUICKSTART.md) - Configure iSCSI for RHEL-based distributions
 - [iSCSI Best Practices](distributions/rhel/iscsi/BEST-PRACTICES.md) - iSCSI best practices for RHEL-based distributions
+- [NFS Quickstart](distributions/rhel/nfs/QUICKSTART.md) - Configure NFS for RHEL-based distributions
+- [NFS Best Practices](distributions/rhel/nfs/BEST-PRACTICES.md) - NFS best practices with nconnect and SELinux
 
 **Debian/Ubuntu:**
-- [NVMe-TCP Quick Start](distributions/debian/nvme-tcp/QUICKSTART.md) - Quick start guide for Debian and Ubuntu
+- [NVMe-TCP Quickstart](distributions/debian/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for Debian and Ubuntu
 - [NVMe-TCP Best Practices](distributions/debian/nvme-tcp/BEST-PRACTICES.md) - Best practices with AppArmor, UFW, and netplan
-- [iSCSI Quick Start](distributions/debian/iscsi/QUICKSTART.md) - iSCSI configuration for Debian and Ubuntu
+- [iSCSI Quickstart](distributions/debian/iscsi/QUICKSTART.md) - Configure iSCSI for Debian and Ubuntu
 - [iSCSI Best Practices](distributions/debian/iscsi/BEST-PRACTICES.md) - iSCSI best practices for Debian and Ubuntu
+- [NFS Quickstart](distributions/debian/nfs/QUICKSTART.md) - Configure NFS for Debian and Ubuntu
+- [NFS Best Practices](distributions/debian/nfs/BEST-PRACTICES.md) - NFS best practices with nconnect and AppArmor
 
 **SUSE/openSUSE:**
-- [NVMe-TCP Quick Start](distributions/suse/nvme-tcp/QUICKSTART.md) - Quick start guide for SUSE Linux Enterprise and openSUSE
+- [NVMe-TCP Quickstart](distributions/suse/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for SUSE Linux Enterprise and openSUSE
 - [NVMe-TCP Best Practices](distributions/suse/nvme-tcp/BEST-PRACTICES.md) - Best practices with YaST, wicked, and AppArmor
-- [iSCSI Quick Start](distributions/suse/iscsi/QUICKSTART.md) - iSCSI configuration for SUSE Linux Enterprise and openSUSE
+- [iSCSI Quickstart](distributions/suse/iscsi/QUICKSTART.md) - Configure iSCSI for SUSE Linux Enterprise and openSUSE
 - [iSCSI Best Practices](distributions/suse/iscsi/BEST-PRACTICES.md) - iSCSI best practices for SUSE and openSUSE
+- [NFS Quickstart](distributions/suse/nfs/QUICKSTART.md) - Configure NFS for SUSE and openSUSE
+- [NFS Best Practices](distributions/suse/nfs/BEST-PRACTICES.md) - NFS best practices with nconnect and wicked
 
 **Oracle Linux:**
-- [NVMe-TCP Quick Start](distributions/oracle/nvme-tcp/QUICKSTART.md) - Quick start guide for Oracle Linux with UEK
+- [NVMe-TCP Quickstart](distributions/oracle/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for Oracle Linux with UEK
 - [NVMe-TCP Best Practices](distributions/oracle/nvme-tcp/BEST-PRACTICES.md) - Best practices with UEK tuning and Ksplice
-- [iSCSI Quick Start](distributions/oracle/iscsi/QUICKSTART.md) - iSCSI configuration for Oracle Linux with UEK
+- [iSCSI Quickstart](distributions/oracle/iscsi/QUICKSTART.md) - Configure iSCSI for Oracle Linux with UEK
 - [iSCSI Best Practices](distributions/oracle/iscsi/BEST-PRACTICES.md) - iSCSI best practices for Oracle Linux with UEK
+- [NFS Quickstart](distributions/oracle/nfs/QUICKSTART.md) - Configure NFS for Oracle Linux
+- [NFS Best Practices](distributions/oracle/nfs/BEST-PRACTICES.md) - NFS best practices with UEK and nconnect
 
 **XCP-ng:**
 - [iSCSI Quick Start (CLI)](distributions/xcpng/iscsi/QUICKSTART.md) - iSCSI configuration via xe CLI
 - [iSCSI Quick Start (GUI)](distributions/xcpng/iscsi/GUI-QUICKSTART.md) - iSCSI setup with Xen Orchestra and multipathing
 - [iSCSI Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) - Production best practices for iSCSI on XCP-ng
-- [NFS Quick Start (GUI)](distributions/xcpng/nfs/QUICKSTART.md) - NFS storage setup with Xen Orchestra
+- [NFS Quickstart (GUI)](distributions/xcpng/nfs/QUICKSTART.md) - Configure NFS storage with Xen Orchestra
 
 ### Cloud & Hybrid Infrastructure
 

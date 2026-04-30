@@ -1,5 +1,5 @@
 dita_output/
 validation/
 external docs/
-dita_output.zip
 .DS_Store
+dita_output*
