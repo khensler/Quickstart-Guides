@@ -1,5 +1,8 @@
 dita_output/
 validation/
+_lessons-learned-local.md
+mcp-screenshot-server/
 external docs/
 .DS_Store
 dita_output*
+changelog.md
