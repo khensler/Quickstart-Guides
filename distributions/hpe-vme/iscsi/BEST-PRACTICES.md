@@ -147,33 +147,34 @@ GFS2 is the primary clustered filesystem for VME iSCSI datastores. It requires a
 defaults {
     user_friendly_names yes
     find_multipaths no
-    polling_interval 5
-    path_selector "service-time 0"
-    path_grouping_policy group_by_prio
-    failback immediate
-    no_path_retry queue
+    enable_foreign "^$"
 }
 
+# Blacklist local devices and NVMe (NVMe uses native multipath)
 blacklist {
     devnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st|nvme)[0-9]*"
     devnode "^hd[a-z]"
-    devnode "^sd[a-z]$"  # Blacklist local boot disk
+    devnode "^cciss.*"
 }
 
-devices {
-    # Pure Storage FlashArray
-    device {
-        vendor "PURE"
-        product "FlashArray"
-        path_grouping_policy group_by_prio
-        path_selector "service-time 0"
-        prio alua
-        failback immediate
-        hardware_handler "1 alua"
-        rr_weight priorities
-        no_path_retry 18
-    }
-}
+# Add device-specific settings for your storage array
+# Consult your storage vendor documentation for recommended values
+#devices {
+#    device {
+#        vendor "VENDOR"
+#        product "PRODUCT"
+#        path_selector "service-time 0"
+#        path_grouping_policy "group_by_prio"
+#        prio "alua"
+#        failback "immediate"
+#        path_checker "tur"
+#        fast_io_fail_tmo 10
+#        dev_loss_tmo 60
+#        no_path_retry 0
+#        hardware_handler "1 alua"
+#        rr_min_io_rq 1
+#    }
+#}
 ```
 
 ### Apply Multipath Configuration
