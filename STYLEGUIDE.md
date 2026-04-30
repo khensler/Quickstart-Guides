@@ -23,6 +23,7 @@ This project uses two primary document types, each with a distinct purpose and s
 
 ### Required Structure
 
+{% raw %}
 ```markdown
 # Document Title
 
@@ -55,13 +56,14 @@ Instructions for the third step.
 - Follow-up action one
 - Follow-up action two
 ```
+{% endraw %}
 
 ### QUICKSTART Section Mapping
 
 | Markdown Section | DITA Element | Notes |
 |------------------|--------------|-------|
 | `# Title` | `<title>` | Topic title |
-| `{% include ... %}` | Inlined content | Disclaimer goes to `<prereq>` |
+| {% raw %}`{% include ... %}`{% endraw %} | Inlined content | Disclaimer goes to `<prereq>` |
 | `## Prerequisites` | `<prereq>` | List items become `<ul><li>` |
 | `## Step N: ...` | `<step><cmd>` | Step heading becomes command |
 | Content under step | `<step><info>` | Supporting content |
@@ -379,9 +381,11 @@ graph LR
 
 Jekyll include statements are inlined during conversion (with `--inline-includes` flag).
 
+{% raw %}
 ```markdown
 {% include quickstart/disclaimer.md %}
 ```
+{% endraw %}
 
 The content of the referenced file is embedded directly into the DITA output.
 
