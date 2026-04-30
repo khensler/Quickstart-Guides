@@ -26,7 +26,6 @@ Choose your distribution and protocol to get started:
 | **Proxmox VE** | [Quickstart](distributions/proxmox/nvme-tcp/QUICKSTART.md) \| [Best Practices](distributions/proxmox/nvme-tcp/BEST-PRACTICES.md) | [Quickstart](distributions/proxmox/iscsi/QUICKSTART.md) \| [Best Practices](distributions/proxmox/iscsi/BEST-PRACTICES.md) | [Quickstart](distributions/proxmox/nfs/QUICKSTART.md) \| [Best Practices](distributions/proxmox/nfs/BEST-PRACTICES.md) |
 | **XCP-ng** | — | [Quickstart](distributions/xcpng/iscsi/QUICKSTART.md) \| [Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) \| [GUI Guide](distributions/xcpng/iscsi/GUI-QUICKSTART.md) | [Quickstart](distributions/xcpng/nfs/QUICKSTART.md) |
 | **HPE VM Essentials** | — | [Quickstart](distributions/hpe-vme/iscsi/QUICKSTART.md) \| [Best Practices](distributions/hpe-vme/iscsi/BEST-PRACTICES.md) | [Quickstart](distributions/hpe-vme/nfs/QUICKSTART.md) \| [Best Practices](distributions/hpe-vme/nfs/BEST-PRACTICES.md) |
-| **Platform9 PCD** | — | [Integration Guide](distributions/pcd/iscsi/GUIDE.md) | — |
 
 ---
 
@@ -34,6 +33,13 @@ Choose your distribution and protocol to get started:
 
 **AWS Outposts:**
 - [Everpure FlashArray for AWS Outposts](distributions/aws-outposts/QUICKSTART.md) — Connect EC2 instances on AWS Outposts to FlashArray for data and boot volumes (NVMe-TCP and iSCSI)
+
+---
+
+## OpenStack Distributions
+
+** Platform9 PCD:**
+- [ Platform9 PCD Integration Guide](distributions/pcd/iscsi/GUIDE.md) — Integrate Pure Storage FlashArray with Platform9 PCD using iSCSI and DM-Multipath
 
 ---
 
