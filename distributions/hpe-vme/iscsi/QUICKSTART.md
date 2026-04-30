@@ -35,7 +35,7 @@ This guide provides step-by-step instructions for configuring iSCSI multipath st
 
 ## Architecture Overview
 
-Per the [HPE VM Essentials documentation](https://hpevm-docs.morpheusdata.com/), **multiple storage fabrics are required for multipathing to work properly**. In a dual-fabric iSCSI configuration, each VME host connects to the Pure FlashArray through two independent storage networks (Fabric A and Fabric B). Each fabric uses a dedicated NIC and subnet, providing both redundancy and increased bandwidth. The Pure FlashArray presents iSCSI target portals on both fabrics across both controllers, resulting in four total paths per host.
+Per the [HPE VM Essentials documentation](https://hpevm-docs.morpheusdata.com/en/8.0.3-vme/vme_getting_started/vme_getting_started.html), **multiple storage fabrics are required for multipathing to work properly**. In a dual-fabric iSCSI configuration, each VME host connects to the Pure FlashArray through two independent storage networks (Fabric A and Fabric B). Each fabric uses a dedicated NIC and subnet, providing both redundancy and increased bandwidth. The Pure FlashArray presents iSCSI target portals on both fabrics across both controllers, resulting in four total paths per host.
 
 **Example environment used in this guide:**
 
