@@ -16,6 +16,7 @@ Key features:
 Usage:
     python convert_to_dita.py [--input-dir PATH] [--output-dir PATH]
     python convert_to_dita.py --inline-includes   # Inline mode (no warehouse topics)
+    python convert_to_dita.py --inline-includes --use-existing-images  # Keep existing images
 """
 
 import os
@@ -47,6 +48,7 @@ class ConversionConfig:
     images_dir: str = "images"        # Directory for downloaded images
     inline_includes: bool = False     # If True, inline include content instead of conref
     skip_diagrams: bool = False       # If True, skip downloading Mermaid diagrams (faster for testing)
+    use_existing_images: bool = False  # If True, keep existing images and only download missing ones
 
     # Filtering options for selective conversion
     distribution: str = ""            # Filter by distribution (e.g., "rhel", "debian")
@@ -1316,10 +1318,20 @@ class MarkdownToDITAConverter:
         """Create output directory structure, cleaning existing files first."""
         import shutil
 
-        # Clean existing output directory to remove stale files
-        if self.config.output_dir.exists():
-            print(f"  Cleaning existing output directory: {self.config.output_dir}")
-            shutil.rmtree(self.config.output_dir)
+        if self.config.use_existing_images:
+            # Preserve the images directory, clean everything else
+            if self.config.output_dir.exists():
+                images_path = self.config.output_dir / self.config.images_dir
+                for subdir in [self.config.warehouse_dir, self.config.topics_dir, self.config.maps_dir]:
+                    subdir_path = self.config.output_dir / subdir
+                    if subdir_path.exists():
+                        shutil.rmtree(subdir_path)
+                print(f"  Cleaned output directory (preserved images): {self.config.output_dir}")
+        else:
+            # Clean entire output directory including images
+            if self.config.output_dir.exists():
+                print(f"  Cleaning existing output directory: {self.config.output_dir}")
+                shutil.rmtree(self.config.output_dir)
 
         dirs = [
             self.config.output_dir / self.config.warehouse_dir,
@@ -1753,6 +1765,9 @@ Examples:
     # Organize output into subdirectories for easier selective import
     python convert_to_dita.py --inline-includes --section-maps --organize-sections
 
+    # Re-convert with existing images (skip re-downloading unchanged diagrams)
+    python convert_to_dita.py --inline-includes --use-existing-images
+
 Available distributions: rhel, debian, suse, oracle, proxmox, xcpng, aws-outposts
 Available protocols: iscsi, nvme-tcp, nfs
         '''
@@ -1782,6 +1797,12 @@ Available protocols: iscsi, nvme-tcp, nfs
         '--skip-diagrams',
         action='store_true',
         help='Skip downloading Mermaid diagrams (faster for testing runs)'
+    )
+
+    parser.add_argument(
+        '--use-existing-images',
+        action='store_true',
+        help='Keep existing images and only download missing ones (skips clearing images directory)'
     )
 
     parser.add_argument(
@@ -1829,6 +1850,7 @@ Available protocols: iscsi, nvme-tcp, nfs
         output_dir=args.output_dir.resolve(),
         inline_includes=args.inline_includes,
         skip_diagrams=args.skip_diagrams,
+        use_existing_images=args.use_existing_images,
         distribution=args.distribution.lower(),
         protocol=args.protocol.lower(),
         generate_section_maps=args.section_maps,
