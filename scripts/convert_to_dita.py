@@ -1348,7 +1348,7 @@ class MarkdownToDITAConverter:
         print("\n=== Generating DITA map ===")
         self._generate_map()
 
-        print(f"\n✅ Conversion complete! Output written to: {self.config.output_dir}")
+        print(f"\nConversion complete! Output written to: {self.config.output_dir}")
 
     def _convert_standalone(self):
         """Convert a standalone markdown file to DITA topics and map.
@@ -1441,7 +1441,7 @@ class MarkdownToDITAConverter:
         map_file.write_text(map_content, encoding='utf-8')
         print(f"  Created map: {map_file.name}")
 
-        print(f"\n✅ Standalone conversion complete!")
+        print(f"\nStandalone conversion complete!")
         print(f"   Topics: {len(self.converted_topics)}")
         print(f"   Output: {self.config.output_dir}")
 
@@ -2024,14 +2024,14 @@ Available protocols: iscsi, nvme-tcp, nfs
     converter.convert()
 
     # Print summary
-    print(f"\n📁 Output Structure:")
+    print(f"\nOutput Structure:")
     print(f"   {config.output_dir}/")
     print(f"   ├── {config.warehouse_dir}/    # Reusable content (warehouse topics)")
     print(f"   ├── {config.topics_dir}/       # Main documentation topics")
     print(f"   ├── {config.images_dir}/       # Downloaded diagram images (PNG)")
     print(f"   └── {config.maps_dir}/         # DITA navigation maps")
 
-    print(f"\n📋 Import Instructions for Heretto:")
+    print(f"\nImport Instructions for Heretto:")
     print(f"   1. Create a new content collection in Heretto")
     print(f"   2. Import the entire '{config.output_dir}' folder")
     print(f"   3. Or import the '{config.maps_dir}/linux-storage-guides.ditamap' file")
