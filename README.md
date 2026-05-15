@@ -22,7 +22,8 @@ A collection of quick start guides for various technologies and configurations.
 - [iSCSI Best Practices](distributions/proxmox/iscsi/BEST-PRACTICES.md) - Production deployment best practices for iSCSI on Proxmox VE
 - [NFS Quickstart](distributions/proxmox/nfs/QUICKSTART.md) - Configure NFS storage for Proxmox VE
 - [NFS Best Practices](distributions/proxmox/nfs/BEST-PRACTICES.md) - Production deployment best practices for NFS on Proxmox VE
-- [VMware to Proxmox Migration Guide](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Pure Storage vVols
+- [VMware to Proxmox Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Pure Storage vVols
+- [VMware to Proxmox Migration Guide (NFS)](distributions/proxmox/migration/VMware-Proxmox-NFS-Migration.md) - Migrate VMs from VMware NFS datastores hosted on Pure Storage FlashArray, with optional non-destructive managed directory copy
 
 **RHEL/Rocky/AlmaLinux:**
 - [NVMe-TCP Quickstart](distributions/rhel/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for RHEL-based distributions

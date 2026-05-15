@@ -50,6 +50,8 @@ class ConversionConfig:
     skip_diagrams: bool = False       # If True, skip downloading Mermaid diagrams (faster for testing)
     use_existing_images: bool = False  # If True, keep existing images and only download missing ones
 
+    standalone_file: Optional[Path] = None  # If set, convert a single standalone markdown file
+
     # Filtering options for selective conversion
     distribution: str = ""            # Filter by distribution (e.g., "rhel", "debian")
     protocol: str = ""                # Filter by protocol (e.g., "iscsi", "nvme-tcp", "nfs")
@@ -424,6 +426,19 @@ class MarkdownParser:
                     ))
                 continue
 
+            # Check for image
+            image_match = re.match(r'^!\[([^\]]*)\]\(([^)]+)\)\s*$', line.strip())
+            if image_match:
+                alt_text = image_match.group(1) or 'Image'
+                image_path = image_match.group(2)
+                elements.append(MarkdownElement(
+                    type='image',
+                    content=image_path,
+                    language=alt_text  # Reuse language field for alt text
+                ))
+                i += 1
+                continue
+
             # Regular paragraph
             if line.strip():
                 para_lines = [line]
@@ -619,6 +634,15 @@ class DITAGenerator:
         # Include scope attribute for proper Heretto CCMS linking
         return f'<fig><image href="{escape_xml_attr(image_path)}" scope="local"><alt>Diagram</alt></image></fig>'
 
+    def _resolve_image_path(self, src_path: str) -> str:
+        """Resolve a markdown image path to a DITA-relative path.
+
+        For standalone files, images are copied to the output images/ dir.
+        Topics are in topics/ so the relative path is ../images/filename.
+        """
+        filename = Path(src_path).name
+        return f"../images/{filename}"
+
     def generate_warehouse_topic(self, include_path: str, content: str) -> str:
         """Generate a DITA warehouse topic from an include file.
 
@@ -755,6 +779,10 @@ class DITAGenerator:
             elif elem.type == 'ordered_list_nested':
                 nested_items = [child.items for child in elem.children]
                 section_content.append(self._generate_ol(elem.items, nested_items=nested_items))
+            elif elem.type == 'image':
+                image_href = self._resolve_image_path(elem.content)
+                alt_text = escape_xml(elem.language or 'Image')
+                section_content.append(f'        <fig><image href="{escape_xml_attr(image_href)}" scope="local"><alt>{alt_text}</alt></image></fig>')
             elif elem.type == 'table':
                 section_content.append(self._generate_table(elem.content))
 
@@ -924,6 +952,10 @@ class DITAGenerator:
         elif elem.type == 'ordered_list_nested':
             nested_items = [child.items for child in elem.children]
             return self._generate_ol(elem.items, indent='                    ', nested_items=nested_items)
+        elif elem.type == 'image':
+            image_href = self._resolve_image_path(elem.content)
+            alt_text = escape_xml(elem.language or 'Image')
+            return f'                    <fig><image href="{escape_xml_attr(image_href)}" scope="local"><alt>{alt_text}</alt></image></fig>'
         elif elem.type == 'note':
             note_type = self._detect_note_type(elem.content)
             cleaned_content = self._strip_note_prefix(elem.content, note_type)
@@ -1295,6 +1327,10 @@ class MarkdownToDITAConverter:
 
     def convert(self):
         """Run the full conversion process."""
+        if self.config.standalone_file:
+            self._convert_standalone()
+            return
+
         print(f"Starting conversion from {self.config.input_dir}")
 
         # Create output directories
@@ -1313,6 +1349,117 @@ class MarkdownToDITAConverter:
         self._generate_map()
 
         print(f"\n✅ Conversion complete! Output written to: {self.config.output_dir}")
+
+    def _convert_standalone(self):
+        """Convert a standalone markdown file to DITA topics and map.
+
+        Splits the document by H1 headings (chapters) into separate concept topics.
+        Each chapter's H2 sections become DITA sections within the topic.
+        Images are copied from the source directory to the output images directory.
+        """
+        import shutil
+
+        md_file = self.config.standalone_file
+        print(f"Converting standalone file: {md_file}")
+
+        # Create output directories
+        self._create_output_dirs()
+
+        content = md_file.read_text(encoding='utf-8')
+
+        # Copy images from source directory to output images directory
+        source_images_dir = md_file.parent / 'images'
+        if source_images_dir.exists():
+            output_images = self.config.output_dir / self.config.images_dir
+            copied = 0
+            for img in source_images_dir.glob('*'):
+                if img.is_file():
+                    dest = output_images / img.name
+                    if not dest.exists():
+                        shutil.copy2(img, dest)
+                        copied += 1
+            print(f"  Copied {copied} images to {output_images}")
+
+        # Remove TOC section (between "## Table of Contents" and "---")
+        content = re.sub(r'## Table of Contents\n.*?---\n', '', content, flags=re.DOTALL)
+
+        # Extract document title
+        title_match = re.match(r'^#\s+(.+)$', content, re.MULTILINE)
+        doc_title = title_match.group(1).strip() if title_match else md_file.stem
+
+        # Split by H1 headings (chapters)
+        h1_pattern = r'^#\s+(.+)$'
+        h1_matches = list(re.finditer(h1_pattern, content, re.MULTILINE))
+
+        if not h1_matches:
+            # No H1 headings — treat entire document as one topic
+            base_id = sanitize_id(md_file.stem)
+            topic_id = f"c_{base_id}"
+            self.dita_gen.set_source_context(md_file.stem)
+            dita_content = self.dita_gen.generate_concept_topic(doc_title, content, topic_id)
+            dita_content = remove_non_ascii(dita_content)
+            output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
+            output_file.write_text(dita_content, encoding='utf-8')
+            self.converted_topics.append({
+                'id': topic_id, 'title': doc_title,
+                'relative_path': md_file.name, 'type': 'concept', 'subdir': ''
+            })
+        else:
+            # Split into chapters at H1 boundaries
+            print(f"\n=== Splitting into {len(h1_matches)} chapters ===")
+            topics_dir = self.config.output_dir / self.config.topics_dir
+
+            for idx, match in enumerate(h1_matches):
+                chapter_title = match.group(1).strip()
+                start = match.end()
+                end = h1_matches[idx + 1].start() if idx + 1 < len(h1_matches) else len(content)
+                chapter_content = content[start:end].strip()
+
+                # Generate topic
+                base_id = sanitize_id(chapter_title)
+                topic_id = f"c_{base_id}"
+                self.dita_gen.set_source_context(base_id)
+
+                dita_content = self.dita_gen.generate_concept_topic(
+                    chapter_title, chapter_content, topic_id
+                )
+                dita_content = remove_non_ascii(dita_content)
+
+                output_file = topics_dir / f"{topic_id}.dita"
+                output_file.write_text(dita_content, encoding='utf-8')
+                print(f"  Created: {topic_id}.dita ({chapter_title})")
+
+                self.converted_topics.append({
+                    'id': topic_id, 'title': chapter_title,
+                    'relative_path': md_file.name, 'type': 'concept', 'subdir': ''
+                })
+
+        # Generate DITA map
+        print(f"\n=== Generating DITA map ===")
+        map_content = self._generate_standalone_map(doc_title)
+        map_file = self.config.output_dir / self.config.maps_dir / f"{sanitize_id(md_file.stem)}.ditamap"
+        map_file.write_text(map_content, encoding='utf-8')
+        print(f"  Created map: {map_file.name}")
+
+        print(f"\n✅ Standalone conversion complete!")
+        print(f"   Topics: {len(self.converted_topics)}")
+        print(f"   Output: {self.config.output_dir}")
+
+    def _generate_standalone_map(self, title: str) -> str:
+        """Generate a DITA map for a standalone document."""
+        topicrefs = []
+        for topic in self.converted_topics:
+            topic_path = f"../topics/{topic['id']}.dita"
+            topicrefs.append(f'    <topicref href="{topic_path}" navtitle="{escape_xml(topic["title"])}"/>')
+
+        topicrefs_str = '\n'.join(topicrefs)
+        return f'''<?xml version="1.0" encoding="UTF-8"?>
+{self.config.map_doctype}
+<map>
+    <title>{escape_xml(title)}</title>
+{topicrefs_str}
+</map>
+'''
 
     def _create_output_dirs(self):
         """Create output directory structure, cleaning existing files first."""
@@ -1768,6 +1915,9 @@ Examples:
     # Re-convert with existing images (skip re-downloading unchanged diagrams)
     python convert_to_dita.py --inline-includes --use-existing-images
 
+    # Convert a standalone markdown file (e.g., PDF-extracted admin guide)
+    python convert_to_dita.py --file pdf_conversion/purityfa_admin_guide_6105_formatted.md -o dita_admin_guide
+
 Available distributions: rhel, debian, suse, oracle, proxmox, xcpng, aws-outposts
 Available protocols: iscsi, nvme-tcp, nfs
         '''
@@ -1832,6 +1982,13 @@ Available protocols: iscsi, nvme-tcp, nfs
     )
 
     parser.add_argument(
+        '-f', '--file',
+        type=Path,
+        default=None,
+        help='Convert a standalone Markdown file (e.g., a PDF-extracted admin guide) instead of Jekyll guides'
+    )
+
+    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Enable verbose output'
@@ -1839,8 +1996,12 @@ Available protocols: iscsi, nvme-tcp, nfs
 
     args = parser.parse_args()
 
-    # Validate input directory
-    if not args.input_dir.exists():
+    # Validate inputs
+    if args.file:
+        if not args.file.exists():
+            print(f"Error: File does not exist: {args.file}", file=sys.stderr)
+            sys.exit(1)
+    elif not args.input_dir.exists():
         print(f"Error: Input directory does not exist: {args.input_dir}", file=sys.stderr)
         sys.exit(1)
 
@@ -1851,6 +2012,7 @@ Available protocols: iscsi, nvme-tcp, nfs
         inline_includes=args.inline_includes,
         skip_diagrams=args.skip_diagrams,
         use_existing_images=args.use_existing_images,
+        standalone_file=args.file.resolve() if args.file else None,
         distribution=args.distribution.lower(),
         protocol=args.protocol.lower(),
         generate_section_maps=args.section_maps,
