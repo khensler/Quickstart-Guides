@@ -29,6 +29,17 @@ Choose your distribution and protocol to get started:
 
 ---
 
+## VMware to Proxmox Migration
+
+Guides for migrating VMware VMs to Proxmox VE using Pure Storage FlashArray storage.
+
+| Guide | Storage Type | Description |
+|:------|:-------------|:------------|
+| [Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) | vVol (block) | Manual migration using Pure Storage vVols with live disk move via QMP |
+| [Migration Guide (NFS)](distributions/proxmox/migration/VMware-Proxmox-NFS-Migration.md) | NFS | Migrate from NFS datastores; direct VMDK attach with live `qm move_disk`, includes non-destructive managed directory copy method |
+
+---
+
 ## Cloud & Hybrid Infrastructure
 
 **AWS Outposts:**
