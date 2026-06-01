@@ -20,6 +20,8 @@ A collection of quick start guides for various technologies and configurations.
 - [NVMe-TCP Best Practices](distributions/proxmox/nvme-tcp/BEST-PRACTICES.md) - Production deployment best practices with architectural diagrams
 - [iSCSI Quickstart](distributions/proxmox/iscsi/QUICKSTART.md) - Configure iSCSI for Proxmox VE
 - [iSCSI Best Practices](distributions/proxmox/iscsi/BEST-PRACTICES.md) - Production deployment best practices for iSCSI on Proxmox VE
+- [Fibre Channel Quickstart](distributions/proxmox/fc/QUICKSTART.md) - Configure Fibre Channel storage for Proxmox VE clusters
+- [Fibre Channel Best Practices](distributions/proxmox/fc/BEST-PRACTICES.md) - FC best practices including cluster HA and WWID-based device paths
 - [NFS Quickstart](distributions/proxmox/nfs/QUICKSTART.md) - Configure NFS storage for Proxmox VE
 - [NFS Best Practices](distributions/proxmox/nfs/BEST-PRACTICES.md) - Production deployment best practices for NFS on Proxmox VE
 - [VMware to Proxmox Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Pure Storage vVols
@@ -30,6 +32,8 @@ A collection of quick start guides for various technologies and configurations.
 - [NVMe-TCP Best Practices](distributions/rhel/nvme-tcp/BEST-PRACTICES.md) - Best practices with SELinux, firewalld, and tuned profiles
 - [iSCSI Quickstart](distributions/rhel/iscsi/QUICKSTART.md) - Configure iSCSI for RHEL-based distributions
 - [iSCSI Best Practices](distributions/rhel/iscsi/BEST-PRACTICES.md) - iSCSI best practices for RHEL-based distributions
+- [Fibre Channel Quickstart](distributions/rhel/fc/QUICKSTART.md) - Configure Fibre Channel storage for RHEL-based distributions
+- [Fibre Channel Best Practices](distributions/rhel/fc/BEST-PRACTICES.md) - FC best practices with SELinux, HBA tuning, and ALUA multipath
 - [NFS Quickstart](distributions/rhel/nfs/QUICKSTART.md) - Configure NFS for RHEL-based distributions
 - [NFS Best Practices](distributions/rhel/nfs/BEST-PRACTICES.md) - NFS best practices with nconnect and SELinux
 
@@ -38,6 +42,8 @@ A collection of quick start guides for various technologies and configurations.
 - [NVMe-TCP Best Practices](distributions/debian/nvme-tcp/BEST-PRACTICES.md) - Best practices with AppArmor, UFW, and netplan
 - [iSCSI Quickstart](distributions/debian/iscsi/QUICKSTART.md) - Configure iSCSI for Debian and Ubuntu
 - [iSCSI Best Practices](distributions/debian/iscsi/BEST-PRACTICES.md) - iSCSI best practices for Debian and Ubuntu
+- [Fibre Channel Quickstart](distributions/debian/fc/QUICKSTART.md) - Configure Fibre Channel storage for Debian and Ubuntu
+- [Fibre Channel Best Practices](distributions/debian/fc/BEST-PRACTICES.md) - FC best practices with AppArmor and HBA driver notes
 - [NFS Quickstart](distributions/debian/nfs/QUICKSTART.md) - Configure NFS for Debian and Ubuntu
 - [NFS Best Practices](distributions/debian/nfs/BEST-PRACTICES.md) - NFS best practices with nconnect and AppArmor
 
@@ -46,6 +52,8 @@ A collection of quick start guides for various technologies and configurations.
 - [NVMe-TCP Best Practices](distributions/suse/nvme-tcp/BEST-PRACTICES.md) - Best practices with YaST, wicked, and AppArmor
 - [iSCSI Quickstart](distributions/suse/iscsi/QUICKSTART.md) - Configure iSCSI for SUSE Linux Enterprise and openSUSE
 - [iSCSI Best Practices](distributions/suse/iscsi/BEST-PRACTICES.md) - iSCSI best practices for SUSE and openSUSE
+- [Fibre Channel Quickstart](distributions/suse/fc/QUICKSTART.md) - Configure Fibre Channel storage for SUSE and openSUSE
+- [Fibre Channel Best Practices](distributions/suse/fc/BEST-PRACTICES.md) - FC best practices with YaST notes and HBA driver persistence
 - [NFS Quickstart](distributions/suse/nfs/QUICKSTART.md) - Configure NFS for SUSE and openSUSE
 - [NFS Best Practices](distributions/suse/nfs/BEST-PRACTICES.md) - NFS best practices with nconnect and wicked
 
@@ -54,6 +62,8 @@ A collection of quick start guides for various technologies and configurations.
 - [NVMe-TCP Best Practices](distributions/oracle/nvme-tcp/BEST-PRACTICES.md) - Best practices with UEK tuning and Ksplice
 - [iSCSI Quickstart](distributions/oracle/iscsi/QUICKSTART.md) - Configure iSCSI for Oracle Linux with UEK
 - [iSCSI Best Practices](distributions/oracle/iscsi/BEST-PRACTICES.md) - iSCSI best practices for Oracle Linux with UEK
+- [Fibre Channel Quickstart](distributions/oracle/fc/QUICKSTART.md) - Configure Fibre Channel storage for Oracle Linux
+- [Fibre Channel Best Practices](distributions/oracle/fc/BEST-PRACTICES.md) - FC best practices with UEK vs. RHCK HBA driver version notes
 - [NFS Quickstart](distributions/oracle/nfs/QUICKSTART.md) - Configure NFS for Oracle Linux
 - [NFS Best Practices](distributions/oracle/nfs/BEST-PRACTICES.md) - NFS best practices with UEK and nconnect
 
@@ -61,11 +71,16 @@ A collection of quick start guides for various technologies and configurations.
 - [iSCSI Quick Start (CLI)](distributions/xcpng/iscsi/QUICKSTART.md) - iSCSI configuration via xe CLI
 - [iSCSI Quick Start (GUI)](distributions/xcpng/iscsi/GUI-QUICKSTART.md) - iSCSI setup with Xen Orchestra and multipathing
 - [iSCSI Best Practices](distributions/xcpng/iscsi/BEST-PRACTICES.md) - Production best practices for iSCSI on XCP-ng
+- [Fibre Channel Quick Start (CLI)](distributions/xcpng/fc/QUICKSTART.md) - FC configuration via xe CLI using the lvmohba SR type
+- [Fibre Channel Quick Start (GUI)](distributions/xcpng/fc/GUI-QUICKSTART.md) - FC setup with Xen Orchestra
+- [Fibre Channel Best Practices](distributions/xcpng/fc/BEST-PRACTICES.md) - Production best practices for FC on XCP-ng
 - [NFS Quickstart (GUI)](distributions/xcpng/nfs/QUICKSTART.md) - Configure NFS storage with Xen Orchestra
 
 **HPE VM Essentials:**
 - [iSCSI Quick Start](distributions/hpe-vme/iscsi/QUICKSTART.md) - iSCSI with GFS2 datastores for HPE VME clusters
 - [iSCSI Best Practices](distributions/hpe-vme/iscsi/BEST-PRACTICES.md) - iSCSI best practices for HPE VME with dual-fabric multipath
+- [Fibre Channel Quick Start](distributions/hpe-vme/fc/QUICKSTART.md) - FC with GFS2 datastores for HPE VME clusters (CLI-only)
+- [Fibre Channel Best Practices](distributions/hpe-vme/fc/BEST-PRACTICES.md) - FC best practices for HPE VME
 - [NFS Quick Start](distributions/hpe-vme/nfs/QUICKSTART.md) - NFS datastore and ISO repository configuration for HPE VME
 - [NFS Best Practices](distributions/hpe-vme/nfs/BEST-PRACTICES.md) - NFS best practices for HPE VME (NFSv3 required)
 
@@ -78,10 +93,11 @@ A collection of quick start guides for various technologies and configurations.
 
 **Platform9 Private Cloud Director (PCD):**
 - [iSCSI Integration Guide](distributions/pcd/iscsi/GUIDE.md) - Integrate Pure Storage FlashArray with Platform9 PCD using iSCSI and DM-Multipath
+- [Fibre Channel Integration Guide](distributions/pcd/fc/GUIDE.md) - Integrate Pure Storage FlashArray with Platform9 PCD using Fibre Channel and DM-Multipath
 
 ### Common Reference Documentation
 
-- [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html) - Definitions for iSCSI, NVMe-TCP, and storage terms (IQN, NQN, Portal, LUN, Namespace, etc.)
+- [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html) - Definitions for iSCSI, NVMe-TCP, Fibre Channel, and storage terms (IQN, NQN, WWPN, Portal, LUN, Namespace, etc.)
 - [Network Concepts]({{ site.baseurl }}/common/network-concepts.html) - Network architecture, topology, MTU, and performance tuning
 - [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html) - Multipath configuration, path selection, and monitoring
 - [Performance Tuning]({{ site.baseurl }}/common/performance-tuning.html) - CPU/IRQ tuning, kernel parameters, I/O scheduler
