@@ -51,6 +51,7 @@ class ConversionConfig:
     use_existing_images: bool = False  # If True, keep existing images and only download missing ones
 
     standalone_file: Optional[Path] = None  # If set, convert a single standalone markdown file
+    single_task: bool = False         # If True, emit one task topic from standalone file (instead of splitting by H1)
 
     # Filtering options for selective conversion
     distribution: str = ""            # Filter by distribution (e.g., "rhel", "debian")
@@ -1387,6 +1388,33 @@ class MarkdownToDITAConverter:
         title_match = re.match(r'^#\s+(.+)$', content, re.MULTILINE)
         doc_title = title_match.group(1).strip() if title_match else md_file.stem
 
+        # Single task topic mode: emit one task topic from the entire file
+        if self.config.single_task:
+            base_id = sanitize_id(md_file.stem)
+            topic_id = f"t_{base_id}"
+            self.dita_gen.set_source_context(md_file.stem)
+            dita_content = self.dita_gen.generate_task_topic(doc_title, content, topic_id)
+            dita_content = remove_non_ascii(dita_content)
+            output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
+            output_file.write_text(dita_content, encoding='utf-8')
+            print(f"  Created: {topic_id}.dita ({doc_title})")
+            self.converted_topics.append({
+                'id': topic_id, 'title': doc_title,
+                'relative_path': md_file.name, 'type': 'task', 'subdir': ''
+            })
+
+            # Generate DITA map
+            print(f"\n=== Generating DITA map ===")
+            map_content = self._generate_standalone_map(doc_title)
+            map_file = self.config.output_dir / self.config.maps_dir / f"{sanitize_id(md_file.stem)}.ditamap"
+            map_file.write_text(map_content, encoding='utf-8')
+            print(f"  Created map: {map_file.name}")
+
+            print(f"\nStandalone conversion complete!")
+            print(f"   Topics: {len(self.converted_topics)}")
+            print(f"   Output: {self.config.output_dir}")
+            return
+
         # Split by H1 headings (chapters)
         h1_pattern = r'^#\s+(.+)$'
         h1_matches = list(re.finditer(h1_pattern, content, re.MULTILINE))
@@ -1918,6 +1946,9 @@ Examples:
     # Convert a standalone markdown file (e.g., PDF-extracted admin guide)
     python convert_to_dita.py --file pdf_conversion/purityfa_admin_guide_6105_formatted.md -o dita_admin_guide
 
+    # Convert a standalone markdown file as a single task topic (instead of one concept per H1)
+    python convert_to_dita.py --file vmware-proxmox-manual-migration.md --single-task -o dita_output
+
 Available distributions: rhel, debian, suse, oracle, proxmox, xcpng, aws-outposts
 Available protocols: iscsi, nvme-tcp, nfs
         '''
@@ -1989,6 +2020,12 @@ Available protocols: iscsi, nvme-tcp, nfs
     )
 
     parser.add_argument(
+        '--single-task',
+        action='store_true',
+        help='With --file: emit one task topic from the entire file instead of splitting by H1 chapters'
+    )
+
+    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Enable verbose output'
@@ -2013,6 +2050,7 @@ Available protocols: iscsi, nvme-tcp, nfs
         skip_diagrams=args.skip_diagrams,
         use_existing_images=args.use_existing_images,
         standalone_file=args.file.resolve() if args.file else None,
+        single_task=args.single_task,
         distribution=args.distribution.lower(),
         protocol=args.protocol.lower(),
         generate_section_maps=args.section_maps,
@@ -2026,10 +2064,10 @@ Available protocols: iscsi, nvme-tcp, nfs
     # Print summary
     print(f"\nOutput Structure:")
     print(f"   {config.output_dir}/")
-    print(f"   ├── {config.warehouse_dir}/    # Reusable content (warehouse topics)")
-    print(f"   ├── {config.topics_dir}/       # Main documentation topics")
-    print(f"   ├── {config.images_dir}/       # Downloaded diagram images (PNG)")
-    print(f"   └── {config.maps_dir}/         # DITA navigation maps")
+    print(f"   |-- {config.warehouse_dir}/    # Reusable content (warehouse topics)")
+    print(f"   |-- {config.topics_dir}/       # Main documentation topics")
+    print(f"   |-- {config.images_dir}/       # Downloaded diagram images (PNG)")
+    print(f"   `-- {config.maps_dir}/         # DITA navigation maps")
 
     print(f"\nImport Instructions for Heretto:")
     print(f"   1. Create a new content collection in Heretto")

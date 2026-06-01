@@ -11,3 +11,4 @@ dita*
 format_pdf_markdown.py
 generate_toc.py
 pdf_to_markdown.py
+vdi-audit/
