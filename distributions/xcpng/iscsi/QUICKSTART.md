@@ -17,7 +17,7 @@ This guide provides a streamlined path to configure iSCSI storage on XCP-ng.
 
 ## Prerequisites
 
-- XCP-ng 8.2 or later
+- XCP-ng 8.3 or later
 - iSCSI storage array with portal IPs and target IQN
 - Dedicated storage network interfaces (recommended: separate NICs/VLANs)
 - Root access to all pool hosts

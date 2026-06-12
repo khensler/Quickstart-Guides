@@ -17,7 +17,7 @@ This guide walks you through configuring NFS storage on XCP-ng using **Xen Orche
 
 ## Prerequisites
 
-- XCP-ng 8.2 or later with Xen Orchestra installed
+- XCP-ng 8.3 or later with Xen Orchestra installed
 - NFS server with:
   - NFS export path configured
   - XCP-ng hosts allowed in export rules

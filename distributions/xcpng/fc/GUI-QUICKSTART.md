@@ -18,7 +18,7 @@ This guide walks you through configuring Fibre Channel storage on XCP-ng using t
 
 ## Prerequisites
 
-- XCP-ng 8.2 or later with Xen Orchestra installed
+- XCP-ng 8.3 or later with Xen Orchestra installed
 - Fibre Channel HBA installed in each pool host and cabled to the FC fabric
 - Fabric zoning and volume presentation configured by your SAN administrator
   - All pool host WWPNs registered on the FlashArray and added to a host group
@@ -33,6 +33,8 @@ This guide walks you through configuring Fibre Channel storage on XCP-ng using t
 Before working in Xen Orchestra, verify that all HBA ports are online and collect WWPNs for registration on the array. Run on **every pool host**:
 
 {% include quickstart/fc-hba-verify.md %}
+
+> **Note:** Once the hosts are zoned to the fabric, the FlashArray can often auto-discover their WWPNs. When creating the host on the Pure side, the connected WWPNs appear in a selectable list — letting you add them directly rather than copying each one from the host CLI. As long as fabric connectivity is established, this may let you skip the manual collection step above.
 
 ---
 
@@ -93,11 +95,18 @@ systemctl restart multipathd
 ## Step 5: Create FC Storage Repository (Xen Orchestra)
 
 1. In Xen Orchestra, click **New → Storage**
-2. Select your **Pool**
-3. Select **LVM (HBA)** as the storage type
+2. Select the **master host** in your pool
+3. Select **HBA** as the storage type
 4. Enter a name for the storage repository (e.g., `FC Storage — FlashArray`)
 5. In the device list, select the LUN presented from the FlashArray (identified by its WWID / SCSIid)
-6. Click **Create**
+
+![Create FC Storage Repository — select the LVM (HBA) device](images/FC%20Setup%20Step%201.png)
+
+6. Choose the disk image format for the SR — select **VHD** for broad compatibility with existing tooling, or **QCOW2** for support of larger virtual disks and more efficient thin provisioning. Choose the format that best fits your needs.
+
+![Choosing the disk image format (VHD or QCOW2) for the Storage Repository](images/FC%20Setup%20Step%202.png)
+
+7. Click **Create**
 
 > **Tip:** If the expected LUN does not appear, verify that `multipath -ll` shows the FC device on **all pool hosts**, and that the volume is connected to the correct host group on the FlashArray.
 
@@ -110,6 +119,8 @@ In Xen Orchestra:
 1. Navigate to **Storage** in the left sidebar
 2. Confirm the new SR appears and its status shows as connected
 3. Check that **all hosts in the pool** show as connected to the SR
+
+![Verifying the FC Storage Repository in Xen Orchestra](images/FC%20Setup%20Step%203.png)
 
 Via CLI, confirm on each host:
 

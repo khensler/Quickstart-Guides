@@ -18,7 +18,7 @@ This guide provides a streamlined path to configure Fibre Channel storage on XCP
 
 ## Prerequisites
 
-- XCP-ng 8.2 or later
+- XCP-ng 8.3 or later
 - Fibre Channel HBA installed in each pool host and cabled to the FC fabric
 - Fabric zoning and volume presentation configured by your SAN administrator
 - Root access to all pool hosts
