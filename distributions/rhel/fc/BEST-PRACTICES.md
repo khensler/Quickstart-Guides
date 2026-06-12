@@ -41,8 +41,8 @@ flowchart TB
     end
 
     subgraph "FC Fabric"
-        SWA[FC Switch — Fabric A<br/>16/32 Gbps]
-        SWB[FC Switch — Fabric B<br/>16/32 Gbps]
+        SWA[FC Switch - Fabric A<br/>16/32 Gbps]
+        SWB[FC Switch - Fabric B<br/>16/32 Gbps]
     end
 
     subgraph "FlashArray"
@@ -540,7 +540,7 @@ sudo multipathd reconfigure
 
 ### FC Security Model
 
-Fibre Channel security is implemented at the **fabric level**, not the host level. There is no equivalent to iSCSI CHAP on the host. Security controls for FC storage access are:
+Fibre Channel security is implemented at the **fabric level**, not the host level. Host-level authentication is not part of the FC transport. Security controls for FC storage access are:
 
 1. **Fabric zoning** — the primary access control mechanism. Only zoned initiators can communicate with target ports.
 2. **LUN masking / host registration** — the storage array independently enforces which hosts can access which volumes based on WWPN registration and host group membership.
@@ -552,6 +552,8 @@ Fibre Channel security is implemented at the **fabric level**, not the host leve
 - Register each host with a specific OS type on the array for correct SCSI behavior
 - Use separate host groups per cluster; do not share host groups across unrelated workloads
 - Do not place HBA WWPNs in more zones than necessary
+
+{% include bestpractices/fc-in-transit-encryption.md %}
 
 ### No Host-Level Firewall Required
 

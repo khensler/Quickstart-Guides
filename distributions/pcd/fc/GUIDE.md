@@ -82,7 +82,7 @@ Navigate to **Persistent Storage Connectivity** in the blueprint.
 | `image_volume_cache_max_size_gb` | `200` | Maximum cache size (GB) |
 | `volumes_dir` | `/opt/pf9/etc/pf9-cindervolume-base/volumes/` | Volume storage directory |
 
-> **FC vs. iSCSI difference:** The FC driver does not require `san_ip` portal configuration or a `pure_iscsi_cidr` setting. The FlashArray discovers hypervisor hosts automatically via WWPNs registered in the Cinder driver. Ensure `use_multipath_for_image_xfer` is `true` — this is required for both iSCSI and FC.
+> **Note:** The FC driver discovers the FlashArray via the management IP (`san_ip`); no portal or CIDR settings are required. The driver reads each hypervisor's WWPNs and registers the host on the array automatically when the first volume is attached. `use_multipath_for_image_xfer` must be `true`.
 
 5. Click **Save Blueprint**
 
@@ -128,7 +128,7 @@ sudo apt-get update
 sudo apt-get install -y multipath-tools sg3-utils sysfsutils
 ```
 
-> **FC vs. iSCSI difference:** The `open-iscsi` / `iscsid` packages are **not** required for FC. Only `multipath-tools` and supporting utilities are needed.
+> **Note:** Only `multipath-tools` and supporting utilities are required for FC. `open-iscsi` and `iscsid` are not used.
 
 ### 3.2 Verify HBA and Collect WWPNs
 
@@ -269,7 +269,7 @@ In the FlashArray UI, navigate to **Storage > Hosts** and confirm:
 
 ## Important Considerations
 
-1. **No `pure_iscsi_cidr` or portal IPs are needed.** The FC driver discovers the FlashArray via the management IP (`san_ip`) and uses the Cinder API to orchestrate volume attachments over FC — no IP portal configuration is required.
+1. **Cinder FC driver uses the management IP only.** The driver discovers the FlashArray via `san_ip` and orchestrates volume attachments over FC. No portal or CIDR configuration is required.
 
 2. **The Pure Cinder FC driver auto-registers hosts.** When Cinder attaches a volume to a hypervisor, the driver reads the hypervisor's WWPNs, registers the host on the FlashArray, and presents the volume to that host automatically. Manual host group management is not required for Cinder-managed volumes.
 

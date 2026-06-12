@@ -36,14 +36,14 @@ flowchart TB
     end
 
     subgraph "FC Fabric"
-        SWA[FC Switch — Fabric A<br/>16/32 Gbps]
-        SWB[FC Switch — Fabric B<br/>16/32 Gbps]
+        SWA[FC Switch - Fabric A<br/>16/32 Gbps]
+        SWB[FC Switch - Fabric B<br/>16/32 Gbps]
     end
 
     subgraph "FlashArray"
         CTRL1[Controller 1<br/>FC Ports]
         CTRL2[Controller 2<br/>FC Ports]
-        LUN[(Shared Volume — GFS2)]
+        LUN[(Shared Volume - GFS2)]
     end
 
     NODE1 ---|HBA Port 0| SWA
@@ -82,10 +82,10 @@ HPE VM Essentials hypervisor nodes run Ubuntu. Package management and HBA driver
 
 ### No FC Support in VME Manager UI
 
-The VME Manager UI does not expose any FC storage configuration options. Unlike iSCSI (which has a basic target discovery UI), FC is entirely CLI-driven:
+The VME Manager UI does not expose FC storage configuration. All FC setup is performed via CLI on each cluster node:
 
-- HBA verification, WWPN collection, multipath configuration, and LVM setup all happen via CLI on each node
-- The **only** VME Manager UI step is creating the GFS2 datastore once all nodes have a working multipath device
+- HBA verification, WWPN collection, multipath configuration, and LVM setup are performed via CLI on each node
+- The only VME Manager UI step is creating the GFS2 datastore once all nodes have a working multipath device
 
 ### GFS2 Requires All Nodes
 
@@ -258,6 +258,8 @@ Fibre Channel security is implemented at the fabric level — no host-level fire
 3. **Hard zoning** — enforce at switch port level for strongest isolation
 
 **Cluster note:** All VME cluster node WWPNs should share a single host group on the FlashArray for the shared GFS2 volume. Separate host groups per node for the same volume can cause inconsistent LUN numbering across nodes.
+
+{% include bestpractices/fc-in-transit-encryption.md %}
 
 ---
 

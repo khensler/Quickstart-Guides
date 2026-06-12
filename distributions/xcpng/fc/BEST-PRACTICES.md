@@ -40,14 +40,14 @@ flowchart TB
     end
 
     subgraph "FC Fabric"
-        SWA[FC Switch — Fabric A<br/>16/32 Gbps]
-        SWB[FC Switch — Fabric B<br/>16/32 Gbps]
+        SWA[FC Switch - Fabric A<br/>16/32 Gbps]
+        SWB[FC Switch - Fabric B<br/>16/32 Gbps]
     end
 
     subgraph "FlashArray"
         CTRL1[Controller 1<br/>FC Ports]
         CTRL2[Controller 2<br/>FC Ports]
-        LUN[(Shared Volume — lvmohba SR)]
+        LUN[(Shared Volume - lvmohba SR)]
     end
 
     HOST1 ---|HBA Port 0| SWA
@@ -274,6 +274,8 @@ FC security is implemented at the fabric level — no host-level firewall is req
 1. **Fabric zoning** — primary access control
 2. **LUN masking / host registration** — enforced by the FlashArray based on WWPN and host group
 3. **Hard zoning** — enforce at switch port level
+
+{% include bestpractices/fc-in-transit-encryption.md %}
 
 ---
 

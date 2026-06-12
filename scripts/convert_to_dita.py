@@ -26,12 +26,14 @@ import argparse
 import uuid
 import base64
 import zlib
+import io
 import urllib.request
 import urllib.error
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 import html
+import time
 
 # ============================================================================
 # Configuration
@@ -184,17 +186,17 @@ def get_kroki_url(mermaid_code: str) -> str:
     Generate a Kroki URL for Mermaid code.
 
     Kroki is a diagram rendering service that supports Mermaid.
-    A white background init directive is prepended so PNGs are never transparent.
+    Background color is set via Kroki's ?background-color query parameter,
+    which is applied at the image-rendering layer and is more reliable than
+    the Mermaid init theme directive.
     """
-    # Prepend Mermaid init to force a white background on every diagram
-    bg_init = "%%{init: {'theme': 'default', 'themeVariables': {'background': '#ffffff', 'mainBkg': '#ffffff'}}}%%"
-    code = bg_init + "\n" + mermaid_code.strip()
+    code = mermaid_code.strip()
 
     # Kroki uses deflate compression + base64
     compressed = zlib.compress(code.encode('utf-8'), 9)
     encoded = base64.urlsafe_b64encode(compressed).decode('ascii')
-
-    return f"https://kroki.io/mermaid/png/{encoded}"
+    return f"http://172.26.83.19:8888/mermaid/png/{encoded}"
+    #return f"https://kroki.io/mermaid/png/{encoded}"
 
 
 def download_mermaid_image(mermaid_code: str, images_dir: Path, source_context: str, diagram_num: int) -> str:
@@ -224,26 +226,43 @@ def download_mermaid_image(mermaid_code: str, images_dir: Path, source_context: 
     # Generate Kroki URL
     url = get_kroki_url(code)
 
-    max_retries = 3
+    max_retries = 20
     for attempt in range(1, max_retries + 1):
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'DITA-Converter/1.0'})
+            req = urllib.request.Request(url, headers={'User-Agent': 'DITA-Converter/1.0'}, method='GET')
             with urllib.request.urlopen(req, timeout=60) as response:
                 png_content = response.read()
+
+            try:
+                from PIL import Image as _PILImage
+                img = _PILImage.open(io.BytesIO(png_content)).convert("RGBA")
+                bg = _PILImage.new("RGBA", img.size, (255, 255, 255, 255))
+                bg.paste(img, mask=img.split()[3])
+                buf = io.BytesIO()
+                bg.convert("RGB").save(buf, format="PNG")
+                png_content = buf.getvalue()
+            except ImportError:
+                pass
 
             filepath.write_bytes(png_content)
             print(f"    Downloaded: {filename}")
             return filename
 
         except urllib.error.URLError as e:
+            print(f"    URLError: {e}")
             if attempt < max_retries:
                 print(f"    Retry {attempt}/{max_retries - 1}: {e}")
+                print("    Waiting 5 seconds before retrying...")
+                time.sleep(5)
             else:
                 print(f"    Warning: Failed to download diagram after {max_retries} attempts: {e}")
                 return f"{source_context}-diagram-{diagram_num:02d}-error.png"
         except Exception as e:
+            print(f"    Error: {e}")
             if attempt < max_retries:
                 print(f"    Retry {attempt}/{max_retries - 1}: {e}")
+                print("    Waiting 5 seconds before retrying...")
+                time.sleep(5)
             else:
                 print(f"    Warning: Error processing diagram after {max_retries} attempts: {e}")
                 return f"{source_context}-diagram-{diagram_num:02d}-error.png"

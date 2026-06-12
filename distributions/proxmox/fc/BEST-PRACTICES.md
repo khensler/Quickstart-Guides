@@ -40,8 +40,8 @@ flowchart TB
     end
 
     subgraph "FC Fabric"
-        SWA[FC Switch — Fabric A<br/>16/32 Gbps]
-        SWB[FC Switch — Fabric B<br/>16/32 Gbps]
+        SWA[FC Switch - Fabric A<br/>16/32 Gbps]
+        SWB[FC Switch - Fabric B<br/>16/32 Gbps]
     end
 
     subgraph "FlashArray"
@@ -309,6 +309,8 @@ Fibre Channel security is implemented at the fabric level — no host-level fire
 3. **Hard zoning** — enforce at the switch port level
 
 **Cluster-specific note:** All cluster node WWPNs should be in the same host group on the FlashArray. Avoid creating separate host groups per node for the same shared volume — this can cause inconsistent LUN numbering across nodes and confuse LVM.
+
+{% include bestpractices/fc-in-transit-encryption.md %}
 
 ---
 
