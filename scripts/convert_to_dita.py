@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 import html
 import time
+import zipfile
+from datetime import date
 
 # ============================================================================
 # Configuration
@@ -57,7 +59,7 @@ class ConversionConfig:
 
     # Filtering options for selective conversion
     distribution: str = ""            # Filter by distribution (e.g., "rhel", "debian")
-    protocol: str = ""                # Filter by protocol (e.g., "iscsi", "nvme-tcp", "nfs")
+    protocol: str = ""                # Filter by protocol (e.g., "iscsi", "nvme-tcp", "nfs", "fc")
     generate_section_maps: bool = False  # Generate per-distribution/protocol maps
     organize_by_section: bool = False    # Organize topics into subdirectories
 
@@ -1203,6 +1205,8 @@ class DITAMapGenerator:
                     proto = 'iSCSI'
                 elif 'nfs' in path.lower():
                     proto = 'NFS'
+                elif '/fc/' in path.lower().replace('\\', '/'):
+                    proto = 'FC'
                 else:
                     proto = 'Other'
                 if proto not in protocols:
@@ -1249,7 +1253,7 @@ class DITAMapGenerator:
     def generate_section_map(self, topics: List[Dict[str, str]], dist: str, proto: str) -> str:
         """Generate a DITA map for a specific distribution/protocol combination."""
         dist_title = dist.upper() if dist in ['rhel', 'suse'] else dist.title()
-        proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP'}
+        proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP', 'fc': 'FC'}
         proto_title = proto_map.get(proto.lower(), proto.title())
         map_title = f"{dist_title} {proto_title} Storage Guide"
 
@@ -1284,7 +1288,7 @@ class DITAMapGenerator:
         The Architecture section is the top-level node, with other topics nested below.
         """
         dist_title = dist.upper() if dist in ['rhel', 'suse'] else dist.title()
-        proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP'}
+        proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP', 'fc': 'FC'}
         proto_title = proto_map.get(proto.lower(), proto.title())
         map_title = f"{dist_title} {proto_title} Best Practices"
 
@@ -1861,7 +1865,7 @@ class MarkdownToDITAConverter:
         if self.config.distribution or self.config.protocol:
             # Generate a filtered main map with specific title
             dist_label = self.config.distribution.upper() if self.config.distribution in ['rhel', 'suse'] else self.config.distribution.title()
-            proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP'}
+            proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP', 'fc': 'FC'}
             proto_label = proto_map.get(self.config.protocol.lower(), self.config.protocol.title()) if self.config.protocol else ''
             parts = [p for p in [dist_label, proto_label, "Storage Guide"] if p]
             title = " ".join(parts)
@@ -1901,6 +1905,8 @@ class MarkdownToDITAConverter:
                 proto = 'iscsi'
             elif 'nfs' in path.lower():
                 proto = 'nfs'
+            elif '/fc/' in path.lower().replace('\\', '/'):
+                proto = 'fc'
             else:
                 proto = 'other'
 
@@ -1969,7 +1975,7 @@ Examples:
     python convert_to_dita.py --file vmware-proxmox-manual-migration.md --single-task -o dita_output
 
 Available distributions: rhel, debian, suse, oracle, proxmox, xcpng, aws-outposts
-Available protocols: iscsi, nvme-tcp, nfs
+Available protocols: iscsi, nvme-tcp, nfs, fc
         '''
     )
 
@@ -2016,7 +2022,7 @@ Available protocols: iscsi, nvme-tcp, nfs
         '-p', '--protocol',
         type=str,
         default='',
-        help='Filter by protocol (e.g., iscsi, nvme-tcp, nfs)'
+        help='Filter by protocol (e.g., iscsi, nvme-tcp, nfs, fc)'
     )
 
     parser.add_argument(
@@ -2042,6 +2048,12 @@ Available protocols: iscsi, nvme-tcp, nfs
         '--single-task',
         action='store_true',
         help='With --file: emit one task topic from the entire file instead of splitting by H1 chapters'
+    )
+
+    parser.add_argument(
+        '--zip',
+        action='store_true',
+        help='Zip the output directory; archive name encodes the options used and the date'
     )
 
     parser.add_argument(
@@ -2094,6 +2106,43 @@ Available protocols: iscsi, nvme-tcp, nfs
     print(f"   3. Or import the '{config.maps_dir}/linux-storage-guides.ditamap' file")
     print(f"   4. Ensure images folder is included for diagram rendering")
     print(f"   5. Review and publish your content")
+
+    if args.zip:
+        zip_path = _zip_output(config.output_dir, args)
+        print(f"\nCreated archive: {zip_path}")
+
+
+def _zip_output(output_dir: Path, args) -> Path:
+    """Zip the output directory; name encodes the options used and today's date."""
+    parts = [output_dir.name]
+    if args.distribution:
+        parts.append(args.distribution.lower())
+    if args.protocol:
+        parts.append(args.protocol.lower())
+    if args.file:
+        parts.append('file')
+    if args.single_task:
+        parts.append('single-task')
+    if args.inline_includes:
+        parts.append('inline')
+    if args.section_maps:
+        parts.append('section-maps')
+    if args.organize_sections:
+        parts.append('organized')
+    if args.skip_diagrams:
+        parts.append('no-diagrams')
+    if args.use_existing_images:
+        parts.append('existing-images')
+    parts.append(date.today().isoformat())
+
+    archive_name = '_'.join(parts) + '.zip'
+    zip_path = output_dir.parent / archive_name
+
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for path in output_dir.rglob('*'):
+            if path.is_file():
+                zf.write(path, path.relative_to(output_dir.parent))
+    return zip_path
 
 
 if __name__ == '__main__':

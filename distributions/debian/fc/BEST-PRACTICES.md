@@ -123,9 +123,6 @@ sudo apt install -y \
     sysstat \
     iotop \
     htop
-
-# Optional: rescan-scsi-bus
-sudo apt install -y scsitools
 ```
 
 **Verify installation:**

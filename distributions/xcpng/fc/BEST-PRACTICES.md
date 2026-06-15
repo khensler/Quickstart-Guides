@@ -284,8 +284,8 @@ FC security is implemented at the fabric level — no host-level firewall is req
 ### SR Cannot Be Created — SCSIid Not Found
 
 ```bash
-# Probe available FC devices and their SCSIids
-xe sr-probe type=lvmohba
+# Probe available FC devices and their SCSIids (host-uuid is required)
+xe sr-probe type=lvmohba host-uuid=<HOST_UUID>
 
 # If no devices are listed, check multipath
 multipath -ll

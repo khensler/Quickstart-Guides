@@ -87,7 +87,8 @@ XCP-ng uses the `lvmohba` SR type for Fibre Channel block storage:
 
 ```bash
 # Probe for available FC devices — shows SCSIids for visible LUNs
-xe sr-probe type=lvmohba
+xe host-list                            # get a host UUID for the probe
+xe sr-probe type=lvmohba host-uuid=<HOST_UUID>
 
 # Create the SR using the SCSIid from the probe output
 xe sr-create name-label="FC Storage" type=lvmohba shared=true \
