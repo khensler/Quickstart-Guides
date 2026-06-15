@@ -18,7 +18,7 @@ This guide walks you through configuring iSCSI storage on XCP-ng using **Xen Orc
 
 ## Prerequisites
 
-- XCP-ng 8.2 or later with Xen Orchestra installed
+- XCP-ng 8.3 or later with Xen Orchestra installed
 - iSCSI storage array with:
   - Portal IPs (at least 2 for multipathing)
   - Target IQN

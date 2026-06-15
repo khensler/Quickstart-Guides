@@ -2,7 +2,7 @@
 
 # Storage Terminology Glossary
 
-This glossary defines key terms used throughout the iSCSI and NVMe-TCP documentation.
+This glossary defines key terms used throughout the iSCSI, NVMe-TCP, and Fibre Channel documentation.
 
 ---
 
@@ -69,6 +69,46 @@ An authentication mechanism for iSCSI that verifies initiator identity using a s
 
 ### Interface Binding
 The practice of associating iSCSI sessions with specific network interfaces. Required for proper multipath operation to ensure each session uses a designated NIC.
+
+---
+
+## FC / SAN Terminology
+
+### Fibre Channel (FC)
+A high-speed network technology designed for storage area networks (SANs). FC uses dedicated hardware (HBAs and FC switches) and a lossless fabric to transport SCSI commands between hosts and storage arrays. Common speeds: 8, 16, 32, and 64 Gbps per port.
+
+### HBA (Host Bus Adapter)
+A hardware adapter installed in a server that provides Fibre Channel connectivity. Each HBA port has a unique, factory-burned WWPN. Common vendors: Broadcom (Emulex), Marvell (QLogic), Broadcom (Brocade).
+
+### WWN (World Wide Name)
+A globally unique 64-bit identifier assigned to a Fibre Channel entity. Used to identify nodes and ports in the fabric.
+
+### WWPN (World Wide Port Name)
+A WWN that uniquely identifies a specific FC port — either on an HBA or on a storage array controller. WWPNs are used for zoning and host registration. Format: `XX:XX:XX:XX:XX:XX:XX:XX` (e.g., `21:00:00:1b:32:a1:bc:de`).
+
+**Location on Linux hosts:** `/sys/class/fc_host/host*/port_name`
+
+### WWNN (World Wide Node Name)
+A WWN that identifies the FC node (device) rather than a specific port. A multi-port HBA has one WWNN and multiple WWPNs.
+
+### Fabric
+The interconnect infrastructure that links FC hosts and storage arrays. A fabric consists of one or more FC switches. Redundant fabrics (Fabric A and Fabric B) provide path-level high availability.
+
+### Zone
+A fabric-level access control grouping. Only devices in the same zone can communicate. **Single-initiator zoning** (one host WWPN per zone, paired with target array ports) is the standard best practice. Zones are configured on FC switches, not on the hosts.
+
+### Soft Zoning vs. Hard Zoning
+- **Soft zoning**: Enforced by the fabric's name server — devices outside a zone are not advertised, but communication is physically possible. Less secure.
+- **Hard zoning** (recommended): Enforced at the port level in hardware. Communication between ports in different zones is physically blocked regardless of name server state.
+
+### FCP (Fibre Channel Protocol)
+The SCSI transport binding for Fibre Channel. FCP carries SCSI commands, data, and status across the FC fabric — analogous to how iSCSI carries SCSI over TCP/IP.
+
+### LIP (Loop Initialization Primitive)
+A signal used to reset and reinitialize an FC loop or arbitrated loop. A LIP is disruptive and indicates a link-level event such as a device connecting or disconnecting.
+
+### NPIV (N-Port ID Virtualization)
+An FC feature that allows a single physical HBA port to present multiple virtual ports (vHBAs), each with its own WWPN. Used for virtualization environments to provide per-VM FC identity.
 
 ---
 

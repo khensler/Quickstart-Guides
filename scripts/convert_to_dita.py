@@ -26,12 +26,16 @@ import argparse
 import uuid
 import base64
 import zlib
+import io
 import urllib.request
 import urllib.error
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 import html
+import time
+import zipfile
+from datetime import date
 
 # ============================================================================
 # Configuration
@@ -51,10 +55,11 @@ class ConversionConfig:
     use_existing_images: bool = False  # If True, keep existing images and only download missing ones
 
     standalone_file: Optional[Path] = None  # If set, convert a single standalone markdown file
+    single_task: bool = False         # If True, emit one task topic from standalone file (instead of splitting by H1)
 
     # Filtering options for selective conversion
     distribution: str = ""            # Filter by distribution (e.g., "rhel", "debian")
-    protocol: str = ""                # Filter by protocol (e.g., "iscsi", "nvme-tcp", "nfs")
+    protocol: str = ""                # Filter by protocol (e.g., "iscsi", "nvme-tcp", "nfs", "fc")
     generate_section_maps: bool = False  # Generate per-distribution/protocol maps
     organize_by_section: bool = False    # Organize topics into subdirectories
 
@@ -183,17 +188,17 @@ def get_kroki_url(mermaid_code: str) -> str:
     Generate a Kroki URL for Mermaid code.
 
     Kroki is a diagram rendering service that supports Mermaid.
-    A white background init directive is prepended so PNGs are never transparent.
+    Background color is set via Kroki's ?background-color query parameter,
+    which is applied at the image-rendering layer and is more reliable than
+    the Mermaid init theme directive.
     """
-    # Prepend Mermaid init to force a white background on every diagram
-    bg_init = "%%{init: {'theme': 'default', 'themeVariables': {'background': '#ffffff', 'mainBkg': '#ffffff'}}}%%"
-    code = bg_init + "\n" + mermaid_code.strip()
+    code = mermaid_code.strip()
 
     # Kroki uses deflate compression + base64
     compressed = zlib.compress(code.encode('utf-8'), 9)
     encoded = base64.urlsafe_b64encode(compressed).decode('ascii')
-
-    return f"https://kroki.io/mermaid/png/{encoded}"
+    return f"http://172.26.83.19:8888/mermaid/png/{encoded}"
+    #return f"https://kroki.io/mermaid/png/{encoded}"
 
 
 def download_mermaid_image(mermaid_code: str, images_dir: Path, source_context: str, diagram_num: int) -> str:
@@ -223,26 +228,43 @@ def download_mermaid_image(mermaid_code: str, images_dir: Path, source_context: 
     # Generate Kroki URL
     url = get_kroki_url(code)
 
-    max_retries = 3
+    max_retries = 20
     for attempt in range(1, max_retries + 1):
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'DITA-Converter/1.0'})
+            req = urllib.request.Request(url, headers={'User-Agent': 'DITA-Converter/1.0'}, method='GET')
             with urllib.request.urlopen(req, timeout=60) as response:
                 png_content = response.read()
+
+            try:
+                from PIL import Image as _PILImage
+                img = _PILImage.open(io.BytesIO(png_content)).convert("RGBA")
+                bg = _PILImage.new("RGBA", img.size, (255, 255, 255, 255))
+                bg.paste(img, mask=img.split()[3])
+                buf = io.BytesIO()
+                bg.convert("RGB").save(buf, format="PNG")
+                png_content = buf.getvalue()
+            except ImportError:
+                pass
 
             filepath.write_bytes(png_content)
             print(f"    Downloaded: {filename}")
             return filename
 
         except urllib.error.URLError as e:
+            print(f"    URLError: {e}")
             if attempt < max_retries:
                 print(f"    Retry {attempt}/{max_retries - 1}: {e}")
+                print("    Waiting 5 seconds before retrying...")
+                time.sleep(5)
             else:
                 print(f"    Warning: Failed to download diagram after {max_retries} attempts: {e}")
                 return f"{source_context}-diagram-{diagram_num:02d}-error.png"
         except Exception as e:
+            print(f"    Error: {e}")
             if attempt < max_retries:
                 print(f"    Retry {attempt}/{max_retries - 1}: {e}")
+                print("    Waiting 5 seconds before retrying...")
+                time.sleep(5)
             else:
                 print(f"    Warning: Error processing diagram after {max_retries} attempts: {e}")
                 return f"{source_context}-diagram-{diagram_num:02d}-error.png"
@@ -1183,6 +1205,8 @@ class DITAMapGenerator:
                     proto = 'iSCSI'
                 elif 'nfs' in path.lower():
                     proto = 'NFS'
+                elif '/fc/' in path.lower().replace('\\', '/'):
+                    proto = 'FC'
                 else:
                     proto = 'Other'
                 if proto not in protocols:
@@ -1229,7 +1253,7 @@ class DITAMapGenerator:
     def generate_section_map(self, topics: List[Dict[str, str]], dist: str, proto: str) -> str:
         """Generate a DITA map for a specific distribution/protocol combination."""
         dist_title = dist.upper() if dist in ['rhel', 'suse'] else dist.title()
-        proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP'}
+        proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP', 'fc': 'FC'}
         proto_title = proto_map.get(proto.lower(), proto.title())
         map_title = f"{dist_title} {proto_title} Storage Guide"
 
@@ -1264,7 +1288,7 @@ class DITAMapGenerator:
         The Architecture section is the top-level node, with other topics nested below.
         """
         dist_title = dist.upper() if dist in ['rhel', 'suse'] else dist.title()
-        proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP'}
+        proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP', 'fc': 'FC'}
         proto_title = proto_map.get(proto.lower(), proto.title())
         map_title = f"{dist_title} {proto_title} Best Practices"
 
@@ -1386,6 +1410,33 @@ class MarkdownToDITAConverter:
         # Extract document title
         title_match = re.match(r'^#\s+(.+)$', content, re.MULTILINE)
         doc_title = title_match.group(1).strip() if title_match else md_file.stem
+
+        # Single task topic mode: emit one task topic from the entire file
+        if self.config.single_task:
+            base_id = sanitize_id(md_file.stem)
+            topic_id = f"t_{base_id}"
+            self.dita_gen.set_source_context(md_file.stem)
+            dita_content = self.dita_gen.generate_task_topic(doc_title, content, topic_id)
+            dita_content = remove_non_ascii(dita_content)
+            output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
+            output_file.write_text(dita_content, encoding='utf-8')
+            print(f"  Created: {topic_id}.dita ({doc_title})")
+            self.converted_topics.append({
+                'id': topic_id, 'title': doc_title,
+                'relative_path': md_file.name, 'type': 'task', 'subdir': ''
+            })
+
+            # Generate DITA map
+            print(f"\n=== Generating DITA map ===")
+            map_content = self._generate_standalone_map(doc_title)
+            map_file = self.config.output_dir / self.config.maps_dir / f"{sanitize_id(md_file.stem)}.ditamap"
+            map_file.write_text(map_content, encoding='utf-8')
+            print(f"  Created map: {map_file.name}")
+
+            print(f"\nStandalone conversion complete!")
+            print(f"   Topics: {len(self.converted_topics)}")
+            print(f"   Output: {self.config.output_dir}")
+            return
 
         # Split by H1 headings (chapters)
         h1_pattern = r'^#\s+(.+)$'
@@ -1814,7 +1865,7 @@ class MarkdownToDITAConverter:
         if self.config.distribution or self.config.protocol:
             # Generate a filtered main map with specific title
             dist_label = self.config.distribution.upper() if self.config.distribution in ['rhel', 'suse'] else self.config.distribution.title()
-            proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP'}
+            proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP', 'fc': 'FC'}
             proto_label = proto_map.get(self.config.protocol.lower(), self.config.protocol.title()) if self.config.protocol else ''
             parts = [p for p in [dist_label, proto_label, "Storage Guide"] if p]
             title = " ".join(parts)
@@ -1854,6 +1905,8 @@ class MarkdownToDITAConverter:
                 proto = 'iscsi'
             elif 'nfs' in path.lower():
                 proto = 'nfs'
+            elif '/fc/' in path.lower().replace('\\', '/'):
+                proto = 'fc'
             else:
                 proto = 'other'
 
@@ -1918,8 +1971,11 @@ Examples:
     # Convert a standalone markdown file (e.g., PDF-extracted admin guide)
     python convert_to_dita.py --file pdf_conversion/purityfa_admin_guide_6105_formatted.md -o dita_admin_guide
 
+    # Convert a standalone markdown file as a single task topic (instead of one concept per H1)
+    python convert_to_dita.py --file vmware-proxmox-manual-migration.md --single-task -o dita_output
+
 Available distributions: rhel, debian, suse, oracle, proxmox, xcpng, aws-outposts
-Available protocols: iscsi, nvme-tcp, nfs
+Available protocols: iscsi, nvme-tcp, nfs, fc
         '''
     )
 
@@ -1966,7 +2022,7 @@ Available protocols: iscsi, nvme-tcp, nfs
         '-p', '--protocol',
         type=str,
         default='',
-        help='Filter by protocol (e.g., iscsi, nvme-tcp, nfs)'
+        help='Filter by protocol (e.g., iscsi, nvme-tcp, nfs, fc)'
     )
 
     parser.add_argument(
@@ -1986,6 +2042,18 @@ Available protocols: iscsi, nvme-tcp, nfs
         type=Path,
         default=None,
         help='Convert a standalone Markdown file (e.g., a PDF-extracted admin guide) instead of Jekyll guides'
+    )
+
+    parser.add_argument(
+        '--single-task',
+        action='store_true',
+        help='With --file: emit one task topic from the entire file instead of splitting by H1 chapters'
+    )
+
+    parser.add_argument(
+        '--zip',
+        action='store_true',
+        help='Zip the output directory; archive name encodes the options used and the date'
     )
 
     parser.add_argument(
@@ -2013,6 +2081,7 @@ Available protocols: iscsi, nvme-tcp, nfs
         skip_diagrams=args.skip_diagrams,
         use_existing_images=args.use_existing_images,
         standalone_file=args.file.resolve() if args.file else None,
+        single_task=args.single_task,
         distribution=args.distribution.lower(),
         protocol=args.protocol.lower(),
         generate_section_maps=args.section_maps,
@@ -2026,10 +2095,10 @@ Available protocols: iscsi, nvme-tcp, nfs
     # Print summary
     print(f"\nOutput Structure:")
     print(f"   {config.output_dir}/")
-    print(f"   ├── {config.warehouse_dir}/    # Reusable content (warehouse topics)")
-    print(f"   ├── {config.topics_dir}/       # Main documentation topics")
-    print(f"   ├── {config.images_dir}/       # Downloaded diagram images (PNG)")
-    print(f"   └── {config.maps_dir}/         # DITA navigation maps")
+    print(f"   |-- {config.warehouse_dir}/    # Reusable content (warehouse topics)")
+    print(f"   |-- {config.topics_dir}/       # Main documentation topics")
+    print(f"   |-- {config.images_dir}/       # Downloaded diagram images (PNG)")
+    print(f"   `-- {config.maps_dir}/         # DITA navigation maps")
 
     print(f"\nImport Instructions for Heretto:")
     print(f"   1. Create a new content collection in Heretto")
@@ -2037,6 +2106,43 @@ Available protocols: iscsi, nvme-tcp, nfs
     print(f"   3. Or import the '{config.maps_dir}/linux-storage-guides.ditamap' file")
     print(f"   4. Ensure images folder is included for diagram rendering")
     print(f"   5. Review and publish your content")
+
+    if args.zip:
+        zip_path = _zip_output(config.output_dir, args)
+        print(f"\nCreated archive: {zip_path}")
+
+
+def _zip_output(output_dir: Path, args) -> Path:
+    """Zip the output directory; name encodes the options used and today's date."""
+    parts = [output_dir.name]
+    if args.distribution:
+        parts.append(args.distribution.lower())
+    if args.protocol:
+        parts.append(args.protocol.lower())
+    if args.file:
+        parts.append('file')
+    if args.single_task:
+        parts.append('single-task')
+    if args.inline_includes:
+        parts.append('inline')
+    if args.section_maps:
+        parts.append('section-maps')
+    if args.organize_sections:
+        parts.append('organized')
+    if args.skip_diagrams:
+        parts.append('no-diagrams')
+    if args.use_existing_images:
+        parts.append('existing-images')
+    parts.append(date.today().isoformat())
+
+    archive_name = '_'.join(parts) + '.zip'
+    zip_path = output_dir.parent / archive_name
+
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for path in output_dir.rglob('*'):
+            if path.is_file():
+                zf.write(path, path.relative_to(output_dir.parent))
+    return zip_path
 
 
 if __name__ == '__main__':
