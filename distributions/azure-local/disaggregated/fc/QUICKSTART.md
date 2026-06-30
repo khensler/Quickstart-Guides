@@ -151,6 +151,9 @@ Get-MSDSMSupportedHw
 # Record the HBA World Wide Names (WWNs) for each node — needed in Phase 2
 Get-InitiatorPort
 ```
+### 1.7 Repeat for all Azure Local Nodes
+
+Repeat Phase 1 steps for each node.
 
 ---
 
