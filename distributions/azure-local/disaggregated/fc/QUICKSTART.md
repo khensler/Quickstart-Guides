@@ -4,7 +4,7 @@ This guide provides a high-level workflow for integrating the Everpure FlashArra
 
 > **This document is based heavliy on the official Microsoft documentation.**  [Deploy Azure Local using the Azure portal for disaggregated deployments](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated)
 
-> **Looking for a hyperconverged (S2D + FlashArray) cluster?** See the [Hyperconverged FC guide](../hyperconverged/FC.md). For the original Microsoft procedure, see [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage).
+> **Looking for a hyperconverged (S2D + FlashArray) cluster?** See the [Hyperconverged FC guide](../hyperconverged/fc/QUICKSTART.md). For the original Microsoft procedure, see [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage).
 
 ## Prerequisites to Using the Quick Start Guide
 
