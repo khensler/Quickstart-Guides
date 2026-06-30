@@ -4,7 +4,7 @@
 
 This quick start guide walks through adding an Everpure Data FlashArray to an Azure Local cluster in a **hybrid** topology using Fibre Channel (FC). In a hybrid deployment the cluster is deployed on local **Storage Spaces Direct (S2D)**, and the FlashArray is attached afterward as **additional** external block storage. Upon completion, Azure Local VMs and workloads can consume persistent block storage from both S2D and the FlashArray over FC.
 
-> Looking for a **SAN-only** cluster (no local S2D)? See the [Disaggregated FC guide](../disaggregated/FC.md).
+> Looking for a **SAN-only** cluster (no local S2D)? See the [Disaggregated FC guide](../../disaggregated/fc/QUICKSTART.md).
 
 > **Microsoft reference:** [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage) · [Supported SAN solutions on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/concepts/san-requirements)
 
