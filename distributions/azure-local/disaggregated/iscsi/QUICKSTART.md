@@ -4,8 +4,6 @@ This guide provides a high-level workflow for integrating the Everpure FlashArra
 
 > **This document is based heavliy on the official Microsoft documentation.**  [Deploy Azure Local using the Azure portal for disaggregated deployments](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated) · [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage)
 
-> **Preview feature:** SAN integration over **iSCSI is currently in preview** on Azure Local (FC is generally available). See the [Supplemental Terms of Use for Microsoft Azure Previews](https://azure.microsoft.com/support/legal/preview-supplemental-terms/). Validate carefully before using in production.
-
 > **Looking for Fibre Channel instead?** See the [Disaggregated FC guide](../fc/QUICKSTART.md). **Looking for a hyperconverged (S2D + FlashArray) cluster?** See the [Hyperconverged FC guide](../../hyperconverged/fc/QUICKSTART.md).
 
 ## Prerequisites to Using the Quick Start Guide

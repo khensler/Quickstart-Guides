@@ -23,6 +23,7 @@ This guide translates the standard Linux iSCSI multipathing and NIC binding conf
 - [MachineConfig 2: iSCSI Initiator Configuration](#machineconfig-2-iscsi-initiator-configuration)
 - [MachineConfig 3: Multipath Configuration](#machineconfig-3-multipath-configuration)
 - [MachineConfig 4: iSCSI Interface Bindings](#machineconfig-4-iscsi-interface-bindings)
+- [MachineConfig 5: Everpure Data udev Rules](#machineconfig-5-pure-storage-udev-rules)
 - [Enabling Services](#enabling-services)
 - [Applying and Verifying](#applying-and-verifying)
 - [CSI Driver Integration](#csi-driver-integration)
@@ -394,6 +395,75 @@ spec:
 
 ---
 
+## MachineConfig 5: Everpure Data udev Rules
+
+Everpure Data publishes recommended per-device tuning for FlashArray volumes on Linux. On bare-metal RHEL these settings live in `/etc/udev/rules.d/99-pure-storage.rules`; MachineConfig delivers the identical file to RHCOS. The rules match only devices whose SCSI vendor string is `PURE`, so they never touch local disks or non-Pure LUNs.
+
+The four recommended settings are:
+
+| Setting | Value | Purpose |
+|---|---|---|
+| `queue/scheduler` | `none` | Flash storage needs no I/O reordering; the multiqueue `none` scheduler minimizes latency and CPU overhead. (On older single-queue kernels this was `noop`.) |
+| `queue/add_random` | `0` | Excludes the device from kernel entropy pool contributions, removing per-I/O CPU overhead. |
+| `queue/rq_affinity` | `2` | Completes each I/O on the CPU that submitted it, improving cache locality and spreading completion load. |
+| `device/timeout` | `60` | Raises the SCSI command timeout to 60s so transient path/controller events don't prematurely fail I/O. |
+
+> **Note:** These rules apply to the underlying `sd*` SCSI paths (the `PURE` vendor match). Multipath (`dm-*`) devices inherit their behavior from the member paths, so matching the `sd*` devices is sufficient.
+
+**Raw file content for `/etc/udev/rules.d/99-pure-storage.rules`:**
+```
+# Recommended settings for Everpure Data FlashArray.
+
+# Use none scheduler for high-performance solid-state storage.
+ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", ATTR{queue/scheduler}="none"
+
+# Reduce CPU overhead due to entropy collection.
+ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", ATTR{queue/add_random}="0"
+
+# Spread CPU load by redirecting completions to originating CPU.
+ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", ATTR{queue/rq_affinity}="2"
+
+# Set the HBA/SCSI command timeout to 60 seconds.
+ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", ATTR{device/timeout}="60"
+```
+
+**MachineConfig spec:**
+
+```yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-worker-pure-udev
+  labels:
+    machineconfiguration.openshift.io/role: worker
+spec:
+  config:
+    ignition:
+      version: 3.4.0
+    files:
+      - path: /etc/udev/rules.d/99-pure-storage.rules
+        mode: 0644
+        overwrite: true
+        contents:
+          source: "data:text/plain;charset=utf-8;base64,<BASE64: 99-pure-storage.rules content above>"
+```
+
+> **Applying without a reboot** — MachineConfig triggers a rolling reboot which reloads udev automatically. To apply on an already-running node for validation, reload and re-trigger udev:
+> ```bash
+> oc debug node/<NODE_NAME> -- chroot /host bash -c \
+>   "udevadm control --reload-rules && udevadm trigger --subsystem-match=block --action=change"
+> ```
+
+> **Verify the settings took effect** (after Pure volumes are attached):
+> ```bash
+> oc debug node/<NODE_NAME> -- chroot /host bash -c \
+>   'for d in $(grep -l PURE /sys/block/sd*/device/vendor | cut -d/ -f4); do \
+>      echo -n "$d: "; cat /sys/block/$d/queue/scheduler; done'
+> ```
+> The active scheduler (in brackets) should be `[none]` for each `PURE` device.
+
+---
+
 ## Enabling Services
 
 The systemd `enabled: true` fields above configure the units to start on boot. For the initial enable without a reboot, you can run:
@@ -484,7 +554,7 @@ oc get mcp worker -o jsonpath='{.spec.configuration.source}' | jq .
 
 ## CSI Driver Integration
 
-MachineConfig prepares the node's iSCSI infrastructure. The **actual iSCSI discovery and session login** is performed by your CSI driver (e.g., Pure Storage CSI, Portworx) when it attaches a volume to a pod.
+MachineConfig prepares the node's iSCSI infrastructure. The **actual iSCSI discovery and session login** is performed by your CSI driver (e.g., Everpure Data CSI, Portworx) when it attaches a volume to a pod.
 
 The MachineConfig ensures:
 1. Storage NICs have correct IPs and MTU before the CSI driver runs
@@ -494,7 +564,7 @@ The MachineConfig ensures:
 
 **No manual `iscsiadm discovery` or `--login` commands are needed** — the CSI driver handles this per-volume.
 
-> **Pure Storage CSI:** Configure the iSCSI interface names in the CSI driver's `StorageClass` or `Secret` as appropriate. The driver uses the iface bindings automatically when `iscsid` is configured for NIC-bound sessions.
+> **Everpure Data CSI:** Configure the iSCSI interface names in the CSI driver's `StorageClass` or `Secret` as appropriate. The driver uses the iface bindings automatically when `iscsid` is configured for NIC-bound sessions.
 
 ---
 
@@ -549,6 +619,8 @@ If duplicate connections exist, remove the old one via a MachineConfig oneshot u
 
 For environments applying all four configs simultaneously, here is a single combined MachineConfig. This results in a single reboot per node instead of four.
 
+[Back to Table of Contents](#table-of-contents)
+
 ```yaml
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
@@ -602,6 +674,13 @@ spec:
         overwrite: true
         contents:
           source: "data:text/plain;charset=utf-8;base64,<BASE64: iface1>"
+
+      # Everpure Data recommended udev rules
+      - path: /etc/udev/rules.d/99-pure-storage.rules
+        mode: 0644
+        overwrite: true
+        contents:
+          source: "data:text/plain;charset=utf-8;base64,<BASE64: 99-pure-storage.rules>"
 
     systemd:
       units:
