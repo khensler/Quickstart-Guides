@@ -14,3 +14,7 @@ pdf_to_markdown.py
 vdi-audit/
 .venv/
 articles/
+todo.md
+__pycache__/
+*.pyc
+*.pyd
