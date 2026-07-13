@@ -6,3 +6,11 @@ external docs/
 .DS_Store
 dita_output*
 changelog.md
+pdf_conversion
+dita*
+format_pdf_markdown.py
+generate_toc.py
+pdf_to_markdown.py
+vdi-audit/
+.venv/
+articles/

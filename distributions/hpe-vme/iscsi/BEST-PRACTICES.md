@@ -34,25 +34,25 @@ Comprehensive best practices for deploying iSCSI storage with GFS2 datastores on
 flowchart TB
     subgraph VME["HPE VME Cluster"]
         direction LR
-        H1["Host 1\n2x Storage NICs"]
-        H2["Host 2\n2x Storage NICs"]
-        H3["Host 3\n2x Storage NICs"]
+        H1["Host 1<br>2x Storage NICs"]
+        H2["Host 2<br>2x Storage NICs"]
+        H3["Host 3<br>2x Storage NICs"]
     end
 
     subgraph FA["Fabric A — Dedicated VLAN — Subnet A"]
-        SWA["Switch A\n10/25 GbE · MTU 9000"]
+        SWA["Switch A<br>10/25 GbE · MTU 9000"]
     end
 
     subgraph FB["Fabric B — Dedicated VLAN — Subnet B"]
-        SWB["Switch B\n10/25 GbE · MTU 9000"]
+        SWB["Switch B<br>10/25 GbE · MTU 9000"]
     end
 
     subgraph PURE["Pure Storage FlashArray"]
         direction LR
-        CT0A["CT0 Portal\nFabric A"]
-        CT1A["CT1 Portal\nFabric A"]
-        CT0B["CT0 Portal\nFabric B"]
-        CT1B["CT1 Portal\nFabric B"]
+        CT0A["CT0 Portal<br>Fabric A"]
+        CT1A["CT1 Portal<br>Fabric A"]
+        CT0B["CT0 Portal<br>Fabric B"]
+        CT1B["CT1 Portal<br>Fabric B"]
     end
 
     H1 -- "NIC-A" --> SWA
