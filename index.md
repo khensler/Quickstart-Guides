@@ -29,18 +29,32 @@ Choose your distribution and protocol to get started:
 
 ---
 
+## VMware to Proxmox Migration
+
+Guides for migrating VMware VMs to Proxmox VE using Everpure Data FlashArray storage.
+
+| Guide | Storage Type | Description |
+|:------|:-------------|:------------|
+| [Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) | vVol (block) | Manual migration using Everpure Data vVols with live disk move via QMP |
+| [Migration Guide (NFS)](distributions/proxmox/migration/VMware-Proxmox-NFS-Migration.md) | NFS | Migrate from NFS datastores; direct VMDK attach with live `qm move_disk`, includes non-destructive managed directory copy method |
+
+---
+
 ## Cloud & Hybrid Infrastructure
 
 **AWS Outposts:**
 - [FlashArray for AWS Outposts](distributions/aws-outposts/QUICKSTART.md) — Connect EC2 instances on AWS Outposts to FlashArray for data and boot volumes (NVMe-TCP and iSCSI)
+
+**OpenShift / Kubernetes:**
+- [iSCSI Multipathing & NIC Binding via MachineConfig](distributions/openshift/iscsi/QUICKSTART.md) — Configure iSCSI multipathing with NIC binding on Red Hat CoreOS worker nodes using MachineConfig
 
 ---
 
 ## OpenStack Distributions
 
 **Platform9 PCD:**
-- [Platform9 PCD iSCSI Integration Guide](distributions/pcd/iscsi/GUIDE.md) — Integrate Pure Storage FlashArray with Platform9 PCD using iSCSI and DM-Multipath
-- [Platform9 PCD Fibre Channel Integration Guide](distributions/pcd/fc/GUIDE.md) — Integrate Pure Storage FlashArray with Platform9 PCD using Fibre Channel and DM-Multipath
+- [Platform9 PCD iSCSI Integration Guide](distributions/pcd/iscsi/GUIDE.md) — Integrate Everpure Data FlashArray with Platform9 PCD using iSCSI and DM-Multipath
+- [Platform9 PCD Fibre Channel Integration Guide](distributions/pcd/fc/GUIDE.md) — Integrate Everpure Data FlashArray with Platform9 PCD using Fibre Channel and DM-Multipath
 
 ---
 
@@ -62,4 +76,3 @@ These reference documents are included inline throughout the Best Practices guid
 **QUICKSTART Guides** - Short, opinionated guides with a single recommended configuration path. Get up and running quickly.
 
 **BEST-PRACTICES Guides** - Comprehensive documentation with multiple options, detailed explanations, diagrams, and troubleshooting information.
-

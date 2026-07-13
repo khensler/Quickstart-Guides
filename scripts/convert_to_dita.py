@@ -58,7 +58,8 @@ class ConversionConfig:
     single_task: bool = False         # If True, emit one task topic from standalone file (instead of splitting by H1)
 
     # Filtering options for selective conversion
-    distribution: str = ""            # Filter by distribution (e.g., "rhel", "debian")
+    distribution: str = ""            # Filter by distribution (e.g., "rhel", "debian", "azure-local")
+    deployment: str = ""              # Filter by deployment type (Azure Local: "disaggregated" or "hyperconverged")
     protocol: str = ""                # Filter by protocol (e.g., "iscsi", "nvme-tcp", "nfs", "fc")
     generate_section_maps: bool = False  # Generate per-distribution/protocol maps
     organize_by_section: bool = False    # Organize topics into subdirectories
@@ -138,6 +139,49 @@ def remove_step_prefix(text: str) -> str:
 def generate_uuid() -> str:
     """Generate a short unique identifier."""
     return uuid.uuid4().hex[:8]
+
+
+# Human-friendly distribution labels for map/navtitle display.
+# Anything not listed falls back to str.title().
+DIST_TITLE_OVERRIDES = {
+    'rhel': 'RHEL',
+    'suse': 'SUSE',
+    'xcpng': 'XCP-ng',
+    'hpe-vme': 'HPE VME',
+    'aws-outposts': 'AWS Outposts',
+    'azure-local': 'Azure Local',
+}
+
+
+def format_dist_title(dist: str) -> str:
+    """Return the display label for a distribution (e.g. 'azure-local' -> 'Azure Local')."""
+    return DIST_TITLE_OVERRIDES.get(dist.lower(), dist.title())
+
+
+# Azure Local deployment types, with common aliases normalized to the canonical
+# path segment used under distributions/azure-local/<deployment>/<protocol>/.
+DEPLOYMENT_ALIASES = {
+    'disagg': 'disaggregated',
+    'disaggregated': 'disaggregated',
+    'hci': 'hyperconverged',
+    's2d': 'hyperconverged',
+    'hyperconverged': 'hyperconverged',
+}
+
+
+def normalize_deployment(value: str) -> str:
+    """Normalize a deployment-type filter value (e.g. 'disagg' -> 'disaggregated')."""
+    return DEPLOYMENT_ALIASES.get(value.lower().strip(), value.lower().strip())
+
+
+def deployment_of(path: str) -> str:
+    """Return the Azure Local deployment type embedded in a path, or '' if none."""
+    pl = path.lower().replace('\\', '/')
+    if '/disaggregated/' in pl:
+        return 'disaggregated'
+    if '/hyperconverged/' in pl:
+        return 'hyperconverged'
+    return ''
 
 
 def collapse_consecutive_notes(lines: List[str]) -> List[str]:
@@ -665,6 +709,18 @@ class DITAGenerator:
         filename = Path(src_path).name
         return f"../images/{filename}"
 
+    def _resolve_image_ref(self, src_path: str) -> Tuple[str, str]:
+        """Return (href, scope) for an image.
+
+        External http(s) URLs (e.g. Microsoft Learn screenshots) are referenced
+        in place with scope="external"; everything else is treated as a local
+        image under ../images/ with scope="local".
+        """
+        src = src_path.strip()
+        if re.match(r'^https?://', src, re.IGNORECASE):
+            return src, 'external'
+        return self._resolve_image_path(src), 'local'
+
     def generate_warehouse_topic(self, include_path: str, content: str) -> str:
         """Generate a DITA warehouse topic from an include file.
 
@@ -802,9 +858,9 @@ class DITAGenerator:
                 nested_items = [child.items for child in elem.children]
                 section_content.append(self._generate_ol(elem.items, nested_items=nested_items))
             elif elem.type == 'image':
-                image_href = self._resolve_image_path(elem.content)
+                image_href, image_scope = self._resolve_image_ref(elem.content)
                 alt_text = escape_xml(elem.language or 'Image')
-                section_content.append(f'        <fig><image href="{escape_xml_attr(image_href)}" scope="local"><alt>{alt_text}</alt></image></fig>')
+                section_content.append(f'        <fig><image href="{escape_xml_attr(image_href)}" scope="{image_scope}"><alt>{alt_text}</alt></image></fig>')
             elif elem.type == 'table':
                 section_content.append(self._generate_table(elem.content))
 
@@ -975,9 +1031,9 @@ class DITAGenerator:
             nested_items = [child.items for child in elem.children]
             return self._generate_ol(elem.items, indent='                    ', nested_items=nested_items)
         elif elem.type == 'image':
-            image_href = self._resolve_image_path(elem.content)
+            image_href, image_scope = self._resolve_image_ref(elem.content)
             alt_text = escape_xml(elem.language or 'Image')
-            return f'                    <fig><image href="{escape_xml_attr(image_href)}" scope="local"><alt>{alt_text}</alt></image></fig>'
+            return f'                    <fig><image href="{escape_xml_attr(image_href)}" scope="{image_scope}"><alt>{alt_text}</alt></image></fig>'
         elif elem.type == 'note':
             note_type = self._detect_note_type(elem.content)
             cleaned_content = self._strip_note_prefix(elem.content, note_type)
@@ -1166,6 +1222,39 @@ class DITAMapGenerator:
             return f"topics/{subdir}/{topic['id']}.dita"
         return f"topics/{topic['id']}.dita"
 
+    def _emit_protocol_groups(self, topicrefs: List[str], topics: List[Dict[str, str]], indent: str):
+        """Group topics by protocol and append <topichead> blocks at the given indent."""
+        protocols = {}
+        for topic in topics:
+            path = topic.get('relative_path', '').lower().replace('\\', '/')
+            if 'nvme-tcp' in path:
+                proto = 'NVMe-TCP'
+            elif 'iscsi' in path:
+                proto = 'iSCSI'
+            elif 'nfs' in path:
+                proto = 'NFS'
+            elif '/fc/' in path:
+                proto = 'FC'
+            else:
+                proto = 'Other'
+            protocols.setdefault(proto, []).append(topic)
+
+        for proto, proto_topics in sorted(protocols.items()):
+            topicrefs.append(f'{indent}<topichead navtitle="{proto}">')
+            for topic in proto_topics:
+                # Parent topic with children (BEST-PRACTICES split by H2)
+                if topic.get('type') == 'concept-parent' and 'children' in topic:
+                    parent_title = 'Best Practices' if 'best-practices' in topic['id'].lower() else topic['title']
+                    topicrefs.append(f'{indent}    <topichead navtitle="{escape_xml(parent_title)}">')
+                    for child in topic['children']:
+                        child_href = self._get_topic_href(child)
+                        topicrefs.append(f'{indent}        <topicref href="{child_href}" navtitle="{escape_xml(child["title"])}"/>')
+                    topicrefs.append(f'{indent}    </topichead>')
+                else:
+                    href = self._get_topic_href(topic)
+                    topicrefs.append(f'{indent}    <topicref href="{href}"/>')
+            topicrefs.append(f'{indent}</topichead>')
+
     def generate_main_map(self, topics: List[Dict[str, str]], title: str = "Linux Storage Configuration Guides") -> str:
         """Generate the main DITA map."""
         topicrefs = []
@@ -1192,43 +1281,26 @@ class DITAMapGenerator:
 
         # Build map structure
         for dist, dist_topics in sorted(distributions.items()):
-            dist_title = dist.upper() if dist in ['rhel', 'suse'] else dist.title()
+            dist_title = format_dist_title(dist)
             topicrefs.append(f'    <topichead navtitle="{dist_title}">')
 
-            # Group by protocol
-            protocols = {}
+            # Azure Local carries an extra deployment level (disaggregated /
+            # hyperconverged) between the distribution and the protocol. When
+            # present, nest by deployment type first, then protocol.
+            deployments = {}
             for topic in dist_topics:
-                path = topic.get('relative_path', '')
-                if 'nvme-tcp' in path.lower():
-                    proto = 'NVMe-TCP'
-                elif 'iscsi' in path.lower():
-                    proto = 'iSCSI'
-                elif 'nfs' in path.lower():
-                    proto = 'NFS'
-                elif '/fc/' in path.lower().replace('\\', '/'):
-                    proto = 'FC'
-                else:
-                    proto = 'Other'
-                if proto not in protocols:
-                    protocols[proto] = []
-                protocols[proto].append(topic)
+                deployments.setdefault(deployment_of(topic.get('relative_path', '')), []).append(topic)
 
-            for proto, proto_topics in sorted(protocols.items()):
-                topicrefs.append(f'        <topichead navtitle="{proto}">')
-                for topic in proto_topics:
-                    # Check if this is a parent topic with children (BEST-PRACTICES split by H2)
-                    if topic.get('type') == 'concept-parent' and 'children' in topic:
-                        # Create a topichead for the parent with nested children
-                        parent_title = 'Best Practices' if 'best-practices' in topic['id'].lower() else topic['title']
-                        topicrefs.append(f'            <topichead navtitle="{escape_xml(parent_title)}">')
-                        for child in topic['children']:
-                            child_href = self._get_topic_href(child)
-                            topicrefs.append(f'                <topicref href="{child_href}" navtitle="{escape_xml(child["title"])}"/>')
-                        topicrefs.append('            </topichead>')
+            if any(deployments):  # at least one topic has a deployment segment
+                for deployment, dep_topics in sorted(deployments.items()):
+                    if deployment:
+                        topicrefs.append(f'        <topichead navtitle="{deployment.title()}">')
+                        self._emit_protocol_groups(topicrefs, dep_topics, '            ')
+                        topicrefs.append('        </topichead>')
                     else:
-                        href = self._get_topic_href(topic)
-                        topicrefs.append(f'            <topicref href="{href}"/>')
-                topicrefs.append('        </topichead>')
+                        self._emit_protocol_groups(topicrefs, dep_topics, '        ')
+            else:
+                self._emit_protocol_groups(topicrefs, dist_topics, '        ')
 
             topicrefs.append('    </topichead>')
 
@@ -1250,12 +1322,13 @@ class DITAMapGenerator:
 </map>
 '''
 
-    def generate_section_map(self, topics: List[Dict[str, str]], dist: str, proto: str) -> str:
-        """Generate a DITA map for a specific distribution/protocol combination."""
-        dist_title = dist.upper() if dist in ['rhel', 'suse'] else dist.title()
+    def generate_section_map(self, topics: List[Dict[str, str]], dist: str, proto: str, deployment: str = "") -> str:
+        """Generate a DITA map for a specific distribution/deployment/protocol combination."""
+        dist_title = format_dist_title(dist)
         proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP', 'fc': 'FC'}
         proto_title = proto_map.get(proto.lower(), proto.title())
-        map_title = f"{dist_title} {proto_title} Storage Guide"
+        deploy_title = deployment.title() if deployment else ""
+        map_title = " ".join(p for p in [dist_title, deploy_title, proto_title, "Storage Guide"] if p)
 
         topicrefs = []
 
@@ -1287,7 +1360,7 @@ class DITAMapGenerator:
 
         The Architecture section is the top-level node, with other topics nested below.
         """
-        dist_title = dist.upper() if dist in ['rhel', 'suse'] else dist.title()
+        dist_title = format_dist_title(dist)
         proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP', 'fc': 'FC'}
         proto_title = proto_map.get(proto.lower(), proto.title())
         map_title = f"{dist_title} {proto_title} Best Practices"
@@ -1588,6 +1661,12 @@ class MarkdownToDITAConverter:
             elif f'/{dist_filter}/' not in path_str and not path_str.startswith(f'{dist_filter}/'):
                 return False
 
+        # Check deployment-type filter (Azure Local: disaggregated vs hyperconverged)
+        if self.config.deployment:
+            deploy_filter = normalize_deployment(self.config.deployment)
+            if f'/{deploy_filter}/' not in path_str:
+                return False
+
         # Check protocol filter
         if self.config.protocol:
             proto_filter = self.config.protocol.lower()
@@ -1609,12 +1688,10 @@ class MarkdownToDITAConverter:
         # Filter out the filename (ends with .md) from parts
         dir_parts = [p for p in parts if not p.endswith('.md')]
 
-        # Return directory parts as subdir (e.g., "rhel/iscsi" or just "aws-outposts")
-        if len(dir_parts) >= 2:
-            return f"{dir_parts[0]}/{dir_parts[1]}"
-        elif len(dir_parts) >= 1:
-            return dir_parts[0]
-        return ""
+        # Return directory parts as subdir. For standard distros this is
+        # "rhel/iscsi"; for Azure Local it preserves the deployment level too,
+        # e.g. "azure-local/disaggregated/fc".
+        return "/".join(dir_parts)
 
     def _convert_main_docs(self):
         """Convert main documentation files to DITA topics."""
@@ -1862,12 +1939,13 @@ class MarkdownToDITAConverter:
             return
 
         # Generate main map with appropriate title
-        if self.config.distribution or self.config.protocol:
+        if self.config.distribution or self.config.protocol or self.config.deployment:
             # Generate a filtered main map with specific title
-            dist_label = self.config.distribution.upper() if self.config.distribution in ['rhel', 'suse'] else self.config.distribution.title()
+            dist_label = format_dist_title(self.config.distribution) if self.config.distribution else ''
+            deploy_label = normalize_deployment(self.config.deployment).title() if self.config.deployment else ''
             proto_map = {'nfs': 'NFS', 'iscsi': 'iSCSI', 'nvme-tcp': 'NVMe-TCP', 'fc': 'FC'}
             proto_label = proto_map.get(self.config.protocol.lower(), self.config.protocol.title()) if self.config.protocol else ''
-            parts = [p for p in [dist_label, proto_label, "Storage Guide"] if p]
+            parts = [p for p in [dist_label, deploy_label, proto_label, "Storage Guide"] if p]
             title = " ".join(parts)
         else:
             title = "Linux Storage Configuration Guides"
@@ -1882,9 +1960,9 @@ class MarkdownToDITAConverter:
             self._generate_section_maps()
 
     def _generate_section_maps(self):
-        """Generate individual DITA maps for each distribution/protocol combination."""
-        # Group topics by distribution and protocol
-        sections = {}  # key = (dist, proto), value = list of topics
+        """Generate individual DITA maps for each distribution/deployment/protocol combination."""
+        # Group topics by distribution, deployment type (Azure Local), and protocol
+        sections = {}  # key = (dist, deployment, proto), value = list of topics
 
         for topic in self.converted_topics:
             path = topic.get('relative_path', '')
@@ -1898,6 +1976,9 @@ class MarkdownToDITAConverter:
             else:
                 continue  # Skip common/other topics for section maps
 
+            # Extract deployment type (Azure Local only; '' for everything else)
+            deployment = deployment_of(path)
+
             # Extract protocol
             if 'nvme-tcp' in path.lower():
                 proto = 'nvme-tcp'
@@ -1910,16 +1991,17 @@ class MarkdownToDITAConverter:
             else:
                 proto = 'other'
 
-            key = (dist, proto)
+            key = (dist, deployment, proto)
             if key not in sections:
                 sections[key] = []
             sections[key].append(topic)
 
         # Generate a map for each section
-        for (dist, proto), topics in sorted(sections.items()):
-            map_content = self.map_gen.generate_section_map(topics, dist, proto)
-            map_filename = f"{dist}-{proto}.ditamap"
-            map_file = self.config.output_dir / self.config.maps_dir / map_filename
+        for (dist, deployment, proto), topics in sorted(sections.items()):
+            # File/name stem includes the deployment segment when present
+            stem = f"{dist}-{deployment}-{proto}" if deployment else f"{dist}-{proto}"
+            map_content = self.map_gen.generate_section_map(topics, dist, proto, deployment)
+            map_file = self.config.output_dir / self.config.maps_dir / f"{stem}.ditamap"
             map_file.write_text(map_content, encoding='utf-8')
             print(f"  Generated section map: {map_file}")
 
@@ -1933,8 +2015,7 @@ class MarkdownToDITAConverter:
                         proto,
                         topic.get('title', 'Best Practices')
                     )
-                    bp_map_filename = f"{dist}-{proto}-best-practices.ditamap"
-                    bp_map_file = self.config.output_dir / self.config.maps_dir / bp_map_filename
+                    bp_map_file = self.config.output_dir / self.config.maps_dir / f"{stem}-best-practices.ditamap"
                     bp_map_file.write_text(bp_map_content, encoding='utf-8')
                     print(f"  Generated best practices map: {bp_map_file}")
 
@@ -1974,7 +2055,11 @@ Examples:
     # Convert a standalone markdown file as a single task topic (instead of one concept per H1)
     python convert_to_dita.py --file vmware-proxmox-manual-migration.md --single-task -o dita_output
 
-Available distributions: rhel, debian, suse, oracle, proxmox, xcpng, aws-outposts
+    # Convert only Azure Local disaggregated FC and zip the output
+    python convert_to_dita.py --inline-includes -d azure-local -D disaggregated -p fc --zip
+
+Available distributions: rhel, debian, suse, oracle, proxmox, xcpng, aws-outposts, azure-local
+Available deployment types (Azure Local): disaggregated (disagg), hyperconverged (hci)
 Available protocols: iscsi, nvme-tcp, nfs, fc
         '''
     )
@@ -2015,7 +2100,14 @@ Available protocols: iscsi, nvme-tcp, nfs, fc
         '-d', '--distribution',
         type=str,
         default='',
-        help='Filter by distribution (e.g., rhel, debian, suse, oracle, proxmox, xcpng, aws-outposts)'
+        help='Filter by distribution (e.g., rhel, debian, suse, oracle, proxmox, xcpng, aws-outposts, azure-local)'
+    )
+
+    parser.add_argument(
+        '-D', '--deployment',
+        type=str,
+        default='',
+        help='Filter by Azure Local deployment type: disaggregated (aliases: disagg) or hyperconverged (aliases: hci, s2d)'
     )
 
     parser.add_argument(
@@ -2083,6 +2175,7 @@ Available protocols: iscsi, nvme-tcp, nfs, fc
         standalone_file=args.file.resolve() if args.file else None,
         single_task=args.single_task,
         distribution=args.distribution.lower(),
+        deployment=normalize_deployment(args.deployment) if args.deployment else '',
         protocol=args.protocol.lower(),
         generate_section_maps=args.section_maps,
         organize_by_section=args.organize_sections
@@ -2117,6 +2210,8 @@ def _zip_output(output_dir: Path, args) -> Path:
     parts = [output_dir.name]
     if args.distribution:
         parts.append(args.distribution.lower())
+    if args.deployment:
+        parts.append(normalize_deployment(args.deployment))
     if args.protocol:
         parts.append(args.protocol.lower())
     if args.file:
