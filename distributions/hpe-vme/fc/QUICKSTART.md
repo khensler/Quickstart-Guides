@@ -1,162 +1,91 @@
 ---
 layout: default
-title: Pure Storage FlashArray Fibre Channel Configuration Guide for HPE VM Essentials
+title: Everpure FlashArray Fibre Channel Configuration Guide for HPE VM Essentials
 ---
 
-# Pure Storage FlashArray Fibre Channel Configuration Guide for HPE VM Essentials
+# Everpure FlashArray Fibre Channel Configuration Guide for HPE VM Essentials
 
-This guide provides step-by-step instructions for configuring Fibre Channel multipath storage from a Pure Storage FlashArray to an HPE VM Essentials (VME) cluster using GFS2 shared datastores.
+This guide covers connecting a Everpure FlashArray Fibre Channel volume to an HPE VM Essentials (VME) cluster and creating a shared clustered datastore.
 
-> **⚠️ Important:** HPE VM Essentials Manager does **not** provide a UI configuration path for Fibre Channel storage. All FC storage configuration is performed via CLI on each cluster host. This guide covers the complete CLI workflow and the VME Manager UI step for creating the GFS2 datastore.
-
----
-
-## Disclaimer
-
-> **This guide assumes that the Pure Storage FlashArray is already configured and ready for FC connectivity.** This includes:
-> - FC ports enabled and cabled to the fabric
-> - FC target port IPs assigned across both controllers
-> - FC switches configured end-to-end
-> - At least one volume created and available for connection
->
-> The **only** Pure FlashArray configuration covered in this guide is registering the VME host WWPNs, creating a Host Group, and connecting the volume to that Host Group (Step 3). For initial FlashArray FC port setup, refer to the [Pure Storage FlashArray documentation](https://support.purestorage.com).
+> **The host side is intentionally short.** Once the FlashArray-side prerequisites are complete (WWPNs registered, host group created, volume connected, and fabric zoning in place), the only work on the VME hosts is installing multipath tooling, confirming the volume is visible, and creating the datastore in VME Manager. VME Manager has no Fibre Channel target-discovery UI — the host-side steps below are done via CLI, then the datastore is created in the UI.
 
 ---
 
 ## Prerequisites
 
+Complete these on the FlashArray and FC fabric **before** starting — they are outside the scope of this guide:
+
 | Requirement | Details |
 |-------------|---------|
-| HPE VME Cluster | Deployed and operational, minimum 3 nodes (required for GFS2) |
-| Pure Storage FlashArray | FC volumes provisioned and accessible |
-| FC Fabric | Dual-fabric topology, HBAs installed in each cluster node, cabled to both fabrics |
-| Access | Root or sudo privileges on all cluster hosts |
+| HPE VME Cluster | Deployed and operational (3+ nodes for a shared clustered datastore) |
+| FlashArray host setup | A host entry per VME node (OS type `Linux`) with each node's WWPNs, all added to one **Host Group** |
+| Volume connected | Target volume connected to that Host Group |
+| Fabric zoning | Single-initiator zoning complete on both fabrics for every node's HBA WWPNs |
+| HBAs | Installed in each node and cabled to both fabrics |
+| Access | Root or sudo on all cluster hosts |
+
+> **Need your WWPNs to register on the array?** Run `cat /sys/class/fc_host/host*/port_name` on each host. See the [FC Best Practices]({{ site.baseurl }}/distributions/hpe-vme/fc/BEST-PRACTICES.html) for HBA verification and zoning guidance.
 
 {% include quickstart/glossary-link-fc.md %}
 
 ---
 
-## Step 1: Install Packages and Enable Multipath
+## Step 1: Configure Multipath
 
-Run on **every cluster host**:
-
-```bash
-apt update
-apt install -y multipath-tools sg3-utils sysfsutils
-systemctl enable --now multipathd
-```
-
----
-
-## Step 2: Verify HBA and Collect WWPNs
-
-Run on **every cluster host**:
-
-{% include quickstart/fc-hba-verify.md %}
-
-> **Collect WWPNs from all cluster hosts** before proceeding. Every host that will access the shared volume must be registered on the array.
-
----
-
-## Step 3: Register WWPNs and Present Volume
-
-{% include quickstart/fc-zoning-checklist.md %}
-
-**In the Pure FlashArray UI:**
-
-1. Navigate to **Storage → Hosts**
-2. Click **+** to create a host entry for each VME node
-3. Set **OS Type** to `Linux`
-4. Under **Fibre Channel**, paste the WWPN(s) for that host
-5. Repeat for all cluster hosts
-6. Create a **Host Group** and add all host entries
-7. Navigate to **Storage → Volumes**, select your volume, and connect it to the Host Group
-
----
-
-## Step 4: Rescan for Presented LUNs
-
-Run on **every cluster host**:
-
-{% include quickstart/fc-rescan-luns.md %}
-
-> **All cluster hosts must see the block device before proceeding.** VME Manager will not display the device in the datastore wizard if any host is missing it — no error message is shown.
-
----
-
-## Step 5: Configure Multipath
-
-Run on **every cluster host**:
+Multipath tooling (`multipath-tools`, `sg3-utils`) is already present on HVM hosts from the VME install. Run on **every cluster host** to apply a Pure-appropriate configuration — recent `multipath-tools` ships built-in defaults for `PURE FlashArray`, so a minimal `defaults`/`blacklist` configuration is enough:
 
 {% include quickstart/fc-multipath-conf.md %}
 
 ---
 
-## Step 6: Verify Multipath on All Hosts
+## Step 2: Rescan and Verify the Volume
 
 Run on **every cluster host**:
 
 ```bash
-multipath -ll
+# Scan for the newly presented LUN(s)
+sudo rescan-scsi-bus.sh
+
+# Confirm the Pure device and its paths
+sudo multipath -ll
 ```
 
-**Expected output** — four paths across two ALUA priority groups (active/optimized and active/non-optimized):
+**Expected output** — the Pure FlashArray is active/active, so every path appears in a **single active/optimized priority group** (`prio=50`), all `active ready running`:
 
-```
-mpathX (3624a937...) dm-X PURE,FlashArray
-size=XXG features='0' hwhandler='1 alua' wp=rw
-|-+- policy='service-time 0' prio=50 status=active
-| |- X:0:0:1 sdX  X:X  active ready running
-| `- X:0:0:1 sdX  X:X  active ready running
-`-+- policy='service-time 0' prio=10 status=enabled
-  |- X:0:0:1 sdX  X:X  active ready running
-  `- X:0:0:1 sdX  X:X  active ready running
-```
+![multipath -ll showing the Pure FlashArray device and its active paths](img/fc-multipath-verify.png)
+
+> **Note the WWID** (`3624a9...`) — it must match the volume you connected on the FlashArray, and it must be the **same on every host**. VME Manager will not show the device in the datastore wizard unless it is visible on **all** cluster nodes, and no error is displayed if a host is missing it.
 
 ---
 
-## Step 7: Create GFS2 Datastore in VME Manager
+## Step 3: Create the Shared Datastore in VME Manager
 
-### 7a. Rescan on All Hosts
+1. Go to **Infrastructure > Clusters > [Your Cluster] > Storage > Data Stores** and click **+ ADD**.
+2. **NAME** — enter a name (e.g. `PureFC`).
+3. **TYPE** — select **HPE Clustered Datastore (Shared LUN)**.
+4. **BLOCK DEVICE** — select the Pure multipath device (`/dev/mapper/<wwid>`), *not* a local disk.
+5. Leave **GROUP ACCESS** enabled so all cluster nodes mount the datastore.
+6. Click **Save**.
 
-Run on **every cluster host**:
+![VME Manager Add Data Store dialog — HPE Clustered Datastore on the Pure /dev/mapper device](img/fc-add-datastore.png)
 
-```bash
-rescan-scsi-bus.sh
-```
+VME Manager formats the LUN with the GFS2 clustered filesystem, configures cluster locking, and mounts it on all nodes.
 
-### 7b. Create the GFS2 Datastore
-
-In the VME Manager UI:
-
-1. Navigate to **Infrastructure → Clusters → [Your Cluster] → Storage → Data Stores**
-2. Click **+ ADD**
-3. Select **GFS2 Pool** as the type
-4. In the **BLOCK DEVICE** dropdown, select the Pure multipath device (`/dev/mapper/<wwid>`)
-5. Click **Save**
-
-VME Manager will automatically format the LUN with GFS2, configure DLM, and mount the filesystem on all cluster hosts.
-
-> **Note:** If the block device dropdown shows only local disks, verify that `multipath -ll` shows the Pure device on **every** cluster host, then re-run the rescan command and retry.
+> **Only local disks in the dropdown?** The Pure device isn't visible on every node. Confirm `multipath -ll` shows it on **all** hosts (Step 2), then re-run the rescan and reopen the wizard.
 
 ---
 
 ## Verification
 
-After completing setup, verify on **each cluster host**:
+On **each cluster host**:
 
 ```bash
-# Check HBA port state
-cat /sys/class/fc_host/host*/port_state
-
-# Check multipath (expect 4 active paths)
-multipath -ll
-
-# Verify GFS2 mount
-mount | grep gfs2
+cat /sys/class/fc_host/host*/port_state   # all Online
+sudo multipath -ll                        # Pure device, all paths active
+mount | grep gfs2                         # datastore mounted
 ```
 
-In the VME Manager UI, navigate to **Infrastructure → Clusters → [Your Cluster] → Storage → Data Stores** and confirm the datastore status shows **Online**.
+In VME Manager, confirm the datastore shows **Online** under **Infrastructure > Clusters > [Your Cluster] > Storage > Data Stores**.
 
 ---
 
@@ -164,27 +93,7 @@ In the VME Manager UI, navigate to **Infrastructure → Clusters → [Your Clust
 
 | Symptom | Cause | Resolution |
 |---------|-------|------------|
-| Block device not visible in VME datastore wizard | VME Manager does not auto-rescan hypervisor hosts for new block devices | Run `rescan-scsi-bus.sh` on **all** cluster hosts and retry |
-| Block device still missing after rescan | One or more hosts are missing the multipath device; GFS2 requires all cluster hosts to see the LUN | Complete Steps 2–6 on the affected host(s); verify with `multipath -ll` on every host |
-| Fewer than 4 multipath paths | HBA port not online or zone missing for one HBA port / one fabric | Verify all HBA ports are `Online`; confirm zoning covers both fabrics for this host |
-| LUN not visible on any host | Volume not connected to host group, or zoning not complete | Confirm host group connection on FlashArray and verify zoning with SAN admin |
-| VME datastore created but I/O errors | `multipath.conf` misconfigured or `find_multipaths` set incorrectly | Verify `find_multipaths no` and `no_path_retry 0` in `/etc/multipath.conf` on all hosts |
-
----
-
-## Pre-Flight Checklist
-
-- [ ] HBAs installed and cabled to both FC fabrics on all cluster hosts
-- [ ] Packages installed and `multipathd` enabled on all cluster hosts (Step 1)
-- [ ] WWPNs collected from all cluster hosts (Step 2)
-- [ ] HBA ports report `Online` on all cluster hosts (Step 2)
-- [ ] Zoning configured on both FC fabrics for all host WWPNs (Step 3)
-- [ ] Host entries created on FlashArray for all cluster hosts (Step 3)
-- [ ] Host Group created with all hosts added (Step 3)
-- [ ] Volume connected to Host Group on FlashArray (Step 3)
-- [ ] LUN rescan completed on all cluster hosts (Step 4)
-- [ ] `multipath.conf` deployed on all cluster hosts (Step 5)
-- [ ] `multipath -ll` shows 4 paths on **every** cluster host (Step 6)
-- [ ] Rescan completed before opening VME Manager (Step 7a)
-- [ ] GFS2 datastore created and shows **Online** in VME Manager (Step 7b)
-- [ ] FlashArray shows FC connections from all cluster hosts
+| Block device not in the datastore wizard | VME Manager doesn't auto-rescan hosts, or the device isn't on every node | Run `sudo rescan-scsi-bus.sh` on **all** hosts; confirm `multipath -ll` shows the device everywhere (Step 2) |
+| No PURE device after rescan | Volume not connected, or zoning incomplete | Verify the Host Group connection on the FlashArray and zoning on both fabrics |
+| Fewer paths than expected | An HBA port is down or a fabric zone is missing | Check `cat /sys/class/fc_host/host*/port_state` (all `Online`); confirm zoning covers both fabrics |
+| Datastore created but I/O errors | `multipath.conf` misconfigured | Verify `find_multipaths no` and `no_path_retry 0` on all hosts (Step 1) |
