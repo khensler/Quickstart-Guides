@@ -1,7 +1,7 @@
 # Quickstart: Red Hat OpenShift with FlashArray File Services
 This quickstart configures Red Hat OpenShift Container Platform to dynamically provision ReadWriteMany (RWX) persistent volumes from Pure Storage FlashArray File Services. The supported integration uses Portworx CSI (PX-CSI), a FlashArray file virtual interface, and a Kubernetes `StorageClass` with the `pure_fa_file` backend.
 > **Scope:** This article covers dynamic NFS provisioning from FlashArray File Services. It does not cover FlashArray block volumes or manually defined NFS persistent volumes.
-For the vendor workflow, see [Dynamic Provisioning of FlashArray File Services](https://docs.portworx.com/portworx-csi/provision-storage/dynamic-provisioning/flasharray-file-services).
+For the Portworx documentation, see [Dynamic Provisioning of FlashArray File Services](https://docs.portworx.com/portworx-csi/provision-storage/dynamic-provisioning/flasharray-file-services).
 ## Prerequisites
 Before starting, confirm the following:
 * A supported Red Hat OpenShift Container Platform cluster.
@@ -37,20 +37,8 @@ Workloads that change ownership or use a pod `fsGroup` can fail when root squash
 > **Security warning:** `no_root_squash` permits root on an authorized client to act as root on the export. Restrict the policy to trusted node addresses and use it only when required.
 See [Prepare FlashArray for PX-CSI](https://docs.portworx.com/portworx-csi/install/prepare/flash-array).
 ### 2. Create the PX-CSI FlashArray configuration
-Create `pure.json`:
-```json
-{
-    "FlashArrays": [
-        {
-            "MgmtEndPoint": "10.20.30.40",
-            "APIToken": "REPLACE_WITH_FLASHARRAY_API_TOKEN",
-            "NFSEndPoint": "10.20.40.50"
-        }
-    ]
-}
+Create a `pure.json` file describing the FlashArray management endpoint, API token, and NFS endpoint. `NFSEndPoint` is required for FlashArray File Services. For the field list and IPv6 formatting, see the [PX-CSI pure.json reference](https://docs.portworx.com/portworx-csi/reference/pure-json-reference).
 
-```
-Replace the examples with values from the FlashArray. `NFSEndPoint` is required for FlashArray File Services. For IPv6 formatting, see the [PX-CSI pure.json reference](https://docs.portworx.com/portworx-csi/reference/pure-json-reference).
 Create the required secret in the PX-CSI namespace:
 
 ```bash
@@ -76,27 +64,7 @@ oc get csidriver
 
 Confirm that the `StorageCluster` is online and the PX-CSI controller and node pods are running.
 ### 4. Create the FlashArray File StorageClass
-Create `fa-file-rwx.yaml`:
-
-```yaml
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-name: fa-file-rwx
-provisioner: pxd.portworx.com
-parameters:
-backend: "pure_fa_file"
-pure_nfs_policy: "openshift-nfs"
-pure_fa_file_system: "openshift-files"
-pure_quota_policy: "openshift-100gi"
-mountOptions:
-- nfsvers=4.1
-- proto=tcp
-reclaimPolicy: Delete
-allowVolumeExpansion: true
-```
-
-Replace the policy and file system names with existing FlashArray object names. Remove `pure_quota_policy` if no quota policy will be used.
+Create a `StorageClass` (for example, `fa-file-rwx.yaml`) with `provisioner: pxd.portworx.com` and `backend: "pure_fa_file"`, referencing your pre-created FlashArray objects through `pure_nfs_policy` and `pure_fa_file_system`. Optionally set `pure_quota_policy` to enforce a directory size limit and `allowVolumeExpansion: true`. For the full parameter list, the NFSv4.1/TCP defaults, and the multiserver limitation, see [Create a StorageClass](https://docs.portworx.com/portworx-csi/provision-storage/dynamic-provisioning/flasharray-file-services#create-a-storageclass) and the [PX-CSI StorageClass reference](https://docs.portworx.com/portworx-csi/reference/storage-class).
 
 Apply and verify:
 
@@ -105,56 +73,12 @@ oc apply -f fa-file-rwx.yaml
 oc get storageclass fa-file-rwx -o yaml
 ```
 
-| Parameter | Required | Description |
-|-|-|-|
-| `backend: "pure_fa_file"` | Yes | Selects FlashArray File Services. |
-| `pure_nfs_policy` | Yes | Names a pre-created FlashArray NFS policy. |
-| `pure_fa_file_system` | Yes | Names the pre-created parent file system. |
-| `pure_quota_policy` | No | Associates a pre-created quota policy. |
-| `pure_nfs_endpoint` | No | Overrides `NFSEndPoint` for this class. |
-| `portworx.io/pure-array-id` | No | Targets one array in a multi-array configuration. |
-
 > **Capacity warning:** Without `pure_quota_policy`, the PVC request does not enforce a directory quota. The directory can consume available capacity in the parent file system.
-
-PX-CSI uses NFSv4.1 by default for FlashArray File Services. Use TCP; UDP is not supported. See the [PX-CSI StorageClass reference](https://docs.portworx.com/portworx-csi/reference/storage-class).
 
 ### 5. Create and validate an RWX claim
 
-Create `fa-file-test-pvc.yaml`:
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-name: fa-file-test
-spec:
-accessModes:
-- ReadWriteMany
-resources:
-requests:
-storage: 20Gi
-storageClassName: fa-file-rwx
-```
-Create `fa-file-test-pod.yaml`:
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-name: fa-file-test
-spec:
-securityContext:
-fsGroup: 1000
-containers:
-- name: test
-image: registry.access.redhat.com/ubi9/ubi-minimal:latest
-command: ["/bin/sh", "-c", "echo 'FlashArray File Services test' > /data/test.txt; sleep 3600"]
-volumeMounts:
-- name: data
-mountPath: /data
-volumes:
-- name: data
-persistentVolumeClaim:
-claimName: fa-file-test
-```
+Create a `ReadWriteMany` PVC (`fa-file-test-pvc.yaml`) that sets `storageClassName: fa-file-rwx`, and a test pod (`fa-file-test-pod.yaml`) that mounts it at `/data` and writes a file such as `/data/test.txt`. On OpenShift, set a pod `securityContext.fsGroup` so the workload can write to the mount. For the full PVC and pod field reference, including `nodeAffinity`/topology options, see [Create a PVC](https://docs.portworx.com/portworx-csi/provision-storage/dynamic-provisioning/flasharray-file-services#create-a-pvc) and [Mount a PVC to a Pod](https://docs.portworx.com/portworx-csi/provision-storage/dynamic-provisioning/flasharray-file-services#mount-a-pvc-to-a-pod).
+
 Apply and verify:
 ```bash
 oc apply -f fa-file-test-pvc.yaml
@@ -164,7 +88,7 @@ oc get pvc fa-file-test
 oc exec fa-file-test -- cat /data/test.txt
 oc exec fa-file-test -- mount | grep ' /data '
 ```
-The PVC should be `Bound`, the pod should be `Running`, and the command should return `FlashArray File Services test`. The FlashArray should show a directory and NFS export associated with the persistent volume.
+The PVC should be `Bound`, the pod should be `Running`, and the `cat` command should return the contents you wrote to `/data/test.txt`. The FlashArray should show a directory and NFS export associated with the persistent volume.
 ## Troubleshooting
 | Symptom | Likely cause | Resolution |
 |-|-|-|
@@ -176,16 +100,7 @@ The PVC should be `Bound`, the pod should be `Running`, and the command should r
 
 ## Optional: NFS over TLS
 
-PX-CSI 26.2 documentation supports NFS over TLS with Purity//FA 6.10.6 or later, Linux kernel 6.12 or later on worker nodes, and the required NFS/TLS packages. After validating all prerequisites, add:
-
-```yaml
-mountOptions:
-- nfsvers=4.1
-- proto=tcp
-- xprtsec=tls
-```
-
-See [Dynamic Provisioning of FlashArray File Services](https://docs.portworx.com/portworx-csi/provision-storage/dynamic-provisioning/flasharray-file-services) and the [PX-CSI release notes](https://docs.portworx.com/portworx-csi/release-notes).
+PX-CSI supports NFS over TLS by adding `xprtsec=tls` to the storage class `mountOptions`. This requires a minimum Purity//FA version, a supported worker-node kernel, and the `nfs-utils`, `ktls-util` (`tlshd`), and `openssl` packages on each node. For the exact version and package requirements, see [Create a StorageClass](https://docs.portworx.com/portworx-csi/provision-storage/dynamic-provisioning/flasharray-file-services#create-a-storageclass) and the [PX-CSI release notes](https://docs.portworx.com/portworx-csi/release-notes).
 
 ## Cleanup
 

@@ -7,7 +7,7 @@ title: OpenShift / Kubernetes — iSCSI Multipathing & NIC Binding via MachineCo
 
 This guide translates the standard Linux iSCSI multipathing and NIC binding configuration into OpenShift **MachineConfig** specs. The underlying configuration is identical to a bare-metal RHEL host — MachineConfig simply delivers those files and systemd units declaratively to Red Hat CoreOS (RHCOS) worker nodes.
 
-> **📘 For the underlying Linux concepts and parameter explanations:** See the [RHEL iSCSI Quick Start](../../rhel/iscsi/QUICKSTART.md) and [RHEL iSCSI Best Practices](../../rhel/iscsi/BEST-PRACTICES.md). This guide focuses on *how* to express those configurations as Kubernetes-native specs.
+> **For the underlying Linux concepts and parameter explanations:** See the [RHEL iSCSI Quick Start](../../rhel/iscsi/QUICKSTART.md) and [RHEL iSCSI Best Practices](../../rhel/iscsi/BEST-PRACTICES.md). This guide focuses on *how* to express those configurations as Kubernetes-native specs.
 
 ---
 
@@ -24,6 +24,7 @@ This guide translates the standard Linux iSCSI multipathing and NIC binding conf
 - [MachineConfig 3: Multipath Configuration](#machineconfig-3-multipath-configuration)
 - [MachineConfig 4: iSCSI Interface Bindings](#machineconfig-4-iscsi-interface-bindings)
 - [MachineConfig 5: Everpure Data udev Rules](#machineconfig-5-pure-storage-udev-rules)
+- [MachineConfig 6: ARP Settings for Same-Subnet Multipath](#machineconfig-6-arp-settings-for-same-subnet-multipath)
 - [Enabling Services](#enabling-services)
 - [Applying and Verifying](#applying-and-verifying)
 - [CSI Driver Integration](#csi-driver-integration)
@@ -173,9 +174,9 @@ This drops the `iscsid.conf` and `initiatorname.iscsi` files — the same files 
 **Option A: Per-node MachineConfig (unique per host)**
 Create one MachineConfig per node targeting a node-specific MachineConfigPool, or use a startup script to generate the IQN (see Option B).
 
-**Option B: Generate at first boot (recommended)**
+**Option B: Generate and validate at first boot (recommended)**
 
-Use a oneshot systemd unit to generate a unique IQN on first boot if one does not exist:
+RHCOS images typically ship a default `/etc/iscsi/initiatorname.iscsi` containing a Red Hat default IQN (`iqn.1994-05.com.redhat:<id>`). Nodes cloned from the same image can therefore boot with **identical** IQNs, which breaks multipath and FlashArray host mapping. Use a oneshot systemd unit that runs a small script on every boot to generate a unique IQN when the file is missing or empty, **or when it still contains the shared Red Hat default**:
 
 ```yaml
 apiVersion: machineconfiguration.openshift.io/v1
@@ -217,28 +218,60 @@ spec:
         contents:
           source: "data:text/plain;charset=utf-8;base64,<BASE64: iscsid.conf content above>"
 
+      # IQN generator/validator script (raw content shown below)
+      - path: /usr/local/bin/generate-iscsi-iqn.sh
+        mode: 0755
+        overwrite: true
+        contents:
+          source: "data:text/plain;charset=utf-8;base64,<BASE64: generate-iscsi-iqn.sh content below>"
+
     systemd:
       units:
         - name: iscsid.service
           enabled: true
 
-        # Generate a unique initiator IQN on first boot if none exists
+        # Generate a unique initiator IQN on boot, and replace the shared
+        # RHCOS default IQN if the image shipped one.
         - name: iscsi-initiator-name.service
           enabled: true
           contents: |
             [Unit]
-            Description=Generate iSCSI Initiator Name
+            Description=Generate/validate iSCSI Initiator Name
             Before=iscsid.service
-            ConditionPathExists=!/etc/iscsi/initiatorname.iscsi
 
             [Service]
             Type=oneshot
             RemainAfterExit=yes
-            ExecStart=/bin/bash -c 'echo "InitiatorName=iqn.$(date +%%Y-%%m).$(hostname -d):$(hostname -s)" > /etc/iscsi/initiatorname.iscsi'
+            ExecStart=/usr/local/bin/generate-iscsi-iqn.sh
 
             [Install]
             WantedBy=multi-user.target
 ```
+
+**Raw content for `/usr/local/bin/generate-iscsi-iqn.sh`:**
+```bash
+#!/bin/bash
+# Ensure this node has a unique iSCSI initiator IQN.
+# RHCOS images often ship a shared default IQN (iqn.1994-05.com.redhat:<id>);
+# regenerate when the IQN is missing, empty, or still the Red Hat default.
+set -euo pipefail
+
+IQN_FILE=/etc/iscsi/initiatorname.iscsi
+current=""
+[ -f "$IQN_FILE" ] && current=$(sed -n 's/^InitiatorName=//p' "$IQN_FILE")
+
+if [ -z "$current" ] || [[ "$current" == iqn.1994-05.com.redhat:* ]]; then
+    domain=$(hostname -d)
+    [ -z "$domain" ] && domain=$(hostname -s)
+    new_iqn="iqn.$(date +%Y-%m).${domain}:$(hostname -s)"
+    echo "InitiatorName=${new_iqn}" > "$IQN_FILE"
+    echo "Generated unique iSCSI IQN: ${new_iqn}"
+else
+    echo "Existing unique iSCSI IQN retained: ${current}"
+fi
+```
+
+> **Why not `ConditionPathExists`?** A `ConditionPathExists=!/etc/iscsi/initiatorname.iscsi` guard would skip nodes that already have the file — which is exactly the shared-default case that must be fixed. Running the script every boot is idempotent: once the IQN is unique it is retained (the `else` branch).
 
 > **Register the IQN** — after nodes boot, collect each node's IQN and register it with your storage array before attempting connections:
 > ```bash
@@ -464,6 +497,65 @@ spec:
 
 ---
 
+## MachineConfig 6: ARP Settings for Same-Subnet Multipath
+
+When both storage NICs share the same subnet — a common iSCSI multipath topology — Linux's default ARP behavior can answer ARP requests for one interface's IP out of the *other* interface (the "ARP flux" problem). This causes the array to see both paths behind a single MAC, collapsing multipath redundancy and producing intermittent path failures. Setting `arp_ignore` and `arp_announce` to `2` forces each interface to reply and announce only for addresses it actually owns.
+
+This delivers `/etc/sysctl.d/99-iscsi-arp.conf`. See [Network Concepts]({{ site.baseurl }}/common/network-concepts.html) for the detailed explanation.
+
+> **Note:** These settings are only required when the storage NICs share a subnet. If each NIC is on its own dedicated subnet, they are unnecessary (but harmless). Replace the interface-specific `ens1f0`/`ens1f1` entries with your actual storage interface names.
+
+**Raw file content for `/etc/sysctl.d/99-iscsi-arp.conf`:**
+```
+# ARP settings for same-subnet multipath (CRITICAL)
+# Prevents ARP responses on wrong interface when multiple NICs share same subnet
+# See: Network Concepts documentation for detailed explanation
+net.ipv4.conf.all.arp_ignore = 2
+net.ipv4.conf.default.arp_ignore = 2
+net.ipv4.conf.all.arp_announce = 2
+net.ipv4.conf.default.arp_announce = 2
+# Interface-specific (adjust interface names as needed)
+net.ipv4.conf.ens1f0.arp_ignore = 2
+net.ipv4.conf.ens1f1.arp_ignore = 2
+net.ipv4.conf.ens1f0.arp_announce = 2
+net.ipv4.conf.ens1f1.arp_announce = 2
+```
+
+**MachineConfig spec:**
+
+```yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-worker-iscsi-arp
+  labels:
+    machineconfiguration.openshift.io/role: worker
+spec:
+  config:
+    ignition:
+      version: 3.4.0
+    files:
+      - path: /etc/sysctl.d/99-iscsi-arp.conf
+        mode: 0644
+        overwrite: true
+        contents:
+          source: "data:text/plain;charset=utf-8;base64,<BASE64: 99-iscsi-arp.conf content above>"
+```
+
+> **Applying without a reboot** — MachineConfig triggers a rolling reboot which reloads sysctl automatically. To apply on an already-running node for validation:
+> ```bash
+> oc debug node/<NODE_NAME> -- chroot /host sysctl --system
+> ```
+
+> **Verify the settings took effect:**
+> ```bash
+> oc debug node/<NODE_NAME> -- chroot /host bash -c \
+>   'sysctl net.ipv4.conf.all.arp_ignore net.ipv4.conf.all.arp_announce'
+> ```
+> Both should report `= 2`.
+
+---
+
 ## Enabling Services
 
 The systemd `enabled: true` fields above configure the units to start on boot. For the initial enable without a reboot, you can run:
@@ -487,6 +579,8 @@ oc apply -f 99-worker-iscsi-network.yaml
 oc apply -f 99-worker-iscsi-initiator.yaml
 oc apply -f 99-worker-iscsi-multipath.yaml
 oc apply -f 99-worker-iscsi-ifaces.yaml
+oc apply -f 99-worker-pure-udev.yaml
+oc apply -f 99-worker-iscsi-arp.yaml
 ```
 
 ### Watch the Rollout
@@ -617,7 +711,7 @@ If duplicate connections exist, remove the old one via a MachineConfig oneshot u
 
 ## Full Combined Reference
 
-For environments applying all four configs simultaneously, here is a single combined MachineConfig. This results in a single reboot per node instead of four.
+For environments applying all configs simultaneously, here is a single combined MachineConfig. This results in a single reboot per node instead of one per object.
 
 [Back to Table of Contents](#table-of-contents)
 
@@ -654,6 +748,13 @@ spec:
         contents:
           source: "data:text/plain;charset=utf-8;base64,<BASE64: iscsid.conf>"
 
+      # IQN generator/validator script
+      - path: /usr/local/bin/generate-iscsi-iqn.sh
+        mode: 0755
+        overwrite: true
+        contents:
+          source: "data:text/plain;charset=utf-8;base64,<BASE64: generate-iscsi-iqn.sh>"
+
       # dm-multipath configuration
       - path: /etc/multipath.conf
         mode: 0644
@@ -682,6 +783,13 @@ spec:
         contents:
           source: "data:text/plain;charset=utf-8;base64,<BASE64: 99-pure-storage.rules>"
 
+      # ARP settings for same-subnet multipath
+      - path: /etc/sysctl.d/99-iscsi-arp.conf
+        mode: 0644
+        overwrite: true
+        contents:
+          source: "data:text/plain;charset=utf-8;base64,<BASE64: 99-iscsi-arp.conf>"
+
     systemd:
       units:
         # Enable iscsid and multipathd at boot
@@ -691,19 +799,18 @@ spec:
         - name: multipathd.service
           enabled: true
 
-        # Generate unique IQN on first boot if not present
+        # Generate a unique IQN on boot; replace the shared RHCOS default if present
         - name: iscsi-initiator-name.service
           enabled: true
           contents: |
             [Unit]
-            Description=Generate iSCSI Initiator Name
+            Description=Generate/validate iSCSI Initiator Name
             Before=iscsid.service
-            ConditionPathExists=!/etc/iscsi/initiatorname.iscsi
 
             [Service]
             Type=oneshot
             RemainAfterExit=yes
-            ExecStart=/bin/bash -c 'echo "InitiatorName=iqn.$(date +%%Y-%%m).$(hostname -d):$(hostname -s)" > /etc/iscsi/initiatorname.iscsi'
+            ExecStart=/usr/local/bin/generate-iscsi-iqn.sh
 
             [Install]
             WantedBy=multi-user.target
@@ -716,6 +823,7 @@ spec:
 - [RHEL iSCSI Quick Start](../../rhel/iscsi/QUICKSTART.md)
 - [RHEL iSCSI Best Practices](../../rhel/iscsi/BEST-PRACTICES.md) — multipath parameters, APD handling, performance tuning
 - [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html)
-- [Network Concepts]({{ site.baseurl }}/common/network-concepts.html)
+- [Network Concepts]({{ site.baseurl }}/common/network-concepts.html) — ARP flux and same-subnet multipath
+- [Portworx CSI — Prepare FlashArray](https://docs.portworx.com/portworx-csi/install/prepare/flash-array) — Portworx's own host-prep guidance (multipath, udev, iSCSI/NVMe connectivity)
 - [OpenShift MachineConfig documentation](https://docs.openshift.com/container-platform/latest/post_installation_configuration/machine-configuration-tasks.html)
 - [OpenShift Machine Config Operator](https://github.com/openshift/machine-config-operator)
