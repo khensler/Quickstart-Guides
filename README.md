@@ -65,6 +65,8 @@ A collection of quick start guides for various technologies and configurations.
 **HPE VM Essentials:**
 - [iSCSI Quick Start](distributions/hpe-vme/iscsi/QUICKSTART.md) - iSCSI with GFS2 datastores for HPE VME clusters
 - [iSCSI Best Practices](distributions/hpe-vme/iscsi/BEST-PRACTICES.md) - iSCSI best practices for HPE VME with dual-fabric multipath
+- [Fibre Channel Quick Start](distributions/hpe-vme/fc/QUICKSTART.md) - FC multipath and HPE Clustered Datastore (Shared LUN) setup for HPE VME clusters
+- [Fibre Channel Best Practices](distributions/hpe-vme/fc/BEST-PRACTICES.md) - FC best practices for HPE VME with FlashArray active/active multipath
 - [NFS Quick Start](distributions/hpe-vme/nfs/QUICKSTART.md) - NFS datastore and ISO repository configuration for HPE VME
 - [NFS Best Practices](distributions/hpe-vme/nfs/BEST-PRACTICES.md) - NFS best practices for HPE VME (NFSv3 required)
 
