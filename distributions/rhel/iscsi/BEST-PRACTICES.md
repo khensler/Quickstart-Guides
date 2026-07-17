@@ -553,8 +553,6 @@ sudo journalctl -u multipathd -n 50
 
 {% include iscsi-performance-tuning.md %}
 
-{% include performance-tuning-iscsi.md %}
-
 ### RHEL-Specific Tuning
 
 #### Tuned Profiles

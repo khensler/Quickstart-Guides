@@ -545,8 +545,6 @@ sudo yast iscsi-client connect target=<target_iqn> portal=<portal_ip>:3260
 
 {% include iscsi-performance-tuning.md %}
 
-{% include performance-tuning-iscsi.md %}
-
 ### SUSE-Specific Tuning
 
 #### Kernel Parameters
