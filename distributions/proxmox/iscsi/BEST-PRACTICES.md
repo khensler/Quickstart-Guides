@@ -160,20 +160,6 @@ systemctl status multipathd
 
 {% include network-concepts.md %}
 
-### Network Architecture Principles
-
-1. **Dedicated Storage Network**: Always use dedicated physical or VLAN-isolated networks for storage traffic
-   - *Why*: Isolates storage I/O from other network traffic; prevents bandwidth contention
-
-2. **No Single Points of Failure**: Redundant switches, NICs, and storage controllers
-   - *Why*: Any single component can fail without impacting storage availability
-
-3. **Proper Segmentation**: Separate storage traffic from management and VM traffic
-   - *Why*: Prevents noisy neighbor problems; ensures consistent storage performance
-
-4. **Optimized MTU**: Use jumbo frames (MTU 9000) end-to-end when possible
-   - *Why*: Reduces CPU overhead; improves throughput by reducing packet count
-
 ### Proxmox Network Configuration (ifupdown2)
 
 Proxmox uses `ifupdown2` for network configuration via `/etc/network/interfaces`.
@@ -233,58 +219,16 @@ iface ens1f1.100 inet static
     vlan-raw-device ens1f1
 ```
 
-### ARP Configuration for Same-Subnet Multipath
+> **Same-subnet multipath (required):** If both storage interfaces share a subnet, you must set `arp_ignore=2` and `arp_announce=2` so each NIC answers ARP only for its own address. The rationale, the `/etc/sysctl.d/99-iscsi-arp.conf` contents, and verification steps are covered in the [ARP Configuration for Same-Subnet Multipath](#arp-configuration-for-same-subnet-multipath) section above. For VLAN-based storage (Option 2), add matching entries for the VLAN sub-interfaces (e.g. `ens1f0.100`).
 
-> **⚠️ CRITICAL**: When using multiple interfaces on the same subnet, proper ARP configuration is **mandatory** to prevent routing issues.
+### MTU Verification
 
-**Create ARP sysctl configuration:**
+Jumbo frames (MTU 9000) are set in the interface configuration above and must be configured **end-to-end** (host → switch → storage). See [MTU Configuration Best Practices](#mtu-configuration-best-practices) above for the rationale. Verify against a storage portal:
 ```bash
-cat > /etc/sysctl.d/99-iscsi-arp.conf << 'EOF'
-# ARP settings for same-subnet multipath (CRITICAL)
-# Prevents ARP responses on wrong interface
-# See: network-concepts.md for detailed explanation
-
-net.ipv4.conf.all.arp_ignore = 2
-net.ipv4.conf.default.arp_ignore = 2
-net.ipv4.conf.all.arp_announce = 2
-net.ipv4.conf.default.arp_announce = 2
-
-# Interface-specific (adjust names as needed)
-net.ipv4.conf.ens1f0.arp_ignore = 2
-net.ipv4.conf.ens1f1.arp_ignore = 2
-net.ipv4.conf.ens1f0.arp_announce = 2
-net.ipv4.conf.ens1f1.arp_announce = 2
-
-# For VLAN interfaces (if used)
-#net.ipv4.conf.ens1f0.100.arp_ignore = 2
-#net.ipv4.conf.ens1f1.100.arp_ignore = 2
-#net.ipv4.conf.ens1f0.100.arp_announce = 2
-#net.ipv4.conf.ens1f1.100.arp_announce = 2
-EOF
-
-# Apply settings
-sysctl -p /etc/sysctl.d/99-iscsi-arp.conf
-```
-
-For detailed explanation of ARP settings, see the ARP Configuration section in the network concepts documentation.
-
-### MTU Configuration
-
-**Verify MTU end-to-end:**
-```bash
-# Check interface MTU
 ip link show ens1f0 | grep mtu
-
-# Test MTU to storage portal (9000 - 28 byte header = 8972)
+# 9000 - 28 byte header = 8972; the packet must not fragment
 ping -M do -s 8972 10.100.1.10
-
-# If ping fails, check:
-# 1. Interface MTU
-# 2. Switch MTU configuration
-# 3. Storage array MTU
 ```
-
-**Important:** MTU must be 9000 end-to-end (host → switch → storage).
 
 ### Firewall Configuration
 
@@ -333,8 +277,6 @@ iptables-save > /etc/iptables.rules
 ---
 
 ## Multipath Configuration
-
-{% include multipath-concepts.md %}
 
 {% include iscsi-multipath-config.md %}
 
@@ -388,19 +330,7 @@ blacklist {
 EOF
 ```
 
-**Key Configuration Parameters:**
-
-| Parameter | Value | Purpose |
-|-----------|-------|---------|
-| `path_selector` | `service-time 0` | Routes I/O to path with lowest service time |
-| `path_grouping_policy` | `group_by_prio` | Groups paths by ALUA priority |
-| `prio` | `alua` | Uses ALUA for path prioritization |
-| `failback` | `immediate` | Returns to preferred path immediately when available |
-| `fast_io_fail_tmo` | `10` | Seconds before failing I/O on path failure |
-| `dev_loss_tmo` | `60` | Seconds before removing device on path loss |
-| `no_path_retry` | `0` | **Fail immediately when all paths down** (prevents hangs) |
-
-> **⚠️ Critical**: Setting `no_path_retry 0` is recommended to prevent system hangs during APD (All Paths Down) events. See the APD section in the iSCSI multipath documentation.
+> **Parameter reference:** The device-level settings shown commented above (`path_selector`, `path_grouping_policy`, `prio`, `failback`, `fast_io_fail_tmo`, `dev_loss_tmo`, `no_path_retry`) are explained in the [Path Failure Detection](#path-failure-detection) and [Understanding APD (All Paths Down) Events](#understanding-apd-all-paths-down-events) sections above. In particular, `no_path_retry 0` is recommended to prevent APD-related system hangs.
 
 **Enable and start multipath:**
 ```bash
@@ -603,29 +533,14 @@ multipath -ll
 
 ### Kernel Parameters
 
-**Optimize kernel for iSCSI storage:**
+TCP buffer and low-latency network tuning is covered in the performance-tuning sections above, and ARP settings in [ARP Configuration for Same-Subnet Multipath](#arp-configuration-for-same-subnet-multipath). The settings below are the Proxmox-specific VM writeback tuning for storage workloads (not covered elsewhere):
+
 ```bash
 cat > /etc/sysctl.d/99-iscsi-proxmox.conf << 'EOF'
-# Network performance for iSCSI
-net.core.netdev_max_backlog = 5000
-net.core.rmem_max = 134217728
-net.core.wmem_max = 134217728
-net.ipv4.tcp_rmem = 4096 87380 67108864
-net.ipv4.tcp_wmem = 4096 65536 67108864
-
-# Low latency TCP
-net.ipv4.tcp_low_latency = 1
-
-# VM tuning for storage workloads
+# VM writeback tuning for storage workloads
 vm.dirty_ratio = 10
 vm.dirty_background_ratio = 5
 vm.swappiness = 10
-
-# ARP settings for same-subnet multipath
-net.ipv4.conf.all.arp_ignore = 2
-net.ipv4.conf.default.arp_ignore = 2
-net.ipv4.conf.all.arp_announce = 2
-net.ipv4.conf.default.arp_announce = 2
 EOF
 
 # Apply settings
