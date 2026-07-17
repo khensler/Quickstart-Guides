@@ -770,8 +770,6 @@ OnCalendar=Sun 02:00
 
 {% include iscsi-performance-tuning.md %}
 
-{% include performance-tuning-iscsi.md %}
-
 ### Oracle Linux-Specific Tuning
 
 #### Tuned Profiles

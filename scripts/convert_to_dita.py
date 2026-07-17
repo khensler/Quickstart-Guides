@@ -110,8 +110,11 @@ def remove_non_ascii(text: str) -> str:
         '"': '"',  # smart double quote
         '…': '...',  # ellipsis
         '•': '*',  # bullet
-        '→': '->',  # arrow
-        '←': '<-',  # arrow
+        # NOTE: this runs on the already-escaped XML string, so replacements must
+        # not introduce raw <, >, or & (that would break well-formedness). Use
+        # XML entities for the arrows.
+        '→': '-&gt;',  # arrow
+        '←': '&lt;-',  # arrow
         '⚠️': '[WARNING]',  # warning emoji
         '📖': '[INFO]',  # book emoji
         '✅': '[OK]',  # checkmark
@@ -530,14 +533,25 @@ class MarkdownParser:
 
     def convert_inline(self, text: str) -> str:
         """Convert inline Markdown formatting to DITA."""
+        # Protect inline code spans FIRST so their contents are not treated as
+        # emphasis or links. Without this, `sd*` ... `dm-*` would be parsed as an
+        # italic run spanning the two code spans, producing mismatched <i> tags.
+        code_spans: List[str] = []
+
+        def _stash_code(match):
+            code_spans.append(match.group(1))
+            return f'\x00CODE{len(code_spans) - 1}\x00'
+
+        text = re.sub(r'`([^`]+)`', _stash_code, text)
         # Bold
         text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', text)
         # Italic
         text = re.sub(r'\*([^*]+)\*', r'<i>\1</i>', text)
-        # Inline code
-        text = re.sub(r'`([^`]+)`', r'<codeph>\1</codeph>', text)
         # Links - handle internal .md links vs external links
         text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', self._convert_link, text)
+        # Restore inline code spans as <codeph>
+        text = re.sub(r'\x00CODE(\d+)\x00',
+                      lambda m: f'<codeph>{code_spans[int(m.group(1))]}</codeph>', text)
         return text
 
     def _convert_link(self, match) -> str:
@@ -820,61 +834,132 @@ class DITAGenerator:
 '''
 
     def _elements_to_dita(self, elements: List[MarkdownElement], topic_id: str) -> str:
-        """Convert parsed elements to DITA body content."""
-        output = []
+        """Convert parsed elements to DITA body content.
+
+        Headings are turned into <section> elements. Because DITA sections cannot
+        nest, we pick a single "section level" and render deeper (or lone shallower
+        wrapper) headings as bold lead-in paragraphs. Inlined includes are flattened
+        into the element stream first (with their headings demoted by nesting depth)
+        so included content is sectioned like native content instead of being a wall
+        of bold paragraphs.
+        """
+        elements = self._flatten_elements(elements)
+        section_level = self._choose_section_level(
+            [e.level for e in elements if e.type == 'heading']
+        )
+
+        output = []            # completed <section> blocks (and conref divs in conref mode)
+        conbody_pre = []       # content that appears before the first section
         current_section = None
+        current_section_id = None
         section_content = []
+        used_ids = {}
 
         for elem in elements:
-            if elem.type == 'heading' and elem.level == 2:
+            if (elem.type == 'heading' and section_level is not None
+                    and elem.level == section_level):
                 # Close previous section
-                if current_section:
-                    output.append(self._wrap_section(current_section, section_content))
+                if current_section is not None:
+                    output.append(self._wrap_section(
+                        current_section,
+                        collapse_consecutive_notes(section_content),
+                        current_section_id))
                 current_section = elem.content
+                base_id = sanitize_id(elem.content) or 'section'
+                count = used_ids.get(base_id, 0) + 1
+                used_ids[base_id] = count
+                current_section_id = base_id if count == 1 else f'{base_id}_{count}'
                 section_content = []
-            elif elem.type == 'heading' and elem.level >= 3:
-                # H3+ headings become bold paragraphs
-                section_content.append(f'        <p><b>{escape_xml(elem.content)}</b></p>')
-            elif elem.type == 'include':
-                section_content.append(self._generate_conref(elem.content, topic_id))
-            elif elem.type == 'paragraph':
-                section_content.append(f'        <p>{self.parser.convert_inline(escape_xml(elem.content))}</p>')
-            elif elem.type == 'code_block':
-                # Handle Mermaid diagrams as local images
-                if elem.language == 'mermaid':
-                    image_elem = self._handle_mermaid_diagram(elem.content, from_warehouse=False)
-                    section_content.append(f'        {image_elem}')
-                else:
-                    section_content.append(f'        <codeblock>{escape_xml(elem.content)}</codeblock>')
-            elif elem.type == 'note':
-                note_type = self._detect_note_type(elem.content)
-                cleaned_content = self._strip_note_prefix(elem.content, note_type)
-                section_content.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
-            elif elem.type == 'unordered_list':
-                section_content.append(self._generate_ul(elem.items))
-            elif elem.type == 'ordered_list':
-                section_content.append(self._generate_ol(elem.items))
-            elif elem.type == 'ordered_list_nested':
-                nested_items = [child.items for child in elem.children]
-                section_content.append(self._generate_ol(elem.items, nested_items=nested_items))
-            elif elem.type == 'image':
-                image_href, image_scope = self._resolve_image_ref(elem.content)
-                alt_text = escape_xml(elem.language or 'Image')
-                section_content.append(f'        <fig><image href="{escape_xml_attr(image_href)}" scope="{image_scope}"><alt>{alt_text}</alt></image></fig>')
-            elif elem.type == 'table':
-                section_content.append(self._generate_table(elem.content))
+            else:
+                buf = section_content if current_section is not None else conbody_pre
+                self._append_element_dita(elem, buf, topic_id)
 
         # Close final section
-        if current_section:
-            # Collapse consecutive notes before wrapping
-            section_content = collapse_consecutive_notes(section_content)
-            output.append(self._wrap_section(current_section, section_content))
-        elif section_content:
-            # Collapse consecutive notes
-            section_content = collapse_consecutive_notes(section_content)
-            output.extend(section_content)
+        if current_section is not None:
+            output.append(self._wrap_section(
+                current_section,
+                collapse_consecutive_notes(section_content),
+                current_section_id))
 
-        return '\n'.join(output)
+        conbody_pre = collapse_consecutive_notes(conbody_pre)
+        return '\n'.join(conbody_pre + output)
+
+    def _flatten_elements(self, elements: List[MarkdownElement], offset: int = 0) -> List[MarkdownElement]:
+        """Recursively expand inline includes into a flat element list.
+
+        Included headings are demoted by ``offset`` (1 per include nesting level)
+        so that, e.g., an include's H2 lands at the same level as the host guide's
+        H3 subsections. Only applies in --inline-includes mode; in conref mode the
+        include elements are left in place for deferred resolution.
+        """
+        flat = []
+        for elem in elements:
+            if elem.type == 'include' and self.config.inline_includes:
+                inc_content = self._resolve_include(elem.content)
+                if inc_content:
+                    flat.extend(self._flatten_elements(
+                        self.parser.parse(inc_content), offset + 1))
+            elif elem.type == 'heading' and offset:
+                flat.append(MarkdownElement(
+                    type='heading', content=elem.content, level=elem.level + offset,
+                    language=elem.language, items=list(elem.items), children=elem.children))
+            else:
+                flat.append(elem)
+        return flat
+
+    def _choose_section_level(self, levels: List[int]) -> Optional[int]:
+        """Pick the heading level to turn into <section> boundaries.
+
+        Prefer the shallowest level that occurs more than once (the level where the
+        real subsections live), which skips a lone wrapper heading. Fall back to the
+        shallowest level present. Returns None when there are no headings.
+        """
+        if not levels:
+            return None
+        counts = {}
+        for lvl in levels:
+            counts[lvl] = counts.get(lvl, 0) + 1
+        repeating = sorted(lvl for lvl, c in counts.items() if c >= 2)
+        if repeating:
+            return repeating[0]
+        return min(levels)
+
+    def _append_element_dita(self, elem: MarkdownElement, buf: List[str], topic_id: str) -> None:
+        """Append the DITA representation of a single element to ``buf``.
+
+        Headings reaching here are non-section-level (deeper than, or a lone wrapper
+        shallower than, the chosen section level) and become bold lead-in paragraphs.
+        """
+        t = elem.type
+        if t == 'heading':
+            buf.append(f'        <p><b>{escape_xml(elem.content)}</b></p>')
+        elif t == 'include':
+            buf.append(self._generate_conref(elem.content, topic_id))
+        elif t == 'paragraph':
+            buf.append(f'        <p>{self.parser.convert_inline(escape_xml(elem.content))}</p>')
+        elif t == 'code_block':
+            if elem.language == 'mermaid':
+                image_elem = self._handle_mermaid_diagram(elem.content, from_warehouse=False)
+                buf.append(f'        {image_elem}')
+            else:
+                buf.append(f'        <codeblock>{escape_xml(elem.content)}</codeblock>')
+        elif t == 'note':
+            note_type = self._detect_note_type(elem.content)
+            cleaned_content = self._strip_note_prefix(elem.content, note_type)
+            buf.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
+        elif t == 'unordered_list':
+            buf.append(self._generate_ul(elem.items))
+        elif t == 'ordered_list':
+            buf.append(self._generate_ol(elem.items))
+        elif t == 'ordered_list_nested':
+            nested_items = [child.items for child in elem.children]
+            buf.append(self._generate_ol(elem.items, nested_items=nested_items))
+        elif t == 'image':
+            image_href, image_scope = self._resolve_image_ref(elem.content)
+            alt_text = escape_xml(elem.language or 'Image')
+            buf.append(f'        <fig><image href="{escape_xml_attr(image_href)}" scope="{image_scope}"><alt>{alt_text}</alt></image></fig>')
+        elif t == 'table':
+            buf.append(self._generate_table(elem.content))
 
     def _elements_to_task_body(self, elements: List[MarkdownElement], topic_id: str) -> str:
         """Convert parsed elements to DITA task body with steps."""
@@ -1056,9 +1141,10 @@ class DITAGenerator:
             warehouse_file = warehouse_id + '.dita'
             return f'        <div conref="../warehouse/{warehouse_file}#{warehouse_id}/{div_id}"/>'
 
-    def _wrap_section(self, title: str, content: List[str]) -> str:
+    def _wrap_section(self, title: str, content: List[str], section_id: str = None) -> str:
         """Wrap content in a DITA section."""
-        section_id = sanitize_id(title)
+        if section_id is None:
+            section_id = sanitize_id(title)
         content_str = '\n'.join(content) if content else ''
 
         # Quick Reference sections are wrapped in a note
@@ -1925,8 +2011,11 @@ class MarkdownToDITAConverter:
         if yaml_match:
             return yaml_match.group(1).strip()
 
-        # Try first heading
-        heading_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+        # Try first heading. Strip fenced code blocks first so that '#' comments
+        # inside code (e.g. a bash "# do something" line) are not mistaken for an
+        # H1 title.
+        without_code = re.sub(r'```.*?```', '', content, flags=re.DOTALL)
+        heading_match = re.search(r'^#\s+(.+)$', without_code, re.MULTILINE)
         if heading_match:
             return heading_match.group(1).strip()
 

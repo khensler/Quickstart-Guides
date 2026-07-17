@@ -483,7 +483,7 @@ multipath -ll
 
 ## Performance Optimization
 
-{% include performance-tuning-iscsi.md %}
+{% include iscsi-performance-tuning.md %}
 
 ### Kernel Parameters
 

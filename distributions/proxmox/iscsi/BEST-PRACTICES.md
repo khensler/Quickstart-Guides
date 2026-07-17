@@ -527,8 +527,6 @@ multipath -ll
 
 ## Performance Optimization
 
-{% include performance-tuning-iscsi.md %}
-
 {% include iscsi-performance-tuning.md %}
 
 ### Kernel Parameters
@@ -547,32 +545,9 @@ EOF
 sysctl -p /etc/sysctl.d/99-iscsi-proxmox.conf
 ```
 
-### I/O Scheduler Configuration
-
-**Set optimal I/O scheduler for iSCSI devices:**
-```bash
-cat > /etc/udev/rules.d/99-iscsi-scheduler.rules << 'EOF'
-# Set I/O scheduler for iSCSI devices (none/noop for SSD/Flash)
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
-
-# Set queue depth (adjust vendor to match your storage)
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{device/queue_depth}="128"
-
-# Set read-ahead (adjust vendor to match your storage)
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{bdi/read_ahead_kb}="128"
-
-# Multipath device settings
-ACTION=="add|change", KERNEL=="dm-*", ATTR{dm/name}=="mpath*", ATTR{queue/scheduler}="none"
-EOF
-
-# Reload udev rules
-udevadm control --reload-rules
-udevadm trigger
-```
-
 ### Network Interface Tuning
 
-**Optimize NIC settings:**
+The I/O scheduler, queue-depth, and read-ahead udev rules and the NIC ring/coalescing/offload settings are covered in the performance-tuning sections above. This packages the NIC settings as a boot-time systemd service so they persist across reboots:
 ```bash
 # Create network tuning script
 cat > /usr/local/bin/tune-storage-nics.sh << 'EOF'
@@ -615,20 +590,6 @@ EOF
 systemctl daemon-reload
 systemctl enable tune-storage-nics.service
 systemctl start tune-storage-nics.service
-```
-
-### IRQ Affinity
-
-**Install and configure irqbalance:**
-```bash
-# Install irqbalance (usually pre-installed)
-apt install -y irqbalance
-
-# Enable and start
-systemctl enable --now irqbalance
-
-# Check IRQ distribution
-cat /proc/interrupts | grep -E "ens1f"
 ```
 
 ---

@@ -594,8 +594,6 @@ sudo multipath -ll
 
 {% include iscsi-performance-tuning.md %}
 
-{% include performance-tuning-iscsi.md %}
-
 ### Debian/Ubuntu-Specific Tuning
 
 #### Kernel Parameters

@@ -45,9 +45,31 @@ net.ipv4.tcp_low_latency = 1
 net.ipv4.tcp_sack = 1
 net.ipv4.tcp_timestamps = 1
 
+# Connection queue sizes
+net.core.netdev_max_backlog = 30000
+net.core.somaxconn = 4096
+
 # Apply settings
 sysctl -p /etc/sysctl.d/99-iscsi-tuning.conf
 ```
+
+#### Network Interface Tuning (Ring Buffers, RSS, Coalescing)
+
+Tune the storage NIC hardware queues (adjust interface names to match your host):
+```bash
+# Increase ring buffer size (check current with: ethtool -g <iface>)
+ethtool -G ens1f0 rx 4096 tx 4096
+
+# Receive-side scaling: spread packet processing across CPUs
+ethtool -L ens1f0 combined 8
+
+# Interrupt coalescing: fewer interrupts for throughput
+ethtool -C ens1f0 rx-usecs 100 tx-usecs 100
+# ...or minimize latency (more interrupts):
+# ethtool -C ens1f0 rx-usecs 0 tx-usecs 0
+```
+
+> **Tip:** `ethtool` changes are not persistent. Apply them at boot with a systemd oneshot or your distro's network hooks. (The Proxmox iSCSI guide includes a ready-made `tune-storage-nics` service.)
 
 ### iSCSI Session Tuning
 
@@ -157,6 +179,22 @@ reboot
 ```
 
 > **⚠️ Note:** CPU isolation (`isolcpus`) is a general system optimization for I/O-intensive workloads. It does not directly affect iSCSI protocol behavior. Measure baseline performance before and after changes to validate impact in your environment.
+
+#### Memory Configuration
+
+**Hugepages for large I/O buffers:**
+```bash
+# /etc/sysctl.d/99-storage-performance.conf
+vm.nr_hugepages = 1024
+
+# Transparent hugepages (alternative)
+echo always > /sys/kernel/mm/transparent_hugepage/enabled
+```
+
+**Disable NUMA balancing for predictable latency:**
+```bash
+echo 0 > /proc/sys/kernel/numa_balancing
+```
 
 ### Read-Ahead Tuning
 
