@@ -1,29 +1,10 @@
-> **⚠️ Disclaimer:** This content is for reference only. Always consult official vendor documentation for your distribution and storage array. Test thoroughly in a lab environment before production use. In case of conflicts, vendor documentation takes precedence.
+{% include multipath-concepts.md %}
+
+---
 
 ## iSCSI Multipath Configuration
 
-### Why Multipath for iSCSI?
-
-Multipath provides critical benefits for iSCSI storage:
-
-1. **High Availability**: Automatic failover if a path fails
-   - *Why*: Network or HBA failures don't cause storage outage
-2. **Load Balancing**: Distribute I/O across multiple paths
-   - *Why*: Better performance and bandwidth utilization
-3. **No Single Point of Failure**: Continue operating even if NICs, switches, or storage controllers fail
-   - *Why*: Critical for production environments requiring high uptime
-4. **Zero Downtime Maintenance**: Perform maintenance on network components without storage outage
-   - *Why*: Enables rolling upgrades and maintenance windows
-
-### Path Redundancy Calculation
-
-With **N** host interfaces and **M** storage portals, you get **N × M** total paths.
-
-**Example:**
-- 2 host NICs × 2 storage portals = **4 paths**
-- 4 host NICs × 4 storage portals = **16 paths**
-
-**Recommended minimum:** 4 paths (2×2) for production environments
+The multipath concepts above apply to all block storage. This section adds the iSCSI-specific pieces: the `/etc/multipath.conf` file, NIC interface binding, and APD (All Paths Down) handling.
 
 ### dm-multipath Configuration
 
@@ -64,59 +45,7 @@ blacklist {
 #}
 ```
 
-#### Key Parameters Explained
-
-**path_selector "service-time 0"**
-- *What*: Selects path with lowest estimated service time
-- *Why*: Automatically balances load based on actual path performance
-- *Alternative*: "round-robin 0" for simple round-robin
-
-**path_grouping_policy "group_by_prio"**
-- *What*: Groups paths by priority (ALUA state)
-- *Why*: Ensures active/optimized paths are used first
-- *Result*: Better performance by using optimal paths
-
-**prio "alua"**
-- *What*: Uses ALUA (Asymmetric Logical Unit Access) for path priority
-- *Why*: Storage array indicates which paths are optimized
-- *Result*: Automatic selection of best paths
-
-**failback "immediate"**
-- *What*: Immediately fail back to preferred path when available
-- *Why*: Ensures optimal path is always used
-- *Alternative*: "manual" or time-based failback
-
-**fast_io_fail_tmo 10**
-- *What*: Timeout for I/O on failed path (10 seconds)
-- *Why*: Quick detection and failover on path failure
-- *Impact*: Reduces application wait time during failures
-
-**dev_loss_tmo 60**
-- *What*: Time before device is removed (60 seconds)
-- *Why*: Allows time for path recovery without removing device
-- *Balance*: Long enough for transient issues, short enough for real failures
-
-**no_path_retry 0**
-- *What*: Don't queue I/O when all paths are down
-- *Why*: Fail fast rather than hanging applications
-- *Alternative*: Set to number for retry attempts, or "queue" to wait indefinitely
-
-### Path Selection Policies
-
-**service-time** (Recommended for most workloads)
-- Selects path with lowest service time
-- Automatically adapts to path performance
-- Best for mixed workloads
-
-**queue-length**
-- Selects path with fewest outstanding I/Os
-- Good for high-throughput sequential workloads
-- May not account for path speed differences
-
-**round-robin**
-- Simple rotation through all paths
-- Predictable but doesn't adapt to performance
-- Good for testing or homogeneous paths
+> **Parameter reference:** The settings in the commented `device` block are explained in the concepts above — see [Multipath Path Selection Policies](#multipath-path-selection-policies), [Path Grouping Policies](#path-grouping-policies), [Multipath Features](#multipath-features), and [Path Failure Detection](#path-failure-detection). For iSCSI arrays the recommended values are `fast_io_fail_tmo 10`, `dev_loss_tmo 60`, and `no_path_retry 0`.
 
 ### Interface Binding
 
@@ -140,21 +69,11 @@ iscsiadm -m node -T <target_iqn> -p <portal_ip>:3260 -I iface-eth0 --login
 iscsiadm -m node -T <target_iqn> -p <portal_ip>:3260 -I iface-eth1 --login
 ```
 
-### Monitoring Multipath
+### Verifying the Configuration
 
-**Check path status:**
-```bash
-# View all multipath devices and paths
-multipath -ll
+The general path-status commands (`multipath -ll`, `-v3`, `-r`) are covered in [Monitoring Multipath Health](#monitoring-multipath-health) above.
 
-# Verbose output
-multipath -v3
-
-# Reload configuration
-multipath -r
-```
-
-**Example output (with recommended `no_path_retry 0` configuration):**
+**Example `multipath -ll` output (with recommended `no_path_retry 0`):**
 ```
 mpatha (360014380116e6d6e00000000000000001) dm-0 VENDOR,PRODUCT
 size=1.0T features='0' hwhandler='1 alua' wp=rw

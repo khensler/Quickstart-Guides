@@ -43,8 +43,8 @@ sequenceDiagram
 | Parameter | Default | Recommended | Description |
 |-----------|---------|-------------|-------------|
 | `replacement_timeout` | 120s | 20s | Time before failing over to alternate path |
-| `fast_io_fail_tmo` | 5s | 5s | Time before marking path as failed |
-| `no_path_retry` | fail | queue | Behavior when all paths fail |
+| `fast_io_fail_tmo` | 5s | 10s | Time before marking path as failed |
+| `no_path_retry` | fail | 0 | Behavior when all paths fail (0 = fail immediately, avoids APD hangs) |
 | `polling_interval` | 5s | 5s | Path checking frequency |
 
 **Configure timeouts in /etc/iscsi/iscsid.conf:**
