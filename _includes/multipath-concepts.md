@@ -144,10 +144,10 @@ path_selector "round-robin 0"
 
 **What it does:** Time to wait before marking a path as failed
 
-**Recommended setting:** `fast_io_fail_tmo 5`
+**Recommended setting:** `fast_io_fail_tmo 10`
 
 **Why:**
-- Quick detection of failed paths (5 seconds)
+- Quick detection of failed paths (10 seconds)
 - Faster failover to working paths
 - Reduces I/O latency during failures
 
@@ -155,7 +155,7 @@ path_selector "round-robin 0"
 
 **What it does:** Time to wait before removing a failed device
 
-**Recommended setting:** `dev_loss_tmo 30`
+**Recommended setting:** `dev_loss_tmo 60`
 
 **Why:**
 - Allows time for transient failures to recover
