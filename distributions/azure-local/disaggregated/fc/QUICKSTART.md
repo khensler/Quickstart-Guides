@@ -1,10 +1,21 @@
+---
+layout: default
+title: Azure Local with Everpure FlashArray Quick Start Guide for Disaggregated Deployments (FC)
+---
+
 # Azure Local with Everpure FlashArray Quick Start Guide for Disaggregated Deployments
+
+---
+
+{% include quickstart/disclaimer.md %}
+
+---
 
 This guide provides a high-level workflow for integrating the Everpure FlashArray as the **only** block storage for a **disaggregated** Azure Local (formerly Azure Stack HCI) deployment. In a disaggregated deployment there is no local Storage Spaces Direct (S2D) — compute runs on the Azure Local nodes while all cluster storage is served from the FlashArray over Fibre Channel. This combines the cloud-integrated benefits of Azure Local with the high-performance, data-reduced storage of FlashArray, and lets compute and storage scale independently.
 
 > **This document is based heavliy on the official Microsoft documentation.**  [Deploy Azure Local using the Azure portal for disaggregated deployments](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated)
 
-> **Looking for a hyperconverged (S2D + FlashArray) cluster?** See the [Hyperconverged FC guide](../../hyperconverged/fc/QUICKSTART.md).
+> **Looking for iSCSI instead?** See the [Disaggregated iSCSI guide](../iscsi/QUICKSTART.md). **Looking for a hyperconverged (S2D + FlashArray) cluster?** See the [Hyperconverged FC guide](../../hyperconverged/fc/QUICKSTART.md).
 
 ## Prerequisites to Using the Quick Start Guide
 
@@ -14,7 +25,7 @@ Before you begin, ensure that the following requirements are met:
 
 - A deployed and configured Everpure FlashArray.
 - Fibre Channel (FC) must be enabled and configured on the array, with active zoning and connectivity established between the FlashArray and **all** Azure Local nodes.
-- See the [SAN Guidelines for Maximizing FlashArray Performance](https://support.purestorage.com/bundle/m_microsoft_platform_guide).
+- See the [SAN Guidelines for Maximizing FlashArray Performance](https://support.everpuredata.com/bundle/m_microsoft_platform_guide).
 - **Minimum Recommended Purity Version: 6.5.3**
 
 ### Azure Local Deployment (Base)
@@ -76,12 +87,14 @@ Enter-PSSession -ComputerName <Node_Name> -Credential (Get-Credential)
 Azure Local **2604 and later enables MPIO by default**, so this step is primarily a verification. If MPIO is not enabled (possible on earlier builds), enabling it requires a reboot.
 
 ```powershell
-# Enable the MPIO feature (no-op if already enabled)
-Enable-WindowsOptionalFeature -Online -FeatureName MultipathIO
+# Check first — do not enable blindly on a running node
+$mpio = Get-WindowsOptionalFeature -Online -FeatureName MultipathIO
+$mpio | Select-Object FeatureName, State
 
-# Verify — RestartNeeded indicates whether a reboot is required
-Get-WindowsOptionalFeature -Online -FeatureName MultipathIO |
-    Select-Object FeatureName, State, RestartNeeded
+# Only if State is 'Disabled' — -NoRestart avoids an interactive reboot prompt
+if ($mpio.State -ne 'Enabled') {
+    Enable-WindowsOptionalFeature -Online -FeatureName MultipathIO -NoRestart
+}
 ```
 
 ### 1.3 Claim FlashArray as an MPIO Target
@@ -94,10 +107,10 @@ New-MSDSMSupportedHw -VendorId "PURE" -ProductId "FlashArray"
 
 This registers Everpure devices as MPIO-capable. Modern PowerShell automatically handles the character padding for these IDs.
 
-Microsoft recommends removing the generic vendor wildcard entry so MSDSM does **not** automatically claim non-Pure devices:
+Optionally, remove the default placeholder entry so MSDSM does **not** automatically claim unrelated devices. Use the exact IDs rather than a wildcard so the removal cannot match a real vendor entry:
 
 ```powershell
-Remove-MSDSMSupportedHW -VendorId 'Vendor*' -ProductId 'Product*'
+Remove-MSDSMSupportedHW -VendorId 'Vendor 8' -ProductId 'Product 16' -Confirm:$false
 ```
 
 > **Note:** A **reboot is required** after these changes for MSDSM to begin claiming the FlashArray.
@@ -114,25 +127,23 @@ Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy RR    # 10 or fewer paths
 # Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy LQD  # more than 10 paths
 ```
 
-> For a deeper dive, see the [Setting the MPIO Policy](https://support.purestorage.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy) KB. Round Robin with Subset (RRWS) is also an option for high path counts but must be set per-volume (it cannot be a global default).
+> For a deeper dive, see the [Setting the MPIO Policy](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy) KB. Round Robin with Subset (RRWS) is also an option for high path counts but must be set per-volume (it cannot be a global default).
 
 ### 1.5 Configure Path Verification and Timeouts
 
 Tuning MPIO timers prevents premature path failovers and lets the system recover gracefully from momentary fabric hiccups.
 
 ```powershell
-Set-MPIOSetting -NewPathRecoveryInterval 20 -NewPathVerificationPeriod 30 -NewPDORemovePeriod 30
+Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
+    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
+    -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 ```
 
-`NewPDORemovePeriod` determines how long the OS waits for a failed path to recover. Holding failover for 30 seconds lets MPIO complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover.
+`NewPDORemovePeriod` determines how long the OS waits for a failed path to recover before the device is removed.
 
-> **Note:** These are recommended starting values from Everpure lab testing. Workloads with specific latency requirements or complex fabrics may require additional tuning.
+> **Note:** These are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure Data's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
 
-> **Microsoft-documented Everpure values:** The official [Enable External Storage](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage) doc lists these Everpure FlashArray-specific overrides. They are compatible with the values above and add path-recovery and disk-timeout settings:
-> ```powershell
-> Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
->     -NewPDORemovePeriod 20 -NewDiskTimeout 60 -NewPathVerificationState Enabled
-> ```
+> **Note:** Workloads with specific latency requirements or complex fabrics may require additional tuning.
 
 ### 1.6 Verify Azure Node Readiness
 
@@ -176,11 +187,21 @@ $Conn = Connect-PFA2Array -Endpoint "<FlashArray_Management_VIP>" -Credential (G
 
 ### 2.1 Create Host Objects
 
-Create a host object for **every** node, mapping its WWNs (from Phase 1.6).
+Create a host object for **every** node, mapping **all** of its WWNs (from Phase 1.6). `-Wwns` takes an array — pass every WWPN the node reports, not just one.
 
 ```powershell
-# Run once per node
-New-Pfa2Host -Array $Conn -Name "<Node_Name>" -Wwn "<WWN_1>", "<WWN_2>"
+# One host object per node, each with all of that node's WWPNs
+New-Pfa2Host -Array $Conn -Name "<Node_1_Name>" -Wwns "<Node_1_WWPN_A>", "<Node_1_WWPN_B>"
+New-Pfa2Host -Array $Conn -Name "<Node_2_Name>" -Wwns "<Node_2_WWPN_A>", "<Node_2_WWPN_B>"
+
+# Or drive it from a hashtable of node name -> WWPN list
+$NodeWwpns = @{
+    "<Node_1_Name>" = @("<Node_1_WWPN_A>", "<Node_1_WWPN_B>")
+    "<Node_2_Name>" = @("<Node_2_WWPN_A>", "<Node_2_WWPN_B>")
+}
+foreach ($node in $NodeWwpns.Keys) {
+    New-Pfa2Host -Array $Conn -Name $node -Wwns $NodeWwpns[$node]
+}
 ```
 
 ### 2.2 Create and Configure the Host Group
@@ -386,12 +407,14 @@ Get-ClusterSharedVolume | Select-Object Name -ExpandProperty SharedVolumeInfo |
 
 # --- On each Azure Local node (remote session) ---
 Enter-PSSession -ComputerName <Node_Name> -Credential (Get-Credential)
-Enable-WindowsOptionalFeature -Online -FeatureName MultipathIO   # enabled by default on 2604+
+Get-WindowsOptionalFeature -Online -FeatureName MultipathIO      # enabled by default on 2604+; enable with -NoRestart only if Disabled
 New-MSDSMSupportedHw -VendorId "PURE" -ProductId "FlashArray"
-Remove-MSDSMSupportedHW -VendorId 'Vendor*' -ProductId 'Product*'  # don't claim non-Pure devices
+Remove-MSDSMSupportedHW -VendorId 'Vendor 8' -ProductId 'Product 16' -Confirm:$false  # optional: drop the placeholder entry
 Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy RR        # RR <=10 paths, LQD >10 paths
-Set-MPIOSetting -NewPathRecoveryInterval 20 -NewPathVerificationPeriod 30 -NewPDORemovePeriod 30
-Get-InitiatorPort                                          # record WWNs
+Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
+    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
+    -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
+Get-InitiatorPort                                          # record ALL WWPNs per node
 # Reboot the node after registering the hardware ID
 
 # --- On a management workstation (Everpure SDK v2) ---
@@ -401,7 +424,7 @@ if (!(Get-Module -ListAvailable -Name PureStoragePowerShellSDK2)) {
 Import-Module -Name PureStoragePowerShellSDK2
 $Conn = Connect-PFA2Array -Endpoint "<FlashArray_Management_VIP>" -Credential (Get-Credential) -IgnoreCertificateError
 
-New-Pfa2Host         -Array $Conn -Name "<Node_Name>" -Wwn "<WWN_1>", "<WWN_2>"   # per node
+New-Pfa2Host         -Array $Conn -Name "<Node_Name>" -Wwns "<WWPN_1>", "<WWPN_2>"   # per node, all WWPNs
 New-Pfa2HostGroup    -Array $Conn -Name "<Host_Group_Name>"
 New-Pfa2HostGroupHost -Array $Conn -GroupName "<Host_Group_Name>" -MemberName "<Node_1_Name>", "<Node_2_Name>"
 
@@ -436,9 +459,10 @@ Add-ClusterSharedVolume -Name $ClusterDisk.Name
 
 ## Related Articles
 
-- [Azure Local Quick Start Guide - Disaggregated FC (PowerShell reference)](./FC.md)
-- [Azure Local Quick Start Guide - Hyperconverged FC](../hyperconverged/FC.md)
-- [Azure Local with Everpure (Everpure Microsoft Platform Guide)](https://support.purestorage.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
+- [Azure Local Quick Start Guide - Disaggregated iSCSI](../iscsi/QUICKSTART.md)
+- [Azure Local Quick Start Guide - Hyperconverged FC](../../hyperconverged/fc/QUICKSTART.md)
+- [Azure Local Quick Start Guide - Hyperconverged iSCSI](../../hyperconverged/iscsi/QUICKSTART.md)
+- [Azure Local with Everpure Data (Everpure Microsoft Platform Guide)](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
 - [Deploy Azure Local for disaggregated deployments (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated)
 - [Supported SAN solutions on Azure Local (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/concepts/san-requirements)
-- [Setting the MPIO Policy (Everpure)](https://support.purestorage.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy)
+- [Setting the MPIO Policy (Everpure)](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy)

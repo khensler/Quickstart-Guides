@@ -86,6 +86,12 @@ A collection of quick start guides for various technologies and configurations.
 
 ### Cloud & Hybrid Infrastructure
 
+**Azure Local:**
+- [Hyperconverged FC Quickstart](distributions/azure-local/hyperconverged/fc/QUICKSTART.md) - Add a FlashArray as external Fibre Channel storage to an existing Storage Spaces Direct cluster
+- [Hyperconverged iSCSI Quickstart](distributions/azure-local/hyperconverged/iscsi/QUICKSTART.md) - Add a FlashArray as external iSCSI storage to an existing Storage Spaces Direct cluster
+- [Disaggregated FC Quickstart](distributions/azure-local/disaggregated/fc/QUICKSTART.md) - Deploy Azure Local with a FlashArray as the only block storage over Fibre Channel (no S2D)
+- [Disaggregated iSCSI Quickstart](distributions/azure-local/disaggregated/iscsi/QUICKSTART.md) - Deploy Azure Local with a FlashArray as the only block storage over iSCSI (no S2D)
+
 **AWS Outposts:**
 - [Everpure FlashArray for AWS Outposts](distributions/aws-outposts/QUICKSTART.md) - Connect EC2 instances on AWS Outposts to FlashArray for data and boot volumes (NVMe-TCP and iSCSI)
 

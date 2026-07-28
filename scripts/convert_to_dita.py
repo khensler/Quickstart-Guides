@@ -609,6 +609,18 @@ class DITAGenerator:
         self.diagram_counter = 0  # Counter for diagrams within current source file
         self._include_cache = {}  # Cache for resolved include content
         self._current_source_context = "unknown"  # Human-readable source context
+        self._image_prefix = "../images/"  # Relative path to images/ from the current topic
+
+    def set_topic_subdir(self, subdir: str):
+        """Set the output subdirectory of the topic being generated.
+
+        Images live in <output>/images/ while topics live in <output>/topics/[subdir]/,
+        so the number of '../' hops depends on how deeply the topic is nested. With
+        --organize-sections topics sit in topics/<dist>/<proto>/, which needs three
+        hops, not one.
+        """
+        parts = [p for p in str(subdir or '').replace('\\', '/').split('/') if p]
+        self._image_prefix = '../' * (len(parts) + 1) + 'images/'
 
     def set_source_context(self, rel_path: str):
         """Set the current source file context for human-readable diagram names.
@@ -617,6 +629,10 @@ class DITAGenerator:
         """
         # Reset per-file diagram counter
         self.diagram_counter = 0
+
+        # Reset image depth; callers that write into a nested topics/ subdirectory
+        # override this with set_topic_subdir() before generating content.
+        self._image_prefix = "../images/"
 
         # Convert path to human-readable context
         # e.g., "distributions/rhel/nvme-tcp/QUICKSTART.md" -> "rhel-nvme-tcp-quickstart"
@@ -708,8 +724,7 @@ class DITAGenerator:
             self.diagram_counter
         )
 
-        # Both warehouse and topics are one level deep, so path is the same
-        image_path = f"../images/{filename}"
+        image_path = f"{self._image_prefix}{filename}"
 
         # Include scope attribute for proper Heretto CCMS linking
         return f'<fig><image href="{escape_xml_attr(image_path)}" scope="local"><alt>Diagram</alt></image></fig>'
@@ -718,10 +733,11 @@ class DITAGenerator:
         """Resolve a markdown image path to a DITA-relative path.
 
         For standalone files, images are copied to the output images/ dir.
-        Topics are in topics/ so the relative path is ../images/filename.
+        The number of '../' hops depends on how deeply the topic is nested
+        (see set_topic_subdir).
         """
         filename = Path(src_path).name
-        return f"../images/{filename}"
+        return f"{self._image_prefix}{filename}"
 
     def _resolve_image_ref(self, src_path: str) -> Tuple[str, str]:
         """Return (href, scope) for an image.
@@ -968,24 +984,33 @@ class DITAGenerator:
         prereq_conrefs = []     # Conrefs go after the list
         prereq_notes = []       # Vendor doc priority and other prereq notes
         postreq_content = []    # Content for Next Steps / postreq
+        context_content = []    # Intro content before the first H2 -> <context>
         steps = []
         current_step = None
         in_prereq = False
         in_disclaimer_section = False
         in_postreq = False
+        seen_h2 = False         # False until the first H2 - intro content goes to <context>
 
         for elem in elements:
             if elem.type == 'heading' and elem.level == 2:
+                seen_h2 = True
                 if 'prerequisite' in elem.content.lower():
                     in_prereq = True
                     in_disclaimer_section = False
                     in_postreq = False
+                    # Flush any pending step so its content is not discarded
+                    if current_step:
+                        steps.append(current_step)
                     current_step = None
                 elif 'disclaimer' in elem.content.lower() or 'important' in elem.content.lower():
                     # Disclaimer section - vendor doc priority goes to prereq
                     in_disclaimer_section = True
                     in_prereq = False
                     in_postreq = False
+                    # Flush any pending step so its content is not discarded
+                    if current_step:
+                        steps.append(current_step)
                     current_step = None
                 elif 'next step' in elem.content.lower():
                     # Next Steps section goes to postreq
@@ -1036,10 +1061,15 @@ class DITAGenerator:
                     prereq_conrefs.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
                 elif current_step:
                     current_step['content'].append(self._element_to_dita(elem))
+                elif not seen_h2:
+                    # Intro notes belong with the prerequisites, not loose in taskbody
+                    note_type = self._detect_note_type(elem.content)
+                    cleaned_content = self._strip_note_prefix(elem.content, note_type)
+                    prereq_notes.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
                 else:
                     output.append(self._element_to_dita(elem))
             elif elem.type == 'include':
-                if in_prereq or in_disclaimer_section:
+                if in_prereq or in_disclaimer_section or not seen_h2:
                     # Conrefs in prereq go after the list, not inside it
                     prereq_conrefs.append(self._generate_conref(elem.content, topic_id))
                 elif current_step:
@@ -1051,6 +1081,11 @@ class DITAGenerator:
                     prereq_list_items.append(f'            <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>')
             elif current_step:
                 current_step['content'].append(self._element_to_dita(elem))
+            elif not seen_h2:
+                # Intro prose/lists/code before the first H2 -> <context>
+                dita = self._element_to_dita(elem)
+                if dita and dita.strip():
+                    context_content.append(dita)
 
         if current_step:
             steps.append(current_step)
@@ -1069,6 +1104,12 @@ class DITAGenerator:
             for conref in prereq_conrefs:
                 output.append(conref)
             output.append('        </prereq>')
+
+        # Build context (intro content before the first H2) - must precede <steps>
+        if context_content:
+            output.append('        <context>')
+            output.extend(context_content)
+            output.append('        </context>')
 
         # Build steps
         if steps:
@@ -1798,6 +1839,33 @@ class MarkdownToDITAConverter:
         # Also convert standalone reference files from _includes that are linked from topics
         self._convert_reference_files()
 
+    def _copy_local_images(self, md_file: Path, content: str) -> int:
+        """Copy images referenced by a markdown file into the output images/ dir.
+
+        Authored screenshots live next to their guide (e.g. img/foo.png). DITA
+        topics reference them by basename out of images/, so the files have to be
+        copied or the references dangle.
+        """
+        import shutil
+        from urllib.parse import unquote
+
+        output_images = self.config.output_dir / self.config.images_dir
+        output_images.mkdir(parents=True, exist_ok=True)
+        copied = 0
+        for src in re.findall(r'!\[[^\]]*\]\(([^)]+)\)', content):
+            src = src.strip().split()[0].strip('<>')
+            if re.match(r'^https?://', src, re.IGNORECASE):
+                continue
+            # Markdown paths are URI-encoded (e.g. %20 for spaces); the file is not
+            source_file = (md_file.parent / unquote(src)).resolve()
+            if not source_file.is_file():
+                continue
+            dest = output_images / source_file.name
+            if not dest.exists():
+                shutil.copy2(source_file, dest)
+                copied += 1
+        return copied
+
     def _convert_doc_file(self, md_file: Path):
         """Convert a single documentation file to DITA."""
         rel_path = md_file.relative_to(self.config.input_dir)
@@ -1809,6 +1877,9 @@ class MarkdownToDITAConverter:
         self.dita_gen.set_source_context(rel_path_str)
 
         content = md_file.read_text(encoding='utf-8')
+
+        # Copy any authored images this guide references into the output images/ dir
+        self._copy_local_images(md_file, content)
 
         # Extract title from YAML front matter or first heading
         title = self._extract_title(content, md_file.stem)
@@ -1825,6 +1896,9 @@ class MarkdownToDITAConverter:
             output_dir.mkdir(parents=True, exist_ok=True)
         else:
             output_dir = self.config.output_dir / self.config.topics_dir
+
+        # Image hrefs must account for how deeply this topic is nested
+        self.dita_gen.set_topic_subdir(topic_subdir)
 
         # Determine topic type and generate DITA
         if 'QUICKSTART' in md_file.name:
@@ -1977,8 +2051,11 @@ class MarkdownToDITAConverter:
 
             # Set source context for diagrams
             self.dita_gen.set_source_context(rel_path)
+            # Reference topics are written to topics/common/
+            self.dita_gen.set_topic_subdir('common')
 
             content = md_file.read_text(encoding='utf-8')
+            self._copy_local_images(md_file, content)
             title = self._extract_title(content, default_title)
 
             # Generate topic ID with 'c_' prefix (these are concept/reference topics)
