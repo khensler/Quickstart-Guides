@@ -13,7 +13,7 @@ title: Azure Local Quick Start Guide - Hyperconverged FC
 
 ## Overview
 
-This quick start guide walks through adding an Everpure Data FlashArray to an Azure Local cluster in a **hyperconverged** topology using Fibre Channel (FC). In a hyperconverged deployment the cluster is deployed on local **Storage Spaces Direct (S2D)**, and the FlashArray is attached afterward as **additional** external block storage. Upon completion, Azure Local VMs and workloads can consume persistent block storage from both S2D and the FlashArray over FC.
+This quick start guide walks through adding an Everpure FlashArray to an Azure Local cluster in a **hyperconverged** topology using Fibre Channel (FC). In a hyperconverged deployment the cluster is deployed on local **Storage Spaces Direct (S2D)**, and the FlashArray is attached afterward as **additional** external block storage. Upon completion, Azure Local VMs and workloads can consume persistent block storage from both S2D and the FlashArray over FC.
 
 > Looking for a **SAN-only** cluster (no local S2D)? See the [Disaggregated FC guide](../../disaggregated/fc/QUICKSTART.md). Prefer **iSCSI**? See the [Hyperconverged iSCSI guide](../iscsi/QUICKSTART.md).
 
@@ -26,7 +26,7 @@ Before beginning, ensure you have:
 - **Azure Local cluster deployed with version 2604 or later** (FC SAN integration is generally available starting in 2604). See [Azure Local release information](https://learn.microsoft.com/en-us/azure/azure-local/release-information).
 - The cluster is **already deployed on Storage Spaces Direct**, registered with Azure Arc, and healthy in the Azure portal.
 - **Fibre Channel HBAs (Windows Server 2025 certified HBA and driver)** installed on **all** cluster nodes and cabled to the FC fabric.
-- Everpure Data FlashArray accessible on the FC fabric with management access configured and available capacity.
+- Everpure FlashArray accessible on the FC fabric with management access configured and available capacity.
 - FlashArray administrator credentials.
 - Identical HBA configuration and FC zoning across all cluster nodes.
 - PowerShell (run as Administrator) access to every Azure Local node, plus access to the Azure portal.
@@ -35,18 +35,20 @@ Before beginning, ensure you have:
 
 ### Supported-configuration constraints
 
-- External SAN supports **block storage over Fibre Channel only**.
+- External SAN supports **block storage only**, over either **Fibre Channel or iSCSI**. This guide covers FC; for iSCSI see the [Hyperconverged iSCSI guide](../iscsi/QUICKSTART.md).
 - LUNs must be presented to **all** cluster nodes (no partial presentation) with **consistent LUN IDs**.
 - Only **NTFS**-formatted volumes are supported for SAN-backed CSVs (ReFS is not supported for SAN-backed volumes).
 - Each SAN LUN must be dedicated to a single CSV (no sharing across clusters).
 - MPIO must be configured **consistently across all nodes** before using the volumes.
 - The array must support **SCSI-3 Persistent Reservations (PR)** for failover clustering.
 
+> **Note:** [Supported SAN solutions on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/concepts/san-requirements) still carries a legacy bullet reading "External SAN supports only block storage over Fibre Channel." The current [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage) article supersedes it: **Supported protocols — Fibre Channel (FC) and iSCSI (over TCP/IP)**, with Everpure FlashArray listed as supported on both.
+
 ## Background
 
-In a hyperconverged configuration, Azure Local uses its in-box **Storage Spaces Direct** pool (built from local drives) as the primary storage, and the Everpure Data FlashArray is added side-by-side as external FC SAN storage. This lets you keep existing S2D investments while placing performance-sensitive or large-capacity workloads on the FlashArray.
+In a hyperconverged configuration, Azure Local uses its in-box **Storage Spaces Direct** pool (built from local drives) as the primary storage, and the Everpure FlashArray is added side-by-side as external FC SAN storage. This lets you keep existing S2D investments while placing performance-sensitive or large-capacity workloads on the FlashArray.
 
-The FlashArray uses the **native Microsoft Device Specific Module (MSDSM)** for multipathing — there is **no separate Everpure Data DSM to install**. You simply register the FlashArray vendor/product ID with MSDSM.
+The FlashArray uses the **native Microsoft Device Specific Module (MSDSM)** for multipathing — there is **no separate Everpure DSM to install**. You simply register the FlashArray vendor/product ID with MSDSM.
 
 The FlashArray is attached as a **day-2** operation after the S2D cluster is already deployed and healthy.
 
@@ -95,7 +97,7 @@ Get-InitiatorPort | Where-Object ConnectionType -eq 'Fibre Channel' |
 Run on **each** node. MPIO policy and timer changes take effect only after a reboot (Step 5).
 
 ```powershell
-# Register the Everpure Data FlashArray with MSDSM so MPIO claims its LUNs
+# Register the Everpure FlashArray with MSDSM so MPIO claims its LUNs
 New-MSDSMSupportedHW -VendorId "PURE" -ProductId "FlashArray"
 
 # Optional: remove the default placeholder entry so MSDSM does not claim unrelated devices
@@ -110,12 +112,12 @@ Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
     -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 ```
 
-> **Note:** The values above are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure Data's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service treats the disk as gone. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
+> **Note:** The values above are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service treats the disk as gone. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
 
 > **Note:** Use `New-MSDSMSupportedHW` (rather than the MPIO GUI) — it enforces the required 8-char Vendor / 16-char Product string formatting automatically.
-> For hosts with **more than 10 paths** to a volume, Everpure Data recommends Least Queue Depth (`-Policy LQD`) instead of Round Robin.
+> For hosts with **more than 10 paths** to a volume, Everpure recommends Least Queue Depth (`-Policy LQD`) instead of Round Robin.
 
-> [Everpure Data — Setting the MPIO Policy](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy) · [Azure Local with Everpure Data](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
+> [Everpure — Setting the MPIO Policy](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy) · [Azure Local with Everpure](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
 
 ## Step 4: Create hosts, zone the fabric, and present LUNs on the FlashArray
 
@@ -317,7 +319,7 @@ In Windows Admin Center, the Azure portal, or via Hyper-V, create a new VM and p
 
 ## Additional Notes
 
-- The Everpure Data FlashArray uses the **native Windows MSDSM** for multipathing — there is no separate DSM to install. Apply the MPIO settings (Step 3) consistently on every node.
+- The Everpure FlashArray uses the **native Windows MSDSM** for multipathing — there is no separate DSM to install. Apply the MPIO settings (Step 3) consistently on every node.
 - In a hyperconverged cluster, S2D and FlashArray volumes coexist; place each workload on the tier that best fits its capacity and performance needs.
 - Each SAN LUN maps to a single CSV; size LUNs according to per-CSV capacity and IOPS needs.
 - Snapshot and replication policies can be configured on the FlashArray for Azure Local CSV backup workflows.
@@ -336,5 +338,5 @@ In Windows Admin Center, the Azure portal, or via Hyper-V, create a new VM and p
 - [Azure Local Quick Start Guide - Hyperconverged iSCSI](../iscsi/QUICKSTART.md)
 - [Enable External Storage on Azure Local (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage)
 - [Supported SAN solutions on Azure Local (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/concepts/san-requirements)
-- [Azure Local with Everpure Data (Everpure Microsoft Platform Guide)](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
-- [Setting the MPIO Policy (Everpure Data)](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy)
+- [Azure Local with Everpure (Everpure Microsoft Platform Guide)](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
+- [Setting the MPIO Policy (Everpure)](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy)

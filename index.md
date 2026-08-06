@@ -31,11 +31,11 @@ Choose your distribution and protocol to get started:
 
 ## VMware to Proxmox Migration
 
-Guides for migrating VMware VMs to Proxmox VE using Everpure Data FlashArray storage.
+Guides for migrating VMware VMs to Proxmox VE using Everpure FlashArray storage.
 
 | Guide | Storage Type | Description |
 |:------|:-------------|:------------|
-| [Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) | vVol (block) | Manual migration using Everpure Data vVols with live disk move via QMP |
+| [Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) | vVol (block) | Manual migration using Everpure vVols with live disk move via QMP |
 | [Migration Guide (NFS)](distributions/proxmox/migration/VMware-Proxmox-NFS-Migration.md) | NFS | Migrate from NFS datastores; direct VMDK attach with live `qm move_disk`, includes non-destructive managed directory copy method |
 
 ---
@@ -59,8 +59,8 @@ Guides for migrating VMware VMs to Proxmox VE using Everpure Data FlashArray sto
 ## OpenStack Distributions
 
 **Platform9 PCD:**
-- [Platform9 PCD iSCSI Integration Guide](distributions/pcd/iscsi/GUIDE.md) — Integrate Everpure Data FlashArray with Platform9 PCD using iSCSI and DM-Multipath
-- [Platform9 PCD Fibre Channel Integration Guide](distributions/pcd/fc/GUIDE.md) — Integrate Everpure Data FlashArray with Platform9 PCD using Fibre Channel and DM-Multipath
+- [Platform9 PCD iSCSI Integration Guide](distributions/pcd/iscsi/GUIDE.md) — Integrate Everpure FlashArray with Platform9 PCD using iSCSI and DM-Multipath
+- [Platform9 PCD Fibre Channel Integration Guide](distributions/pcd/fc/GUIDE.md) — Integrate Everpure FlashArray with Platform9 PCD using Fibre Channel and DM-Multipath
 
 ---
 

@@ -24,8 +24,8 @@ A collection of quick start guides for various technologies and configurations.
 - [Fibre Channel Best Practices](distributions/proxmox/fc/BEST-PRACTICES.md) - FC best practices including cluster HA and WWID-based device paths
 - [NFS Quickstart](distributions/proxmox/nfs/QUICKSTART.md) - Configure NFS storage for Proxmox VE
 - [NFS Best Practices](distributions/proxmox/nfs/BEST-PRACTICES.md) - Production deployment best practices for NFS on Proxmox VE
-- [VMware to Proxmox Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Everpure Data vVols
-- [VMware to Proxmox Migration Guide (NFS)](distributions/proxmox/migration/VMware-Proxmox-NFS-Migration.md) - Migrate VMs from VMware NFS datastores hosted on Everpure Data FlashArray, with optional non-destructive managed directory copy
+- [VMware to Proxmox Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) - Manual migration of VMs from VMware to Proxmox using Everpure vVols
+- [VMware to Proxmox Migration Guide (NFS)](distributions/proxmox/migration/VMware-Proxmox-NFS-Migration.md) - Migrate VMs from VMware NFS datastores hosted on Everpure FlashArray, with optional non-destructive managed directory copy
 
 **RHEL/Rocky/AlmaLinux:**
 - [NVMe-TCP Quickstart](distributions/rhel/nvme-tcp/QUICKSTART.md) - Configure NVMe over TCP for RHEL-based distributions
@@ -101,8 +101,8 @@ A collection of quick start guides for various technologies and configurations.
 ### Open Stack Distrobutions
 
 **Platform9 Private Cloud Director (PCD):**
-- [iSCSI Integration Guide](distributions/pcd/iscsi/GUIDE.md) - Integrate Everpure Data FlashArray with Platform9 PCD using iSCSI and DM-Multipath
-- [Fibre Channel Integration Guide](distributions/pcd/fc/GUIDE.md) - Integrate Everpure Data FlashArray with Platform9 PCD using Fibre Channel and DM-Multipath
+- [iSCSI Integration Guide](distributions/pcd/iscsi/GUIDE.md) - Integrate Everpure FlashArray with Platform9 PCD using iSCSI and DM-Multipath
+- [Fibre Channel Integration Guide](distributions/pcd/fc/GUIDE.md) - Integrate Everpure FlashArray with Platform9 PCD using Fibre Channel and DM-Multipath
 
 ### Common Reference Documentation
 

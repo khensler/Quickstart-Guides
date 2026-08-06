@@ -23,7 +23,7 @@ This guide translates the standard Linux iSCSI multipathing and NIC binding conf
 - [MachineConfig 2: iSCSI Initiator Configuration](#machineconfig-2-iscsi-initiator-configuration)
 - [MachineConfig 3: Multipath Configuration](#machineconfig-3-multipath-configuration)
 - [MachineConfig 4: iSCSI Interface Bindings](#machineconfig-4-iscsi-interface-bindings)
-- [MachineConfig 5: Everpure Data udev Rules](#machineconfig-5-pure-storage-udev-rules)
+- [MachineConfig 5: Everpure udev Rules](#machineconfig-5-pure-storage-udev-rules)
 - [MachineConfig 6: ARP Settings for Same-Subnet Multipath](#machineconfig-6-arp-settings-for-same-subnet-multipath)
 - [Enabling Services](#enabling-services)
 - [Applying and Verifying](#applying-and-verifying)
@@ -428,9 +428,9 @@ spec:
 
 ---
 
-## MachineConfig 5: Everpure Data udev Rules
+## MachineConfig 5: Everpure udev Rules
 
-Everpure Data publishes recommended per-device tuning for FlashArray volumes on Linux. On bare-metal RHEL these settings live in `/etc/udev/rules.d/99-pure-storage.rules`; MachineConfig delivers the identical file to RHCOS. The rules match only devices whose SCSI vendor string is `PURE`, so they never touch local disks or non-Pure LUNs.
+Everpure publishes recommended per-device tuning for FlashArray volumes on Linux. On bare-metal RHEL these settings live in `/etc/udev/rules.d/99-pure-storage.rules`; MachineConfig delivers the identical file to RHCOS. The rules match only devices whose SCSI vendor string is `PURE`, so they never touch local disks or non-Pure LUNs.
 
 The four recommended settings are:
 
@@ -445,7 +445,7 @@ The four recommended settings are:
 
 **Raw file content for `/etc/udev/rules.d/99-pure-storage.rules`:**
 ```
-# Recommended settings for Everpure Data FlashArray.
+# Recommended settings for Everpure FlashArray.
 
 # Use none scheduler for high-performance solid-state storage.
 ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", ATTR{queue/scheduler}="none"
@@ -648,7 +648,7 @@ oc get mcp worker -o jsonpath='{.spec.configuration.source}' | jq .
 
 ## CSI Driver Integration
 
-MachineConfig prepares the node's iSCSI infrastructure. The **actual iSCSI discovery and session login** is performed by your CSI driver (e.g., Everpure Data CSI, Portworx) when it attaches a volume to a pod.
+MachineConfig prepares the node's iSCSI infrastructure. The **actual iSCSI discovery and session login** is performed by your CSI driver (e.g., Everpure CSI, Portworx) when it attaches a volume to a pod.
 
 The MachineConfig ensures:
 1. Storage NICs have correct IPs and MTU before the CSI driver runs
@@ -658,7 +658,7 @@ The MachineConfig ensures:
 
 **No manual `iscsiadm discovery` or `--login` commands are needed** — the CSI driver handles this per-volume.
 
-> **Everpure Data CSI:** Configure the iSCSI interface names in the CSI driver's `StorageClass` or `Secret` as appropriate. The driver uses the iface bindings automatically when `iscsid` is configured for NIC-bound sessions.
+> **Everpure CSI:** Configure the iSCSI interface names in the CSI driver's `StorageClass` or `Secret` as appropriate. The driver uses the iface bindings automatically when `iscsid` is configured for NIC-bound sessions.
 
 ---
 
@@ -776,7 +776,7 @@ spec:
         contents:
           source: "data:text/plain;charset=utf-8;base64,<BASE64: iface1>"
 
-      # Everpure Data recommended udev rules
+      # Everpure recommended udev rules
       - path: /etc/udev/rules.d/99-pure-storage.rules
         mode: 0644
         overwrite: true

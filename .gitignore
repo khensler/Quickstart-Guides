@@ -19,3 +19,4 @@ __pycache__/
 *.pyc
 *.pyd
 .obsidian/
+CLAUDE.md

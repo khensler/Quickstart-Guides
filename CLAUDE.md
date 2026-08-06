@@ -6,7 +6,7 @@ file records the rules and gotchas that are easy to get wrong.
 
 ## What this repo is
 
-Jekyll-rendered Markdown quickstart guides for connecting platforms to Everpure Data
+Jekyll-rendered Markdown quickstart guides for connecting platforms to Everpure
 FlashArray, which are also converted to DITA XML for the Heretto CCMS. Every guide
 therefore has **two consumers**: the static site and the DITA pipeline. A change that
 reads fine in Markdown can still break the DITA output — always check both.
@@ -23,8 +23,9 @@ Layout:
 
 ## Naming and links
 
-- The company is **Everpure Data** (or "Everpure" where it reads better). Never
-  "Pure Storage". Product names like **FlashArray** are unchanged.
+- The company is **Everpure** — not "Everpure Data", never "Pure Storage". The
+  `everpuredata.com` domain keeps the "data" but the company name does not.
+  Product names like **FlashArray** are unchanged.
 - Exception: `-VendorId "PURE"` is a literal SCSI vendor ID. Never rewrite it.
   Same for `PureStoragePowerShellSDK2`, `Connect-PFA2Array`, `New-Pfa2*`.
 - Support links use **`support.everpuredata.com`**. Paths carry over unchanged from
@@ -131,7 +132,7 @@ drops content elsewhere is worse than the bug.
 - Never present two conflicting config blocks as compatible. Pick one authoritative
   block and explain deviations in a note. (This bit the MPIO
   `Set-MPIOSetting -NewPDORemovePeriod` values: Microsoft's Azure Local docs say 20,
-  Everpure Data's general Windows guidance says 30.)
+  Everpure's general Windows guidance says 30.)
 - `New-Pfa2Host` takes **arrays**: `-Wwns` (FC) and `-Iqns` (iSCSI), not `-Wwn`.
   Pass every WWPN/IQN a node reports, and say so in the prose and checklists.
 - Don't run state-changing cmdlets unconditionally on live cluster nodes. Check

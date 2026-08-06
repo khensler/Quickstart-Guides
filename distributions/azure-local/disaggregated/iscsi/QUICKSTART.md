@@ -159,7 +159,7 @@ Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
 
 `NewPDORemovePeriod` determines how long the OS waits for a failed path to recover before the device is removed.
 
-> **Note:** These are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure Data's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
+> **Note:** These are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
 
 > **Note:** Workloads with specific latency requirements or complex fabrics may require additional tuning.
 
@@ -177,7 +177,7 @@ New-NetIPAddress -InterfaceAlias "iSCSI-NIC-A" -IPAddress 10.30.30.11 -PrefixLen
 New-NetIPAddress -InterfaceAlias "iSCSI-NIC-B" -IPAddress 10.31.31.11 -PrefixLength 24
 ```
 
-> **Note:** Do **not** configure a default gateway on iSCSI NICs.
+> **Important — one default gateway per node, on the management interface only.** Do **not** configure a default gateway on iSCSI NICs (or on the cluster-network NICs). Azure Local's network validation **fails if it detects more than one physical network interface with a default gateway** — the portal uses that check to determine which IP carries outbound connectivity and Arc registration. A second gateway on an iSCSI NIC is one of the more expensive mistakes you can make here: the deployment run currently takes **5–10 hours**, and this surfaces as a validation/deployment failure rather than a warning up front. Where the FlashArray target portals are one or more Layer 3 hops away, route to them with per-path persistent static routes (next code block) instead of a gateway. See [Network considerations for cloud deployment for Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/plan/cloud-deployment-network-considerations).
 
 Optionally, configure consistent MTU (jumbo frames) across the entire iSCSI path, and VLAN tags only if the switch ports are trunked:
 
@@ -190,7 +190,7 @@ Set-NetAdapter -Name "iSCSI-NIC-A" -VlanID 500
 Set-NetAdapter -Name "iSCSI-NIC-B" -VlanID 600
 ```
 
-If the FlashArray iSCSI target portals are on a different subnet, add persistent /32 routes for each target portal on both iSCSI NICs:
+If the FlashArray iSCSI target portals are on a different subnet, add persistent /32 routes for each target portal on both iSCSI NICs. This is how you reach a routed array **without** adding a second default gateway: set the next hop to the leaf switch gateway (switch virtual interface) on that iSCSI VLAN and bind the route to the storage adapter, so iSCSI traffic leaves on the storage NIC instead of leaking onto the management network. Under MPIO, **each path needs its own route** to the same targets over its own VLAN. If the array exposes many target IPs in a single subnet, route the whole target subnet through the corresponding path gateway rather than adding one route per portal.
 
 ```powershell
 New-NetRoute -DestinationPrefix <TargetPortalIP>/32 -InterfaceAlias "iSCSI-NIC-A" -NextHop <GatewayIP> -PolicyStore PersistentStore
@@ -373,9 +373,16 @@ On the **Basics** tab, set **Storage options** to **Storage Area Network (SAN)**
 
 ### 3.2 Networking — SAN-based storage
 
-On the **Networking** tab, storage is **SAN based**, so there is no SMB/storage network intent. Configure **Management** and **Compute** intents only (grouped or separated). RDMA is disabled for cluster networks.
+On the **Networking** tab, storage is **SAN based**, so there is no RDMA storage intent for Network ATC to manage. That does **not** mean networking reduces to Management and Compute — a SAN-only cluster still needs **two cluster networks**:
 
-> **iSCSI note:** The dedicated iSCSI NICs you configured in Phase 1.7 are **not** managed by Network ATC and must **not** be added to a Management or Compute intent. Keep them isolated on their own adapters.
+- **Management and Compute intent** (grouped or separated), configured through Network ATC on a Switch Embedded Teaming (SET) virtual switch.
+- **Two cluster networks**, carrying cluster heartbeat, Cluster Shared Volume (CSV), and Live Migration traffic over SMB Multichannel. These run on **standalone network ports that Network ATC does not manage**, so you define them explicitly: for each cluster network, specify the cluster network name, network adapter, VLAN ID, and subnet. Microsoft's default cluster VLANs are **1711** and **1712**. Give each cluster network its own VLAN and subnet, and **no default gateway** — only the management interface gets one.
+
+RDMA is disabled for cluster networks, and because all cluster and storage traffic is TCP (SMB Multichannel for the cluster networks, iSCSI over TCP for storage), neither Priority Flow Control nor host-side DCB/ETS is required.
+
+Microsoft's validated iSCSI port layout is the **6-port dedicated-path** pattern per node: two ports for the Management and Compute SET team, two standalone ports for the cluster networks (VLANs 1711/1712), and two more standalone ports for dedicated iSCSI path A and path B (for example VLANs 300/400). Storage adapters must be at least 10 GbE — 25 GbE or higher for high-throughput workloads. Each standalone cluster and iSCSI port carries a single VLAN, so you can set that VLAN as the access (native) VLAN on the ToR port and leave the host interface untagged. See [Network considerations for cloud deployment for Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/plan/cloud-deployment-network-considerations).
+
+> **iSCSI note:** The dedicated iSCSI NICs you configured in Phase 1.7 are **not** managed by Network ATC and must **not** be added to a Management or Compute intent. Keep them isolated on their own adapters. If your design shares adapters between cluster and iSCSI traffic instead of using the 6-port layout, select the already-configured iSCSI adapters when you define the cluster network, VLAN ID, and subnet.
 
 ![Networking tab of the disaggregated Azure Local deployment](https://learn.microsoft.com/en-us/azure/azure-local/deploy/media/deploy-via-portal-disaggregated/screenshot-2026-04-14-163448.png)
 *Networking tab — Management and Compute intents (no storage intent for SAN). (Source: Microsoft Learn)*

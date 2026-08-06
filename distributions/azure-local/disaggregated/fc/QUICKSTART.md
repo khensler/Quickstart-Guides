@@ -141,7 +141,7 @@ Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
 
 `NewPDORemovePeriod` determines how long the OS waits for a failed path to recover before the device is removed.
 
-> **Note:** These are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure Data's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
+> **Note:** These are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
 
 > **Note:** Workloads with specific latency requirements or complex fabrics may require additional tuning.
 
@@ -263,7 +263,14 @@ On the **Basics** tab, set **Storage options** to **Storage Area Network (SAN)**
 
 ### 3.2 Networking — SAN-based storage
 
-On the **Networking** tab, storage is **SAN based**, so there is **no SMB/storage (replication) network intent** — that's the key difference from a hyperconverged S2D cluster, which needs a dedicated storage-replication network. Configure **Management** and **Compute** intents only (grouped or separated), and give each cluster network its own VLAN ID. RDMA is disabled for cluster networks. Adapter count and intent layout are a general Azure Local design choice, not storage-specific — follow [Microsoft's networking guidance for disaggregated deployments](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated#specify-network-settings).
+On the **Networking** tab, storage is **SAN based**, so there is **no RDMA storage intent** for Network ATC to manage — that's the key difference from a hyperconverged S2D cluster. It does **not** mean networking reduces to Management and Compute: a SAN-only cluster still needs **two cluster networks**.
+
+- **Management and Compute intent** (grouped or separated), configured through Network ATC on a Switch Embedded Teaming (SET) virtual switch.
+- **Two cluster networks**, carrying cluster heartbeat, Cluster Shared Volume (CSV), and Live Migration traffic over SMB Multichannel. These run on **standalone network ports that Network ATC does not manage**, so you define them explicitly: for each cluster network, specify the cluster network name, network adapter, VLAN ID, and subnet. Microsoft's default cluster VLANs are **1711** and **1712**. Give each cluster network its own VLAN and subnet, and **no default gateway** — only the management interface gets one, because Azure Local's network validation fails if more than one physical interface has a default gateway.
+
+RDMA is disabled for cluster networks, and because FC storage runs entirely on the FC fabric, all remaining cluster traffic is TCP over SMB Multichannel — no Ethernet storage QoS, Priority Flow Control, or lossless Ethernet is required.
+
+Microsoft's validated FC port layout is **4 Ethernet ports** per node: ports 1–2 for the Management and Compute SET team, ports 3–4 as standalone cluster-network ports (VLANs 1711/1712), plus the dual-port FC HBA (Port A to fabric A, Port B to fabric B) for storage. A **6-port** variant adds a *Guest backup* compute intent on ports 5–6. See [Network considerations for cloud deployment for Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/plan/cloud-deployment-network-considerations) and [Microsoft's networking guidance for disaggregated deployments](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated#specify-network-settings).
 
 ![Networking tab of the disaggregated Azure Local deployment](https://learn.microsoft.com/en-us/azure/azure-local/deploy/media/deploy-via-portal-disaggregated/screenshot-2026-04-14-163448.png)
 *Networking tab — Management and Compute intents (no storage intent for SAN). (Source: Microsoft Learn)*
@@ -462,7 +469,7 @@ Add-ClusterSharedVolume -Name $ClusterDisk.Name
 - [Azure Local Quick Start Guide - Disaggregated iSCSI](../iscsi/QUICKSTART.md)
 - [Azure Local Quick Start Guide - Hyperconverged FC](../../hyperconverged/fc/QUICKSTART.md)
 - [Azure Local Quick Start Guide - Hyperconverged iSCSI](../../hyperconverged/iscsi/QUICKSTART.md)
-- [Azure Local with Everpure Data (Everpure Microsoft Platform Guide)](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
+- [Azure Local with Everpure (Everpure Microsoft Platform Guide)](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
 - [Deploy Azure Local for disaggregated deployments (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated)
 - [Supported SAN solutions on Azure Local (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/concepts/san-requirements)
 - [Setting the MPIO Policy (Everpure)](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy)

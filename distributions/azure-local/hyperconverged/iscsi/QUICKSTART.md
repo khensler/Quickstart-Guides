@@ -13,7 +13,7 @@ title: Azure Local Quick Start Guide - Hyperconverged iSCSI
 
 ## Overview
 
-This quick start guide walks through adding an Everpure Data FlashArray to an Azure Local cluster in a **hyperconverged** topology using **iSCSI**. In a hyperconverged deployment the cluster is deployed on local **Storage Spaces Direct (S2D)**, and the FlashArray is attached afterward as **additional** external block storage over iSCSI (TCP/IP). Upon completion, Azure Local VMs and workloads can consume persistent block storage from both S2D and the FlashArray.
+This quick start guide walks through adding an Everpure FlashArray to an Azure Local cluster in a **hyperconverged** topology using **iSCSI**. In a hyperconverged deployment the cluster is deployed on local **Storage Spaces Direct (S2D)**, and the FlashArray is attached afterward as **additional** external block storage over iSCSI (TCP/IP). Upon completion, Azure Local VMs and workloads can consume persistent block storage from both S2D and the FlashArray.
 
 > Looking for a **SAN-only** cluster (no local S2D)? See the [Disaggregated iSCSI guide](../../disaggregated/iscsi/QUICKSTART.md). Prefer **Fibre Channel**? See the [Hyperconverged FC guide](../fc/QUICKSTART.md).
 
@@ -26,7 +26,7 @@ Before beginning, ensure you have:
 - **Azure Local cluster deployed on a version that supports external iSCSI SAN storage.** iSCSI external-storage support landed later than FC; confirm your build against [Supported SAN solutions on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/concepts/san-requirements) and [Azure Local release information](https://learn.microsoft.com/en-us/azure/azure-local/release-information) before starting. (The companion disaggregated iSCSI guide targets **2607+**.)
 - The cluster is **already deployed on Storage Spaces Direct**, registered with Azure Arc, and healthy in the Azure portal.
 - **Dedicated iSCSI NICs (Windows Server 2025 certified NIC and driver)** installed on **all** cluster nodes and cabled to the storage network. Use **dedicated physical ports** — virtual NICs (vNICs) are **not** supported for iSCSI storage.
-- Everpure Data FlashArray with **iSCSI enabled**, target portals assigned IP addresses, and IP connectivity established between the FlashArray iSCSI ports and all cluster nodes.
+- Everpure FlashArray with **iSCSI enabled**, target portals assigned IP addresses, and IP connectivity established between the FlashArray iSCSI ports and all cluster nodes.
 - FlashArray administrator credentials.
 - Identical NIC and iSCSI configuration across all cluster nodes.
 - PowerShell (run as Administrator) access to every Azure Local node, plus access to the Azure portal.
@@ -35,18 +35,20 @@ Before beginning, ensure you have:
 
 ### Supported-configuration constraints
 
-- External SAN supports **block storage** only (here, over iSCSI).
+- External SAN supports **block storage only**, over either **Fibre Channel or iSCSI**. This guide covers iSCSI; for FC see the [Hyperconverged FC guide](../fc/QUICKSTART.md).
 - LUNs must be presented to **all** cluster nodes (no partial presentation) with **consistent LUN IDs**.
 - Only **NTFS**-formatted volumes are supported for SAN-backed CSVs (ReFS is not supported for SAN-backed volumes).
 - Each SAN LUN must be dedicated to a single CSV (no sharing across clusters).
 - MPIO must be configured **consistently across all nodes** before using the volumes.
 - The array must support **SCSI-3 Persistent Reservations (PR)** for failover clustering.
 
+> **Note:** [Supported SAN solutions on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/concepts/san-requirements) still carries a legacy bullet reading "External SAN supports only block storage over Fibre Channel." The current [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage) article supersedes it: **Supported protocols — Fibre Channel (FC) and iSCSI (over TCP/IP)**, with Everpure FlashArray listed as supported on both.
+
 ## Background
 
-In a hyperconverged configuration, Azure Local uses its in-box **Storage Spaces Direct** pool (built from local drives) as the primary storage, and the Everpure Data FlashArray is added side-by-side as external iSCSI SAN storage. This lets you keep existing S2D investments while placing performance-sensitive or large-capacity workloads on the FlashArray.
+In a hyperconverged configuration, Azure Local uses its in-box **Storage Spaces Direct** pool (built from local drives) as the primary storage, and the Everpure FlashArray is added side-by-side as external iSCSI SAN storage. This lets you keep existing S2D investments while placing performance-sensitive or large-capacity workloads on the FlashArray.
 
-The FlashArray uses the **native Microsoft Device Specific Module (MSDSM)** for multipathing — there is **no separate Everpure Data DSM to install**. You register the FlashArray vendor/product ID with MSDSM and enable automatic claiming for the iSCSI bus. With iSCSI, redundant paths are delivered over **dedicated iSCSI NICs** rather than Fibre Channel HBAs, and each node must **discover and log in** to the array's iSCSI targets.
+The FlashArray uses the **native Microsoft Device Specific Module (MSDSM)** for multipathing — there is **no separate Everpure DSM to install**. You register the FlashArray vendor/product ID with MSDSM and enable automatic claiming for the iSCSI bus. With iSCSI, redundant paths are delivered over **dedicated iSCSI NICs** rather than Fibre Channel HBAs, and each node must **discover and log in** to the array's iSCSI targets.
 
 The FlashArray is attached as a **day-2** operation after the S2D cluster is already deployed and healthy.
 
@@ -102,7 +104,7 @@ Collect each node's **iSCSI Qualified Name (IQN)** — you (or your storage admi
 Run on **each** node. MPIO policy, timer, and automatic-claim changes take effect only after a reboot (Step 7).
 
 ```powershell
-# Register the Everpure Data FlashArray with MSDSM so MPIO claims its LUNs
+# Register the Everpure FlashArray with MSDSM so MPIO claims its LUNs
 New-MSDSMSupportedHW -VendorId "PURE" -ProductId "FlashArray"
 
 # Optional: remove the default placeholder entry so MSDSM does not claim unrelated devices
@@ -120,12 +122,12 @@ Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
     -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 ```
 
-> **Note:** The values above are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure Data's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service treats the disk as gone. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
+> **Note:** The values above are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service treats the disk as gone. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
 
 > **Note:** Use `New-MSDSMSupportedHW` (rather than the MPIO GUI) — it enforces the required 8-char Vendor / 16-char Product string formatting automatically.
-> For hosts with **more than 10 paths** to a volume, Everpure Data recommends Least Queue Depth (`-Policy LQD`) instead of Round Robin.
+> For hosts with **more than 10 paths** to a volume, Everpure recommends Least Queue Depth (`-Policy LQD`) instead of Round Robin.
 
-> [Everpure Data — Setting the MPIO Policy](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy) · [Azure Local with Everpure Data](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
+> [Everpure — Setting the MPIO Policy](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy) · [Azure Local with Everpure](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
 
 ## Step 4: Configure the iSCSI network
 
@@ -141,7 +143,7 @@ New-NetIPAddress -InterfaceAlias "iSCSI-NIC-A" -IPAddress 10.30.30.11 -PrefixLen
 New-NetIPAddress -InterfaceAlias "iSCSI-NIC-B" -IPAddress 10.31.31.11 -PrefixLength 24
 ```
 
-> **Note:** Do **not** configure a default gateway on iSCSI NICs.
+> **Note:** Do **not** configure a default gateway on iSCSI NICs. Only the **management** interface should carry one. Azure Local's network validation **fails when it detects more than one physical adapter with a default gateway**, so a gateway left on an iSCSI NIC will block a later add-node, repair, or redeploy operation even though the array itself works. Where the target portals are one or more Layer 3 hops away, reach them with per-path persistent static routes (below) instead of a gateway. See [Network considerations for cloud deployment for Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/plan/cloud-deployment-network-considerations).
 
 Optionally, configure consistent MTU (jumbo frames) across the entire iSCSI path, and VLAN tags only if the switch ports are trunked:
 
@@ -154,7 +156,7 @@ Set-NetAdapter -Name "iSCSI-NIC-A" -VlanID 500
 Set-NetAdapter -Name "iSCSI-NIC-B" -VlanID 600
 ```
 
-If the FlashArray iSCSI target portals are on a different subnet, add persistent /32 routes for each target portal on both iSCSI NICs:
+If the FlashArray iSCSI target portals are on a different subnet, add persistent /32 routes for each target portal on both iSCSI NICs. This is how you route to the array **without** putting a second default gateway on the host: each path gets its own route over its own VLAN, and the route binding keeps iSCSI traffic on the storage adapter instead of leaking onto the management network. If the array exposes many target IPs in one subnet, route the whole target subnet through the corresponding path gateway rather than adding a route per portal.
 
 ```powershell
 New-NetRoute -DestinationPrefix <TargetPortalIP>/32 -InterfaceAlias "iSCSI-NIC-A" -NextHop <GatewayIP> -PolicyStore PersistentStore
@@ -163,7 +165,7 @@ New-NetRoute -DestinationPrefix <TargetPortalIP>/32 -InterfaceAlias "iSCSI-NIC-B
 
 ## Step 5: Create hosts and present LUNs on the FlashArray
 
-Now that the S2D deployment is complete and the node iSCSI networking is in place, provision the storage on the FlashArray. Performed on the array (Everpure Data PowerShell SDK v2 or the GUI):
+Now that the S2D deployment is complete and the node iSCSI networking is in place, provision the storage on the FlashArray. Performed on the array (Everpure PowerShell SDK v2 or the GUI):
 
 - Create a **Host** object for each Azure Local node containing **all** of that node's IQNs from Step 2.
 - Group all Azure Local hosts into a **Host Group** (e.g., `azurelocal-hg`).
@@ -407,8 +409,8 @@ In Windows Admin Center, the Azure portal, or via Hyper-V, create a new VM and p
 
 ## Additional Notes
 
-- The Everpure Data FlashArray uses the **native Windows MSDSM** for multipathing — there is no separate DSM to install. Apply the MPIO settings (Step 3) consistently on every node.
-- Keep iSCSI NICs on **dedicated physical ports**, outside Network ATC, with static IPs and **no default gateway**; vNICs are not supported for iSCSI storage.
+- The Everpure FlashArray uses the **native Windows MSDSM** for multipathing — there is no separate DSM to install. Apply the MPIO settings (Step 3) consistently on every node.
+- Keep iSCSI NICs on **dedicated physical ports**, outside Network ATC, with static IPs and **no default gateway** — only the management interface carries a gateway, and Azure Local's network validation fails if more than one physical adapter has one. Reach routed target portals with per-path persistent static routes instead. vNICs are not supported for iSCSI storage.
 - In a hyperconverged cluster, S2D and FlashArray volumes coexist; place each workload on the tier that best fits its capacity and performance needs.
 - Each SAN LUN maps to a single CSV; size LUNs according to per-CSV capacity and IOPS needs.
 - Snapshot and replication policies can be configured on the FlashArray for Azure Local CSV backup workflows.
@@ -427,5 +429,5 @@ In Windows Admin Center, the Azure portal, or via Hyper-V, create a new VM and p
 - [Azure Local Quick Start Guide - Hyperconverged FC](../fc/QUICKSTART.md)
 - [Enable External Storage on Azure Local (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage)
 - [Supported SAN solutions on Azure Local (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/concepts/san-requirements)
-- [Azure Local with Everpure Data (Everpure Microsoft Platform Guide)](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
-- [Setting the MPIO Policy (Everpure Data)](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy)
+- [Azure Local with Everpure (Everpure Microsoft Platform Guide)](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
+- [Setting the MPIO Policy (Everpure)](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy)
