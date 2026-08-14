@@ -324,6 +324,19 @@ def download_mermaid_image(mermaid_code: str, images_dir: Path, source_context: 
 # ============================================================================
 
 @dataclass
+class NestedListItem:
+    """A sublist item under an ordered list item.
+
+    `depth` is the raw leading-whitespace width, which is all that is needed to
+    rebuild the nesting; `ordered` records whether the marker was a number or a
+    bullet, so a numbered sublist renders as <ol> rather than <ul>.
+    """
+    depth: int
+    ordered: bool
+    text: str
+
+
+@dataclass
 class MarkdownElement:
     """Represents a parsed Markdown element."""
     type: str  # heading, paragraph, code_block, list, table, include, etc.
@@ -346,9 +359,27 @@ class MarkdownParser:
         self.link_pattern = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
         self.list_item_pattern = re.compile(r'^(\s*)[-*]\s+(.+)$', re.MULTILINE)
         self.ordered_list_pattern = re.compile(r'^(\s*)\d+\.\s+(.+)$', re.MULTILINE)
+        # Indented sublist item under an ordered list item: bullet or number
+        self.nested_list_item_pattern = re.compile(r'^(\s+)([-*]|\d+\.)\s+(.+)$')
         self.blockquote_pattern = re.compile(r'^>\s*(.+)$', re.MULTILINE)
         self.hr_pattern = re.compile(r'^---+\s*$', re.MULTILINE)
         self.table_pattern = re.compile(r'^\|(.+)\|$', re.MULTILINE)
+        # Set by DITAGenerator so convert_inline can render inline images; when
+        # unset, inline image markup is left untouched.
+        self.inline_image_hook = None
+
+    def _is_continuation(self, line: str) -> bool:
+        """True if `line` is wrapped text belonging to the list item above it.
+
+        An indented line that is not itself a list item continues the item. Code
+        fences are excluded: an indented fence under a list item is a code block,
+        and folding it into the item text would destroy it.
+        """
+        if not line.strip() or not line[:1].isspace():
+            return False
+        if line.strip().startswith('```'):
+            return False
+        return not self.nested_list_item_pattern.match(line)
 
     def parse(self, content: str) -> List[MarkdownElement]:
         """Parse Markdown content into elements."""
@@ -423,10 +454,19 @@ class MarkdownParser:
             list_match = self.list_item_pattern.match(line)
             if list_match:
                 items = []
-                while i < len(lines) and self.list_item_pattern.match(lines[i]):
+                while i < len(lines):
                     match = self.list_item_pattern.match(lines[i])
-                    items.append(match.group(2).strip())
-                    i += 1
+                    if match:
+                        items.append(match.group(2).strip())
+                        i += 1
+                        continue
+                    if self._is_continuation(lines[i]) and items:
+                        # Wrapped item text; without this the list ends here and
+                        # the remainder of the item becomes a stray paragraph.
+                        items[-1] += ' ' + lines[i].strip()
+                        i += 1
+                        continue
+                    break
                 elements.append(MarkdownElement(
                     type='unordered_list',
                     content='',
@@ -434,32 +474,61 @@ class MarkdownParser:
                 ))
                 continue
 
-            # Check for ordered list (with nested unordered sublists support)
+            # Check for ordered list (with nested sublists support)
             ol_match = self.ordered_list_pattern.match(line)
             if ol_match:
-                # Parse ordered list with potential nested bullet items
-                ol_items = []  # List of tuples: (item_text, [nested_bullet_items])
+                # Parse ordered list with potential nested bullet/numbered items
+                ol_items = []  # List of tuples: (item_text, [nested_items])
+                # The first item sets the list's own level. Usually that is column
+                # zero, but a list can also open already indented (a sublist whose
+                # parent is a plain indented paragraph); treating that as "not a
+                # list" would drop it to loose paragraphs.
+                base_indent = ol_match.group(1)
 
                 while i < len(lines):
                     current_line = lines[i]
 
-                    # Check if this is an ordered list item (at root level, no indent)
+                    # Check if this is an ordered list item at the list's own level
                     ol_item_match = self.ordered_list_pattern.match(current_line)
-                    if ol_item_match and ol_item_match.group(1) == '':  # No leading whitespace
+                    if ol_item_match and ol_item_match.group(1) == base_indent:
                         item_text = ol_item_match.group(2).strip()
                         nested_items = []
                         i += 1
 
-                        # Collect any nested unordered list items (indented bullets)
+                        # Collect nested list items (indented bullets or numbers).
+                        # Numbered sublists have to be accepted here: leaving them
+                        # to the outer loop spins forever, because an indented
+                        # ordered item re-enters this branch, collects nothing,
+                        # and never advances i.
+                        # A sublist item has to be indented deeper than the list's
+                        # own level; at exactly base_indent it is a sibling, which
+                        # the outer loop handles on the next pass.
+                        nest_min = max(2, len(base_indent) + 1)
+                        saw_blank = False
                         while i < len(lines):
                             nested_line = lines[i]
-                            # Check for indented bullet (starts with spaces then - or *)
-                            nested_match = re.match(r'^(\s+)[-*]\s+(.+)$', nested_line)
-                            if nested_match and len(nested_match.group(1)) >= 2:
-                                nested_items.append(nested_match.group(2).strip())
+                            nested_match = self.nested_list_item_pattern.match(nested_line)
+                            if nested_match and len(nested_match.group(1)) >= nest_min:
+                                nested_items.append(NestedListItem(
+                                    depth=len(nested_match.group(1)),
+                                    ordered=nested_match.group(2)[0].isdigit(),
+                                    text=nested_match.group(3).strip()
+                                ))
                                 i += 1
+                                saw_blank = False
                             elif nested_line.strip() == '':
                                 # Empty line - check if next line continues the list
+                                saw_blank = True
+                                i += 1
+                            elif not saw_blank and self._is_continuation(nested_line):
+                                # Wrapped item text. Only when it directly follows
+                                # the item: an indented block after a blank line is
+                                # separate content, not a continuation, and folding
+                                # it in would swallow whole paragraphs.
+                                if nested_items:
+                                    nested_items[-1].text += ' ' + nested_line.strip()
+                                else:
+                                    item_text += ' ' + nested_line.strip()
                                 i += 1
                             else:
                                 # Not a nested item, break out
@@ -476,9 +545,13 @@ class MarkdownParser:
                         content='',
                         items=[item[0] for item in ol_items],  # Main item texts
                         children=[MarkdownElement(type='nested_ul', content='', items=item[1])
-                                  for item in ol_items]  # Nested bullet lists
+                                  for item in ol_items]  # Nested sublists
                     ))
-                continue
+                    continue
+
+                # An indented ordered item with no root-level item to attach it
+                # to (e.g. the document opens on a sublist). Fall through to the
+                # paragraph handling below so i always advances.
 
             # Check for table
             if line.startswith('|'):
@@ -518,12 +591,16 @@ class MarkdownParser:
                       not lines[i].startswith('>') and \
                       not lines[i].startswith('|') and \
                       not self.list_item_pattern.match(lines[i]) and \
+                      not self.ordered_list_pattern.match(lines[i]) and \
                       not self.include_pattern.search(lines[i]):
                     para_lines.append(lines[i])
                     i += 1
                 elements.append(MarkdownElement(
                     type='paragraph',
-                    content=' '.join(para_lines)
+                    # Strip each line: source indentation and wrap points are not
+                    # content, and leaving them in emits <p> text that starts with
+                    # whitespace or has double spaces at every wrap.
+                    content=' '.join(l.strip() for l in para_lines)
                 ))
                 continue
 
@@ -533,6 +610,19 @@ class MarkdownParser:
 
     def convert_inline(self, text: str) -> str:
         """Convert inline Markdown formatting to DITA."""
+        # Protect HTML comments first. Authored annotations (<!-- xref: ... -->,
+        # <!-- SCREENSHOT REQUIRED ... -->) reach here already XML-escaped by the
+        # caller; without this they land in the output as literal "&lt;!--" text.
+        comments: List[str] = []
+
+        def _stash_comment(match):
+            body = html.unescape(match.group(1))
+            body = re.sub(r'-{2,}', '-', body).strip()  # '--' is illegal in an XML comment
+            comments.append(body)
+            return f'\x00CMT{len(comments) - 1}\x00'
+
+        text = re.sub(r'(?:<|&lt;)!--(.*?)--(?:>|&gt;)', _stash_comment, text, flags=re.DOTALL)
+
         # Protect inline code spans FIRST so their contents are not treated as
         # emphasis or links. Without this, `sd*` ... `dm-*` would be parsed as an
         # italic run spanning the two code spans, producing mismatched <i> tags.
@@ -543,6 +633,13 @@ class MarkdownParser:
             return f'\x00CODE{len(code_spans) - 1}\x00'
 
         text = re.sub(r'`([^`]+)`', _stash_code, text)
+        # Images inside a paragraph or list item. Block-level images are handled
+        # by the parser; these have to be converted before the link handling
+        # below, which would otherwise match ![alt](src) as a link and leave a
+        # stray '!' plus a broken xref behind.
+        if self.inline_image_hook:
+            text = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)',
+                          lambda m: self.inline_image_hook(m.group(2), m.group(1)), text)
         # Bold
         text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', text)
         # Italic
@@ -552,6 +649,9 @@ class MarkdownParser:
         # Restore inline code spans as <codeph>
         text = re.sub(r'\x00CODE(\d+)\x00',
                       lambda m: f'<codeph>{code_spans[int(m.group(1))]}</codeph>', text)
+        # Restore HTML comments as real XML comments
+        text = re.sub(r'\x00CMT(\d+)\x00',
+                      lambda m: f'<!-- {comments[int(m.group(1))]} -->', text)
         return text
 
     def _convert_link(self, match) -> str:
@@ -610,6 +710,13 @@ class DITAGenerator:
         self._include_cache = {}  # Cache for resolved include content
         self._current_source_context = "unknown"  # Human-readable source context
         self._image_prefix = "../images/"  # Relative path to images/ from the current topic
+        self.parser.inline_image_hook = self._inline_image_dita
+
+    def _inline_image_dita(self, src: str, alt: str) -> str:
+        """Render an image that appears inside a paragraph or list item."""
+        href, scope = self._resolve_image_ref(src)
+        return (f'<image href="{escape_xml_attr(href)}" scope="{scope}">'
+                f'<alt>{escape_xml(alt or "Image")}</alt></image>')
 
     def set_topic_subdir(self, subdir: str):
         """Set the output subdirectory of the topic being generated.
@@ -1253,15 +1360,58 @@ class DITAGenerator:
         li_items = '\n'.join([f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>' for item in items])
         return f'{indent}<ul>\n{li_items}\n{indent}</ul>'
 
-    def _generate_ol(self, items: List[str], indent: str = '        ', nested_items: List[List[str]] = None) -> str:
-        """Generate a DITA ordered list with proper <p> wrapping and nested <ul> support.
+    def _sublist_tree(self, nested: List[NestedListItem], start: int, depth: int):
+        """Group a flat, depth-tagged sublist into (item, children) nodes.
+
+        Returns (nodes, next_index). Items deeper than `depth` are attached to
+        the preceding sibling; items shallower end the run.
+        """
+        nodes = []
+        i = start
+        while i < len(nested):
+            item = nested[i]
+            if item.depth < depth:
+                break
+            if item.depth > depth:
+                if not nodes:
+                    # Sublist opens deeper than expected; take that as this level
+                    depth = item.depth
+                    continue
+                children, i = self._sublist_tree(nested, i, item.depth)
+                parent, existing = nodes[-1]
+                nodes[-1] = (parent, existing + children)
+                continue
+            nodes.append((item, []))
+            i += 1
+        return nodes, i
+
+    def _render_sublist(self, nodes, indent: str) -> str:
+        """Render sublist nodes as nested DITA <ol>/<ul> markup."""
+        if not nodes:
+            return ''
+        tag = 'ol' if nodes[0][0].ordered else 'ul'
+        parts = [f'{indent}<{tag}>']
+        for item, children in nodes:
+            text = self.parser.convert_inline(escape_xml(item.text))
+            if children:
+                parts.append(f'{indent}    <li><p>{text}</p>')
+                parts.append(self._render_sublist(children, indent + '        '))
+                parts.append(f'{indent}    </li>')
+            else:
+                parts.append(f'{indent}    <li><p>{text}</p></li>')
+        parts.append(f'{indent}</{tag}>')
+        return '\n'.join(parts)
+
+    def _generate_ol(self, items: List[str], indent: str = '        ', nested_items: List[List] = None) -> str:
+        """Generate a DITA ordered list with proper <p> wrapping and nested sublist support.
 
         Args:
             items: List of main ordered list item texts
             indent: Indentation string
-            nested_items: List of lists, where each inner list contains the nested bullet items
-                         for the corresponding main item. Can be None or empty lists for items
-                         without nested bullets.
+            nested_items: List of lists, where each inner list holds the NestedListItem
+                         sublist entries for the corresponding main item. Can be None or
+                         empty lists for items without sublists. Plain strings are accepted
+                         and treated as a single level of bullets.
         """
         if nested_items is None:
             nested_items = [[] for _ in items]
@@ -1269,16 +1419,15 @@ class DITAGenerator:
         li_elements = []
         for idx, item in enumerate(items):
             nested = nested_items[idx] if idx < len(nested_items) else []
+            nested = [n if isinstance(n, NestedListItem)
+                      else NestedListItem(depth=4, ordered=False, text=str(n))
+                      for n in nested]
 
             if nested:
-                # Item with nested ul
+                # Item with a sublist
                 li_content = f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p>\n'
-                # Generate nested ul
-                nested_ul_items = '\n'.join([
-                    f'{indent}            <li><p>{self.parser.convert_inline(escape_xml(n))}</p></li>'
-                    for n in nested
-                ])
-                li_content += f'{indent}        <ul>\n{nested_ul_items}\n{indent}        </ul>\n'
+                nodes, _ = self._sublist_tree(nested, 0, min(n.depth for n in nested))
+                li_content += self._render_sublist(nodes, f'{indent}        ') + '\n'
                 li_content += f'{indent}    </li>'
             else:
                 # Simple item without nested list
@@ -1607,8 +1756,10 @@ class MarkdownToDITAConverter:
         # Remove TOC section (between "## Table of Contents" and "---")
         content = re.sub(r'## Table of Contents\n.*?---\n', '', content, flags=re.DOTALL)
 
-        # Extract document title
-        title_match = re.match(r'^#\s+(.+)$', content, re.MULTILINE)
+        # Extract document title. Use search, not match: a compiled document may
+        # open with a provenance comment or a table of contents, in which case an
+        # anchored match falls back to the filename stem for the map title.
+        title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
         doc_title = title_match.group(1).strip() if title_match else md_file.stem
 
         # Single task topic mode: emit one task topic from the entire file

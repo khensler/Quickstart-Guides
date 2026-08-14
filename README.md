@@ -97,6 +97,8 @@ A collection of quick start guides for various technologies and configurations.
 
 **OpenShift / Kubernetes:**
 - [iSCSI Multipathing & NIC Binding via MachineConfig](distributions/openshift/iscsi/QUICKSTART.md) - Configure iSCSI multipathing with NIC binding on Red Hat CoreOS worker nodes using MachineConfig
+- [OpenShift NFS Quickstart](distributions/openshift/nfs/QUICKSTART.md) - Dynamically provision NFS persistent volumes from FlashBlade and FlashArray File Services with Portworx CSI
+- [Kubernetes NFS Quickstart](distributions/kubernetes/nfs/QUICKSTART.md) - The same FlashBlade and FlashArray File Services provisioning on an upstream Kubernetes cluster
 
 ### Open Stack Distrobutions
 

@@ -19,4 +19,6 @@ __pycache__/
 *.pyc
 *.pyd
 .obsidian/
-CLAUDE.md
+scripts/redact_screenshots.py
+scripts/crop_screenshots.py
+scripts/redactions/vmware_srm_user_guide.json
