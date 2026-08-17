@@ -22,3 +22,4 @@ __pycache__/
 scripts/redact_screenshots.py
 scripts/crop_screenshots.py
 scripts/redactions/vmware_srm_user_guide.json
+env.md

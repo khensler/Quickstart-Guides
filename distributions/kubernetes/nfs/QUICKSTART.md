@@ -73,7 +73,7 @@ Do this before provisioning anything. Changing a node's storage network after wo
 
 ### Apply the bond on each node
 
-Configure the bond with whatever manages node networking in your environment. Two common cases follow — apply the same settings through your configuration management or node image rather than by hand on each node, so replacement nodes inherit them.
+Configure the bond with whatever manages node networking in your environment. The three common backends follow — apply the same settings through your configuration management or node image rather than by hand on each node, so replacement nodes inherit them.
 
 NetworkManager, on the RHEL family and SUSE:
 
@@ -126,15 +126,119 @@ network:
       addresses: [<node-storage-ip>/<prefix>]
 ```
 
+systemd-networkd, on Debian cloud images and anywhere NetworkManager is not installed:
+
+```ini
+# /etc/systemd/network/10-bond0.netdev
+[NetDev]
+Name=bond0
+Kind=bond
+MTUBytes=9000
+
+[Bond]
+Mode=802.3ad
+TransmitHashPolicy=layer3+4
+LACPTransmitRate=fast
+MIIMonitorSec=100ms
+```
+
+```ini
+# /etc/systemd/network/20-bond0-members.network — one file per member, or a glob
+[Match]
+Name=<nic1> <nic2>
+
+[Link]
+MTUBytes=9000
+
+[Network]
+Bond=bond0
+```
+
+```ini
+# /etc/systemd/network/30-bond0-vlan.netdev
+[NetDev]
+Name=bond0.<vlan-id>
+Kind=vlan
+MTUBytes=9000
+
+[VLAN]
+Id=<vlan-id>
+```
+
+```ini
+# /etc/systemd/network/40-bond0.network
+[Match]
+Name=bond0
+
+[Network]
+VLAN=bond0.<vlan-id>
+```
+
+```ini
+# /etc/systemd/network/50-storage.network
+[Match]
+Name=bond0.<vlan-id>
+
+[Link]
+MTUBytes=9000
+
+[Network]
+Address=<node-storage-ip>/<prefix>
+```
+
+Then `systemctl restart systemd-networkd` and confirm with `networkctl status bond0`.
+
+> **Note:** Debian and Ubuntu cloud images are configured by cloud-init, which writes to whichever backend is present — `systemd-networkd` on a minimal Debian image, Netplan on Ubuntu. Check with `networkctl status` and `nmcli general status` before assuming which of the three recipes applies, and put the result into your node image or configuration management so replacement nodes match.
+
 The options that matter, and why:
 
 | Setting | Value | Why |
 |---|---|---|
 | `mode` | `802.3ad` | LACP. Negotiates the aggregation with the switch instead of assuming it. |
-| `xmit_hash_policy` / `transmit-hash-policy` | `layer3+4` | Puts ports in the hash so separate TCP connections can use different links. The default `layer2` pins all traffic to one array VIP onto a single link. |
-| `lacp_rate` / `lacp-rate` | `fast` | LACPDUs every second rather than every 30, so link loss is detected in about 3 seconds instead of 90. |
-| `miimon` / `mii-monitor-interval` | `100` | Link-state polling interval in milliseconds. |
+| `xmit_hash_policy` / `transmit-hash-policy` / `TransmitHashPolicy` | `layer3+4` | Puts ports in the hash so separate TCP connections can use different links. The default `layer2` pins all traffic to one array VIP onto a single link. |
+| `lacp_rate` / `lacp-rate` / `LACPTransmitRate` | `fast` | LACPDUs every second rather than every 30, so link loss is detected in about 3 seconds instead of 90. |
+| `miimon` / `mii-monitor-interval` / `MIIMonitorSec` | `100` | Link-state polling interval in milliseconds. |
 | `mtu` | `9000` | Jumbo frames on the members, the bond, and the VLAN interface. Must match end to end — node, both switches, and the array. |
+
+### Make sure NFS actually uses the storage network
+
+{% include quickstart/nfs-endpoint-reachability.md %}
+
+If your NFS endpoint is on the storage subnet, there is nothing to add. If it is on another subnet reached through a router on the storage VLAN, add a host route per endpoint using the same tool that manages the bond:
+
+```bash
+# NetworkManager — persists in the connection profile
+sudo nmcli con mod storage +ipv4.routes "<nfs-endpoint>/32 <storage-subnet-router>"
+sudo nmcli con up storage
+
+# Verify, and remove again if needed
+nmcli -f ipv4.routes con show storage
+sudo nmcli con mod storage -ipv4.routes "<nfs-endpoint>/32 <storage-subnet-router>"
+```
+
+```yaml
+# Netplan — under the VLAN interface
+  vlans:
+    bond0.<vlan-id>:
+      id: <vlan-id>
+      link: bond0
+      mtu: 9000
+      addresses: [<node-storage-ip>/<prefix>]
+      routes:
+        - to: <nfs-endpoint>/32
+          via: <storage-subnet-router>
+```
+
+```ini
+# systemd-networkd — append to 50-storage.network
+[Route]
+Destination=<nfs-endpoint>/32
+Gateway=<storage-subnet-router>
+```
+
+Use a host route (`/32`) per endpoint rather than a route for the endpoint's whole subnet. A subnet route also moves the array's *management* traffic off the default path, and PX-CSI uses that path for its control plane.
+
+> **Important:** Add the route wherever the bond itself is defined — the node image or configuration management — not by hand with `ip route add`. A manual kernel route disappears on the next reboot or network reconcile, and the symptom is NFS quietly reverting to the management path rather than failing outright.
 
 ### Configure the switch and array sides
 
@@ -153,11 +257,16 @@ cat /proc/net/bonding/bond0
 ip -d link show bond0
 ip addr show bond0.<vlan-id>
 
+# Which interface will NFS actually leave by — run this before trusting any of the above
+ip route get <nfs-endpoint>
+
 # Jumbo frames end to end — fails if any hop is not at 9000
 ping -M do -s 8972 -c 3 <nfs-endpoint>
 ```
 
 In `/proc/net/bonding/bond0`, confirm `Bonding Mode: IEEE 802.3ad Dynamic link aggregation`, `Transmit Hash Policy: layer3+4`, both member interfaces with `MII Status: up`, and a populated partner MAC on each — an empty or all-zero partner MAC means the switch is not running LACP on that port and the bond is not actually aggregated.
+
+`ip route get <nfs-endpoint>` must name the VLAN interface and the node's storage address — for example `via <router> dev bond0.<vlan-id> src <node-storage-ip>`. If it names the node's primary interface instead, NFS will mount over the management network no matter how healthy the bond looks, and every other check in this section will still pass.
 
 The `ping -M do -s 8972` test sets the do-not-fragment bit with a payload that exactly fills a 9000-byte frame. If it fails while a smaller size succeeds, something in the path is still at 1500 and NFS will suffer badly under load rather than fail outright.
 
@@ -173,6 +282,7 @@ sudo dnf install -y nfs-utils
 sudo systemctl enable --now nfs-client.target rpcbind
 
 # Debian and Ubuntu
+sudo apt-get update
 sudo apt-get install -y nfs-common
 
 # SUSE and openSUSE
@@ -213,12 +323,11 @@ Skip this step if you are only using FlashBlade.
 
 Unlike FlashBlade, the FlashArray objects must exist before the first PVC is provisioned. PX-CSI creates only the managed directory and its export.
 
-1. Verify that File Services is enabled on the array.
-2. Configure a File VIF that is reachable from every node, and record its address.
-3. Create the parent file system in which PX-CSI will create directories, and record its name.
-4. Create an NFS policy that allows the node networks, and record its name.
-5. Optionally create a quota policy to enforce a size limit per directory, and record its name.
-6. Record the management endpoint and generate a Storage Admin API token.
+{% include quickstart/fa-file-array-requirements.md %}
+
+Record as you go, because the storage class and `pure.json` both reference them by name:
+the management endpoint, the File VIF address, the parent file system name, the NFS policy
+name, the quota policy name, and a Storage Admin API token.
 
 If your workloads set `fsGroup` or change ownership, disable NFS User Mapping and configure `no_root_squash` in the NFS policy for the authorized node networks.
 
@@ -269,6 +378,21 @@ kubectl get storageclass
 The `StorageCluster` should be online, the controller and node pods should be running, and `pxd.portworx.com` should appear as a CSI driver. PX-CSI creates default storage classes for the backends it discovers — review those before adding your own.
 
 > **Note:** Generate the spec rather than hand-writing the `StorageCluster`. The generated manifest carries the image references, RBAC, and namespace wiring that match the PX-CSI version you selected, and getting those wrong is the most common cause of a cluster that installs but never comes online.
+
+> **Important:** Choosing File as the access type matters beyond the storage classes it creates. A spec generated with a SAN type carries `PURE_FLASHARRAY_SAN_TYPE` in the `StorageCluster` environment, and the node plugin then validates the **block** transport at startup — even on a cluster that only ever uses NFS. Without `/etc/multipath.conf` and `iscsiadm` on every node it exits fatally:
+>
+> ```
+> /etc/multipath.conf not found → Failed to validate multipath configuration → [FATAL]
+> Failed to initialize iSCSI interfaces: failed to list iscsi ifaces: exit status 127
+> ```
+>
+> The node pods then `CrashLoopBackOff` and the `StorageCluster` reports `Degraded`, while PVCs still provision on the array and no pod can mount one. Check with:
+>
+> ```bash
+> kubectl get storagecluster -n "${PX_NAMESPACE}" -o jsonpath='{.items[0].spec.env}{"\n"}'
+> ```
+>
+> A File-only spec omits that variable, and NFS then needs no multipath or iSCSI packages at all. If you do need a SAN type because the cluster also serves block, install the block prerequisites on every node as well.
 
 ---
 
@@ -367,17 +491,27 @@ kubectl apply -f fa-file-rwx.yaml
 kubectl get storageclass fa-file-rwx -o yaml
 ```
 
-> **Capacity warning:** Without `pure_quota_policy`, the PVC request size is not enforced. The managed directory can grow into whatever capacity remains in the parent file system, which is shared with every other PVC bound to that file system. Attach a quota policy on any class used by more than one team or workload.
+> **Capacity warning:** Without `pure_quota_policy`, the PVC request size is not enforced at all — it is advisory. A 1Gi claim will accept far more than 1Gi without error, and the managed directory grows into whatever capacity remains in the parent file system, shared with every other PVC bound to it. The pod cannot see its own limit either: `df` inside the container reports the whole file system, so neither the application nor an operator reading `df` gets any warning before the parent fills. Attach a quota policy on any class used by more than one team or workload.
 
 > **Note:** The Portworx documentation describes NFSv4.1 over TCP as the default for this backend while its storage class example shows `nfsvers=3`. Use `nfsvers=4.1` as above, but verify that the NFS policy you referenced permits NFSv4.1 — the policy on the array wins over the storage class.
 
-If you enable CSI topology, `volumeBindingMode: WaitForFirstConsumer` is required, and `allowedTopologies` must match exactly one array from `pure.json`. A topology expression that matches more than one array fails provisioning.
+### Targeting one array when `pure.json` holds several
+
+{% include quickstart/px-csi-array-id.md %}
+
+If you enable CSI topology, `volumeBindingMode: WaitForFirstConsumer` is required, and `allowedTopologies` must match exactly one array from `pure.json`. A topology expression that matches more than one array fails provisioning. Check whether topology is actually available before relying on it — the driver must advertise topology keys:
+
+```bash
+kubectl get csinode <node> -o jsonpath='{.spec.drivers[?(@.name=="pxd.portworx.com")].topologyKeys}{"\n"}'
+```
+
+An empty result (`null`) means CSI topology is not enabled and `allowedTopologies` will not work. Use `portworx.io/pure-array-id` instead.
 
 ---
 
 ## Step 9: Provision and validate a claim
 
-Create a PVC and a pod that mounts it. This example targets the FlashBlade class; substitute `fa-file-rwx` to validate FlashArray File Services. These class names are created with the classes defined in steps 6 and 7.  Replace the names with the appropriate values if you do not use the defaults above.
+Create a PVC and a pod that mounts it. This example targets the FlashBlade class; substitute `fa-file-rwx` to validate FlashArray File Services. Those classes are the ones defined in [Step 7](#step-7-create-the-flashblade-storageclass) and [Step 8](#step-8-create-the-flasharray-file-storageclass) — replace the names if you did not use the defaults above.
 
 ```yaml
 apiVersion: v1
@@ -425,7 +559,59 @@ kubectl exec nfs-test -- mount | grep ' /data '
 
 The PVC should be `Bound`, the pod should be `Running`, `cat` should return `hello`, and the `mount` output should show the NFS endpoint and the negotiated NFS version. On the array, confirm that a FlashBlade file system, or a FlashArray managed directory and its export, now exists for the volume.
 
-Confirm the RWX behavior that justifies this storage in the first place, by scheduling a second pod on a different node against the same claim:
+Confirm the RWX behavior that justifies this storage in the first place, by scheduling a second pod on a different node against the same claim. Listing access modes is not the same test — a PV can report `ReadWriteMany` while a second node cannot actually mount it, so schedule the pod:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nfs-test-b
+  labels:
+    app: nfs-test-rwx
+spec:
+  securityContext:
+    fsGroup: 2000
+  affinity:
+    podAntiAffinity:
+      # Required, not preferred: on a multi-node cluster this must land elsewhere
+      # or the test proves nothing. It stays Pending if it cannot, which is the
+      # correct, visible failure.
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app: nfs-test-rwx
+          topologyKey: kubernetes.io/hostname
+  containers:
+    - name: reader-writer
+      image: registry.access.redhat.com/ubi9/ubi-minimal
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          for i in $(seq 1 60); do [ -f /data/test.txt ] && break; sleep 2; done
+          echo "peer wrote: $(cat /data/test.txt)"
+          echo "hello-from-b" > /data/test-b.txt
+          sleep 3600
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: nfs-test
+```
+
+Add the matching `app: nfs-test-rwx` label to the first pod so the anti-affinity rule has something to repel from.
+
+```bash
+kubectl apply -f nfs-test-b.yaml
+kubectl get pods -o custom-columns=POD:.metadata.name,STATUS:.status.phase,NODE:.spec.nodeName
+kubectl logs nfs-test-b
+kubectl exec nfs-test -- ls -l /data
+```
+
+The two pods must show **different** node names, `kubectl logs nfs-test-b` should print the file the first pod wrote, and `ls -l /data` from the first pod should show `test-b.txt` written by the second. Both pods reading *and* writing is the point: a read-only check would pass even against a read-only export, which is exactly the failure this is meant to rule out.
 
 ```bash
 kubectl get pv -o custom-columns=NAME:.metadata.name,CLAIM:.spec.claimRef.name,MODES:.spec.accessModes
@@ -485,19 +671,22 @@ Also verify the mount option against the [PX-CSI Release Notes](https://docs.por
 | Symptom | Likely cause | Resolution |
 |---|---|---|
 | PVC stays `Pending` | Missing or misnamed NFS policy, file system, or quota policy; invalid credentials; unhealthy controller | Run `kubectl describe pvc <name>`, confirm the objects exist on the array, verify `px-pure-secret`, then check the PX-CSI controller logs. |
-| PVC stays `Pending` with a multiple-backends error | A topology expression matches more than one array in `pure.json` | Make `allowedTopologies` uniquely match a single array, or pin the array explicitly. |
+| PVC stays `Pending` with a multiple-backends error | More than one FlashArray in `pure.json`. A topology expression can cause it, but two array entries alone are enough — no topology is required to hit this | Set `portworx.io/pure-array-id` on the storage class to the target array's ID from `purearray list`. Note that `pure_nfs_endpoint` does **not** disambiguate backend selection, and `allowedTopologies` only works if CSI topology is enabled. |
+| Block (`pure_block`) provisioning breaks after adding a file array to `pure.json` | The new array has no iSCSI configuration for these hosts, so block volumes can no longer resolve a backend: `no IQN or iSCSI portals found for iSCSI transport` | Pin the existing block classes with `portworx.io/pure-array-id` too. Bound volumes keep working, so test by provisioning one new volume per backend after any `pure.json` change. |
 | PVC is `Bound` but the pod stays `ContainerCreating` | The NFS client is missing on the scheduled node, or the mount is failing | Run `kubectl describe pod <name>` for the mount error, then confirm the client packages from [Step 2](#step-2-install-nfs-client-utilities-on-every-node) on that node. |
 | `permission denied` or `lchown failed` | Root squash or NFS User Mapping conflicts with `fsGroup` or an ownership change | On FlashBlade set `pure_export_rules` with `no_root_squash`; on FlashArray disable User Mapping and allow `no_root_squash` in the NFS policy, scoped to the node networks. |
 | Mount timeout, or no route to host | NFS endpoint unreachable, routing or firewall block, or DNS failure on the node | Find the node with `kubectl get pod -o wide`, then test reachability to port 2049 from that node. |
-| Mount fails with a protocol or version error | The storage class requests an NFS version the array export does not permit | Align `nfsvers` with the versions enabled on the array. The array configuration takes precedence. |
+| Mount fails, often reported as `No such file or directory` / `reason given by server` rather than a version error | The storage class requests an NFS version the array export does not permit. An export published only for NFSv3 is simply absent from the NFSv4.1 pseudo-filesystem, so the client gets ENOENT rather than a version complaint | Align `nfsvers` with the versions enabled on the array — the array configuration takes precedence. Check the policy with `purepolicy nfs list`. Do not be misled into hunting for a wrong path or a deleted directory. |
 | Requested PVC size is not enforced | FlashArray File Services class has no quota policy | Create a FlashArray quota policy and reference it with `pure_quota_policy`. |
 | PV stays `Released`, or deletion fails | A FlashArray managed directory still contains files | Preserve anything needed, remove the files, then retry the deletion. |
 | A newly added array is not discovered | The CSI components have not reloaded the secret | Confirm the `pure.json` content in the secret, then restart the Portworx pods in the PX-CSI namespace. |
 | Throughput plateaus at one NIC's line rate | Single TCP connection pinned to one bond member, or `xmit_hash_policy` left at `layer2` | Confirm `Transmit Hash Policy: layer3+4` in `/proc/net/bonding/bond0`, then add `nconnect` to the storage class `mountOptions`. See [LACP performance limitations](#lacp-performance-limitations). |
+| Everything reports healthy, but throughput and failover behave like the management network | The storage subnet is link-scoped and the NFS endpoint is on another subnet, so the kernel fell back to the default route | Run `ip route get <nfs-endpoint>`. If it names the primary interface, either move the endpoint onto the storage subnet or add a host route as shown in [Step 1](#step-1-configure-the-storage-network). Do not diagnose this with `ping -I <address>`, which sets only the source address. |
+| A storage route works, then vanishes after a reboot | The route was added by hand with `ip route add` instead of in the interface configuration | Add it in NetworkManager, Netplan, or systemd-networkd alongside the bond, so it persists and replacement nodes inherit it. |
 | Bond is up but never aggregates, or links flap | No matching switch port-channel, or a cross-switch bond without MLAG/VPC | Check for a populated partner MAC per member in `/proc/net/bonding/bond0`; an all-zero partner MAC means the switch side is not running LACP. |
 | Small I/O works, large transfers stall or crawl | MTU mismatch somewhere in the path | Run `ping -M do -s 8972` to the NFS endpoint from the node. If it fails, align MTU 9000 across the node, both switches, and the array. |
 | `nconnect` missing from a live mount | Node kernel older than 5.3, or the option was added after the volume was mounted | Check `uname -r`, then reschedule the pod so the volume remounts with the current storage class options. |
-| Mounts work until `xprtsec=tls` is added | `tlshd` not running, node OS older than RHEL 9.6, or array Purity below the TLS floor | Check `cat /etc/redhat-release`, `systemctl status tlshd` on the scheduled node, and the Purity version on the array. See [Step 10](#step-10-optional-enable-nfs-over-tls). |
+| Mounts work until `xprtsec=tls` is added, failing with `access denied by server` | Most often the node does not trust the array's NFS TLS certificate signer — not an export-rule problem, despite the wording. Also possible: `tlshd` not running, node OS older than RHEL 9.6, or array Purity below the TLS floor | Check `journalctl -u tlshd` first: `Certificate signer not found` means a trust-anchor problem, fixed with `x509.truststore` under `[authenticate.client]` in `/etc/tlshd.conf`. Only then check `cat /etc/redhat-release`, `systemctl status tlshd`, and the Purity version. |
 
 ---
 
@@ -535,6 +724,7 @@ Also verify the mount option against the [PX-CSI Release Notes](https://docs.por
 ## Related Articles
 
 - [OpenShift NFS Quickstart](../../openshift/nfs/QUICKSTART.md) — the same two backends on Red Hat OpenShift, with MachineConfig node preparation
+- [Installing ktls-utils on Red Hat CoreOS](../../openshift/nfs-tls/QUICKSTART.md) — how the same TLS prerequisite is met on an immutable node, where no package manager is available
 - [OpenShift iSCSI Multipathing and NIC Binding via MachineConfig](../../openshift/iscsi/QUICKSTART.md) — block connectivity for Kubernetes nodes on Red Hat CoreOS
 - [NFS on RHEL Quickstart](../../rhel/nfs/QUICKSTART.md) — host-level NFS mounts and the underlying mount options
 - [NFS on RHEL Best Practices](../../rhel/nfs/BEST-PRACTICES.md) — NFS tuning, `nconnect`, and failover behavior
