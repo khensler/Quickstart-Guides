@@ -86,8 +86,8 @@ Configure the FlashArray to recognize the EC2 instance and provision storage. Yo
 Run these commands from any workstation with SSH access to the FlashArray management IP.
 
 ```bash
-# SSH to FlashArray (or use pureuser@<array-ip>)
-ssh pureuser@10.21.148.130
+# SSH to FlashArray
+ssh pureuser@<array-ip>
 
 # Create host with NVMe-TCP personality
 purehost create --personality nvme \
@@ -238,7 +238,7 @@ qemu-img convert -f qcow2 -O raw ./image.qcow2 ./image.raw
 
 ```bash
 # SSH to FlashArray from your workstation
-ssh pureuser@10.21.148.130
+ssh pureuser@<array-ip>
 
 # Create boot volume sized for your image (e.g., 20GB for typical Linux)
 purevol create --size 20G golden-rhel9-boot
@@ -286,7 +286,7 @@ After writing the image, create a snapshot for fast provisioning of new boot vol
 
 ```bash
 # SSH to FlashArray
-ssh pureuser@10.21.148.130
+ssh pureuser@<array-ip>
 
 # Create snapshot of the golden image
 purevol snap --suffix golden-v1 golden-rhel9-boot

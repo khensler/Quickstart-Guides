@@ -47,12 +47,12 @@ With `nconnect`, the NFS client establishes multiple TCP connections to the serv
 
 **Manual mount:**
 ```bash
-mount -t nfs4 -o vers=4.1,hard,nconnect=4 10.21.148.147:/export /mnt/nfs
+mount -t nfs4 -o vers=4.1,hard,nconnect=4 <nfs-endpoint>:/export /mnt/nfs
 ```
 
 **fstab entry:**
 ```
-10.21.148.147:/export /mnt/nfs nfs4 vers=4.1,hard,timeo=300,retrans=2,nconnect=4,_netdev 0 0
+<nfs-endpoint>:/export /mnt/nfs nfs4 vers=4.1,hard,timeo=300,retrans=2,nconnect=4,_netdev 0 0
 ```
 
 #### Verify nconnect is Active

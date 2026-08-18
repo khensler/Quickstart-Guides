@@ -15,7 +15,7 @@ When adding NFS storage via `pvesm add nfs`, Proxmox uses these default mount op
 
 **Example mount from Proxmox:**
 ```
-10.21.148.147:/export on /mnt/pve/storage type nfs4 (rw,relatime,vers=4.1,rsize=1048576,wsize=1048576,namlen=255,hard,fatal_neterrors=none,proto=tcp,timeo=600,retrans=2,sec=sys,...)
+<nfs-endpoint>:/export on /mnt/pve/storage type nfs4 (rw,relatime,vers=4.1,rsize=1048576,wsize=1048576,namlen=255,hard,fatal_neterrors=none,proto=tcp,timeo=600,retrans=2,sec=sys,...)
 ```
 
 ### Adding NFS Storage with pvesm
