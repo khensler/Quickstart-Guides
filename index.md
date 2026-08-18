@@ -54,8 +54,8 @@ Guides for migrating VMware VMs to Proxmox VE using Everpure FlashArray storage.
 **OpenShift / Kubernetes:**
 - [iSCSI Multipathing & NIC Binding via MachineConfig](distributions/openshift/iscsi/QUICKSTART.md) — Configure iSCSI multipathing with NIC binding on Red Hat CoreOS worker nodes using MachineConfig
 - [OpenShift NFS Quickstart](distributions/openshift/nfs/QUICKSTART.md) — Dynamically provision NFS persistent volumes from FlashBlade and FlashArray File Services with Portworx CSI
+- [Installing ktls-utils on Red Hat CoreOS](distributions/openshift/nfs-tls/QUICKSTART.md) — Add the `tlshd` handshake daemon to a layered RHCOS image, the node prerequisite for NFS over TLS
 - [Kubernetes NFS Quickstart](distributions/kubernetes/nfs/QUICKSTART.md) — The same FlashBlade and FlashArray File Services provisioning on an upstream Kubernetes cluster
-- [Installing ktls-utils on Red Hat CoreOS](distributions/openshift/nfs-tls/QUICKSTART.md) — Layer an RHCOS image to add the `tlshd` handshake daemon, the node prerequisite for NFS over TLS
 
 ---
 

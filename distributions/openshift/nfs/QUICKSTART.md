@@ -344,8 +344,8 @@ The `ping -M do -s 8972` test sets the do-not-fragment bit with a payload that e
 
 Skip this step if you are only using FlashArray File Services.
 
-1. In the FlashBlade management interface, go to **Settings > Access** and create a user, then generate an API token for it. Record the token for `pure.json`.
-2. Go to **Settings > Network** and record the management endpoint (a virtual interface, named with a `vir` prefix) and the data VIP you will use as the NFS endpoint.
+1. In the FlashBlade management interface, go to **Settings > Access** and create a user, then generate an API token for it. Record the token for `pure.json`. Over SSH the equivalent is `pureadmin create --api-token <user>`, which prints the token once — useful when you are scripting the build. FlashBlade tokens are prefixed `T-`.
+2. Go to **Settings > Network** and record the management endpoint (a virtual interface, named with a `vir` prefix) and the data VIP you will use as the NFS endpoint. From the CLI, `purenetwork list` shows both: the management address carries the `management` service, and the data VIP carries the `data` service along with its VLAN and MTU.
 3. Confirm which NFS versions are enabled for the file systems PX-CSI will create. PX-CSI creates the file system per PVC, so the version support comes from the FlashBlade configuration and the export policy rather than from anything you pre-create.
 
 PX-CSI creates the export policy for each provisioned file system. The defaults allow all clients and enforce root squash, and both are overridable from the storage class in [Step 7](#step-7-create-the-flashblade-storageclass).
@@ -369,6 +369,8 @@ name, the quota policy name, and a Storage Admin API token.
 If your workloads set `fsGroup` or change ownership, disable NFS User Mapping and configure `no_root_squash` in the NFS policy for the authorized node networks.
 
 > **Important:** FlashArray realms do not provide secure multitenancy for FlashArray File Services. Use an account and API token that can manage the required file-service objects directly.
+
+{% include quickstart/fa-file-delete-capability.md %}
 
 ---
 
@@ -440,7 +442,8 @@ or later base that OpenShift 4.19 and above provide satisfies the kernel side, b
 `ktls-utils` — the package supplying the `tlshd` handshake daemon — is absent from the
 RHCOS image and is not one of the supported RHCOS extensions. Adding it means layering a
 custom RHCOS image and rebooting the node, which is a separate procedure — see
-[Installing ktls-utils on Red Hat CoreOS](../nfs-tls/QUICKSTART.md). Only NFSv3 and
+[Image mode for OpenShift](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/machine_configuration/mco-coreos-layering)
+in the Red Hat documentation, formerly called RHCOS image layering. Only NFSv3 and
 NFSv4.1 without TLS work with no node changes.
 
 ---
@@ -476,6 +479,8 @@ oc get storageclass fb-nfs -o yaml
 Parameters worth knowing:
 
 {% include quickstart/px-csi-flashblade-sc-params.md %}
+
+{% include quickstart/fb-reclaim-behavior.md %}
 
 **FlashBlade//EXA** is provisioned differently: it requires a node group and NFSv4.1, and disables NFSv3.
 
@@ -616,10 +621,15 @@ Clean up the test resources, remembering that a FlashArray managed directory can
 
 ```bash
 oc exec nfs-test -- rm -f /data/test.txt
+oc exec nfs-test -- ls -l /data          # confirm the directory is empty
 oc delete pod nfs-test
 oc delete pvc nfs-test
 oc get pv
 ```
+
+The PV should disappear rather than settle at `Released`. If it does not, and the
+controller log shows the managed directory overwrite message, that is the array capability
+covered in Step 3 — not leftover files.
 
 ---
 
@@ -642,7 +652,20 @@ NFS over TLS splits across the kernel and user space, and Red Hat CoreOS ships o
 
 `ktls-utils` is not an available RHCOS extension either, so closing the gap means layering a custom RHCOS image and rebooting the node — a maintenance window, not a storage class change.
 
-**This is node preparation and it is covered separately.** See [Installing ktls-utils on Red Hat CoreOS](../nfs-tls/QUICKSTART.md) for the RHEL version floor per OpenShift release, both layering paths, and verification. Complete that before continuing here.
+> **Prerequisite: `tlshd` must already be on the node before you continue.** Building and
+> rolling out a custom RHCOS image is outside the scope of this guide. Follow
+> [Image mode for OpenShift](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/machine_configuration/mco-coreos-layering)
+> in the Red Hat documentation — it covers both the out-of-cluster and on-cluster build
+> paths — and add `ktls-utils` to the layered image. Complete that first; nothing in this
+> step will work without it.
+>
+> Note that Red Hat now calls this **image mode for OpenShift**; older material calls the
+> same feature RHCOS image layering. Also note that a cluster which applies a custom layered
+> image no longer updates those nodes automatically, so plan for updating them yourself.
+>
+> For a worked example of applying that procedure to this specific package, see
+> [Installing ktls-utils on Red Hat CoreOS](../nfs-tls/QUICKSTART.md). Red Hat's
+> documentation remains the authority on building and rolling out the image.
 
 Confirm the daemon is in place on a node that will mount the volume:
 
@@ -657,7 +680,9 @@ Expect `ktls-utils-<version>`, `active`, and `enabled`. Only once all three hold
 
 Also verify the mount option against the [PX-CSI Release Notes](https://docs.portworx.com/portworx-csi/release-notes) for your driver release.
 
-> **Note:** Because the daemon arrives in the boot image, a node that rejoins the pool on an unlayered image loses `tlshd` and stops mounting TLS volumes. Treat the layer as ongoing rather than a one-off task — see [Installing ktls-utils on Red Hat CoreOS](../nfs-tls/QUICKSTART.md).
+{% include quickstart/fb-nfs-tls.md %}
+
+> **Note:** Because the daemon arrives in the boot image, a node that rejoins the pool on an unlayered image loses `tlshd` and stops mounting TLS volumes. Treat the layer as ongoing rather than a one-off task, and make sure any process that replaces nodes builds them from the layered image.
 
 > **Tip:** The isolated storage VLAN from [Step 1](#step-1-configure-the-storage-network) is the control you already have, and it needs no node changes. Treat it as the baseline and TLS as the addition, not a substitute for it — particularly on a cluster older than 4.19, where the RHCOS base predates RHEL 9.6 and layering will not help.
 
@@ -674,7 +699,8 @@ Also verify the mount option against the [PX-CSI Release Notes](https://docs.por
 | Mount timeout, or no route to host | NFS endpoint unreachable, routing or firewall block, or DNS failure on the node | Find the node with `oc get pod -o wide`, then test reachability to port 2049 from that node as shown in [Step 6](#step-6-confirm-nfs-client-support-on-the-nodes). |
 | Mount fails, often reported as `No such file or directory` / `reason given by server` rather than a version error | The storage class requests an NFS version the array export does not permit. An export published only for NFSv3 is simply absent from the NFSv4.1 pseudo-filesystem, so the client gets ENOENT rather than a version complaint | Align `nfsvers` with the versions enabled on the array — the array configuration takes precedence. Check the policy with `purepolicy nfs list`. Do not be misled into hunting for a wrong path or a deleted directory. |
 | Requested PVC size is not enforced | FlashArray File Services class has no quota policy | Create a FlashArray quota policy and reference it with `pure_quota_policy`. |
-| PV stays `Released`, or deletion fails | A FlashArray managed directory still contains files | Preserve anything needed, remove the files, then retry the deletion. |
+| PV stays `Released`, or deletion fails, and the **leader** controller-plugin pod logs `Managed directory overwrite is not supported since feature flag is disabled` | The array's managed directory overwrite capability is off, so PX-CSI cannot restore the directory to its `.px.base` snapshot. Volumes provision and mount but can never be reclaimed | Contact Everpure Support to enable managed directory overwrite on the array; there is no admin-accessible switch. See Step 3 for the pre-adoption check and for cleaning up directories that already leaked. |
+| PV stays `Released`, or deletion fails, with no such log message | A FlashArray managed directory still contains files | Preserve anything needed, remove the files, then retry the deletion. |
 | A newly added array is not discovered | The CSI components have not reloaded the secret | Confirm the `pure.json` content in the secret, then restart the Portworx pods in the PX-CSI namespace. |
 | Throughput plateaus at one NIC's line rate | Single TCP connection pinned to one bond member, or `xmit_hash_policy` left at `layer2` | Confirm `Transmit Hash Policy: layer3+4` in `/proc/net/bonding/bond0`, then add `nconnect` to the storage class `mountOptions`. See [LACP performance limitations](#lacp-performance-limitations). |
 | Bond is up but never aggregates, or links flap | No matching switch port-channel, or a cross-switch bond without MLAG/VPC | Check for a populated partner MAC per member in `/proc/net/bonding/bond0`; an all-zero partner MAC means the switch side is not running LACP. |
@@ -684,8 +710,14 @@ Also verify the mount option against the [PX-CSI Release Notes](https://docs.por
 | NNCP stays `Progressing` or reports failure | Wrong NIC names, a member NIC already in use, or `slaves` used instead of `port` from an older example | Run `oc get nnce` and inspect the failing enactment. Read real NIC names with `oc get nns <node> -o yaml`. |
 | NNCP is accepted but nothing changes on the nodes | No `NMState` instance, or one created under a name other than `nmstate`, so no node handlers are running | Run `oc get nmstate`; the singleton must be named `nmstate`. Recreate it with that name and confirm the pods in `openshift-nmstate` are `Running`. |
 | Bond cannot be created on the intended NICs | The policy targets the node's primary NIC, which the operator cannot reconfigure | Bond secondary NICs on a dedicated storage network. Read what each node actually presents with `oc get nns <node> -o yaml`. |
-| Mounts work until `xprtsec=tls` is added, failing with `access denied by server` | Most often the node does not trust the array's NFS TLS certificate signer — not an export-rule problem, despite the wording. Also possible: `ktls-utils` absent, `tlshd` not enabled, or array Purity below the TLS floor | Check `journalctl -u tlshd` first: `Certificate signer not found` means a trust-anchor problem, fixed with `x509.truststore` under `[authenticate.client]` in `/etc/tlshd.conf`. Only then check `rpm -q ktls-utils` and the Purity version. See [Installing ktls-utils on Red Hat CoreOS](../nfs-tls/QUICKSTART.md). |
-| `xprtsec=tls` worked, then stopped after a node replacement or cluster upgrade | The node booted an unlayered RHCOS image, so `tlshd` is gone | Confirm the pool is still on the layered image with `oc get mcp`. See [Installing ktls-utils on Red Hat CoreOS](../nfs-tls/QUICKSTART.md). |
+| Mounts work until `xprtsec=tls` is added, failing with `access denied by server` | Most often the node does not trust the array's NFS TLS certificate signer — not an export-rule problem, despite the wording. Also possible: `ktls-utils` absent, `tlshd` not enabled, or array Purity below the TLS floor | Check `journalctl -u tlshd` first: `Certificate signer not found` means a trust-anchor problem, fixed with `x509.truststore` under `[authenticate.client]` in `/etc/tlshd.conf`. Only then check `rpm -q ktls-utils` and the Purity version. |
+| `xprtsec=tls` worked, then stopped after a node replacement or cluster upgrade | The node booted an unlayered RHCOS image, so `tlshd` is gone | Confirm the pool is still on the layered image with `oc get mcp`, then rebuild or reapply the layered image. |
+
+---
+
+## Known Issues
+
+{% include quickstart/known-issue-fa-file-reclaim.md %}
 
 ---
 
@@ -711,13 +743,14 @@ Also verify the mount option against the [PX-CSI Release Notes](https://docs.por
 - Create one storage class per service tier rather than per workload, so mount options and export rules stay reviewable.
 - Attach quota policies to every FlashArray File Services class that more than one team consumes.
 - Decide how RWX file data is protected, given that the `pure_fa_file` backend cannot be snapshotted through the driver.
-- NFS over TLS on OpenShift 4.19 and later clears the RHEL 9.6 kernel-side floor, but `ktls-utils` is not in RHCOS and is not an available extension, so it needs a layered image and a rolling reboot. Budget a maintenance window rather than treating TLS as a storage class change, and keep the layer in place so replacement nodes inherit `tlshd` — see [Installing ktls-utils on Red Hat CoreOS](../nfs-tls/QUICKSTART.md).
+- NFS over TLS on OpenShift 4.19 and later clears the RHEL 9.6 kernel-side floor, but `ktls-utils` is not in RHCOS and is not an available extension, so it needs a layered image and a rolling reboot. Budget a maintenance window rather than treating TLS as a storage class change, and keep the layer in place so replacement nodes inherit `tlshd`. Building the image is Red Hat's procedure, not ours — see [Image mode for OpenShift](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/machine_configuration/mco-coreos-layering).
 
 ---
 
 ## Related Articles
 
-- [Installing ktls-utils on Red Hat CoreOS](../nfs-tls/QUICKSTART.md) — the node preparation required before `xprtsec=tls` mounts will work
+- [Image mode for OpenShift](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/machine_configuration/mco-coreos-layering) — Red Hat's procedure for building a custom RHCOS image, the way to add the `ktls-utils` prerequisite before `xprtsec=tls` mounts will work
+- [Installing ktls-utils on Red Hat CoreOS](../nfs-tls/QUICKSTART.md) — a worked example of adding the `tlshd` prerequisite to a layered RHCOS image
 - [Kubernetes NFS Quickstart](../../kubernetes/nfs/QUICKSTART.md) — the same two backends on a non-OpenShift cluster
 - [OpenShift iSCSI Multipathing and NIC Binding via MachineConfig](../iscsi/QUICKSTART.md) — block connectivity on Red Hat CoreOS worker nodes
 - [NFS on RHEL Quickstart](../../rhel/nfs/QUICKSTART.md) — host-level NFS mounts and the underlying mount options

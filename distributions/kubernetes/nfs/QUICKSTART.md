@@ -307,8 +307,8 @@ kubectl get nodes -o custom-columns=NAME:.metadata.name,OS:.status.nodeInfo.osIm
 
 Skip this step if you are only using FlashArray File Services.
 
-1. In the FlashBlade management interface, go to **Settings > Access** and create a user, then generate an API token for it. Record the token for `pure.json`.
-2. Go to **Settings > Network** and record the management endpoint (a virtual interface, named with a `vir` prefix) and the data VIP you will use as the NFS endpoint.
+1. In the FlashBlade management interface, go to **Settings > Access** and create a user, then generate an API token for it. Record the token for `pure.json`. Over SSH the equivalent is `pureadmin create --api-token <user>`, which prints the token once — useful when you are scripting the build. FlashBlade tokens are prefixed `T-`.
+2. Go to **Settings > Network** and record the management endpoint (a virtual interface, named with a `vir` prefix) and the data VIP you will use as the NFS endpoint. From the CLI, `purenetwork list` shows both: the management address carries the `management` service, and the data VIP carries the `data` service along with its VLAN and MTU.
 3. Confirm which NFS versions are enabled for the file systems PX-CSI will create. PX-CSI creates the file system per PVC, so version support comes from the FlashBlade configuration and the export policy rather than from anything you pre-create.
 
 PX-CSI creates the export policy for each provisioned file system. The defaults allow all clients and enforce root squash, and both are overridable from the storage class in [Step 7](#step-7-create-the-flashblade-storageclass).
@@ -332,6 +332,8 @@ name, the quota policy name, and a Storage Admin API token.
 If your workloads set `fsGroup` or change ownership, disable NFS User Mapping and configure `no_root_squash` in the NFS policy for the authorized node networks.
 
 > **Important:** FlashArray realms do not provide secure multitenancy for FlashArray File Services. Use an account and API token that can manage the required file-service objects directly.
+
+{% include quickstart/fa-file-delete-capability.md %}
 
 ---
 
@@ -427,6 +429,8 @@ kubectl get storageclass fb-nfs -o yaml
 Parameters worth knowing:
 
 {% include quickstart/px-csi-flashblade-sc-params.md %}
+
+{% include quickstart/fb-reclaim-behavior.md %}
 
 **FlashBlade//EXA** is provisioned differently: it requires a node group and NFSv4.1, and disables NFSv3.
 
@@ -620,11 +624,18 @@ kubectl get pv -o custom-columns=NAME:.metadata.name,CLAIM:.spec.claimRef.name,M
 Clean up the test resources, remembering that a FlashArray managed directory cannot be deleted while it still holds files:
 
 ```bash
-kubectl exec nfs-test -- rm -f /data/test.txt
-kubectl delete pod nfs-test
+# remove both test files -- the second pod wrote test-b.txt, and one file left
+# behind is enough to block the managed directory's deletion
+kubectl exec nfs-test -- rm -f /data/test.txt /data/test-b.txt
+kubectl exec nfs-test -- ls -l /data          # confirm the directory is empty
+kubectl delete pod nfs-test nfs-test-b
 kubectl delete pvc nfs-test
 kubectl get pv
 ```
+
+The PV should disappear rather than settle at `Released`. If it does not, and the
+controller log shows the managed directory overwrite message, that is the array capability
+covered in Step 4 — not leftover files.
 
 ---
 
@@ -652,15 +663,30 @@ sudo systemctl enable --now tlshd
 systemctl status tlshd --no-pager
 ```
 
-On Debian and Ubuntu, `ktls-utils` availability varies by release and the supported-configuration statement above does not apply. Confirm both before planning a rollout:
+On Debian and Ubuntu, `ktls-utils` availability varies by release and the
+supported-configuration statement above does not apply, so check the candidate version
+before planning a rollout:
 
 ```bash
 apt-cache policy ktls-utils
+
+# Where a candidate exists -- Debian 13 ships 1.0.0-1, which was verified working
+sudo apt-get update
+sudo apt-get install -y nfs-common ktls-utils
+sudo systemctl enable --now tlshd
+systemctl is-active tlshd
 ```
+
+If `apt-cache policy` reports no candidate, the release cannot do NFS over TLS from
+packages, and building `ktls-utils` yourself puts you outside a supported configuration.
+Treat that as a reason to move the nodes to a newer release rather than a packaging problem
+to work around.
 
 Add these packages to your node image or configuration management alongside the NFS client from [Step 2](#step-2-install-nfs-client-utilities-on-every-node), so a replacement node does not join without `tlshd` and fail to mount TLS volumes.
 
 Also verify the mount option against the [PX-CSI Release Notes](https://docs.portworx.com/portworx-csi/release-notes) for your driver release.
+
+{% include quickstart/fb-nfs-tls.md %}
 
 > **Tip:** Where encryption in flight is a requirement you must satisfy today and your nodes predate RHEL 9.6, the isolated storage VLAN from [Step 1](#step-1-configure-the-storage-network) is the control you already have. Treat it as the baseline and TLS as the addition, not a substitute for it.
 
@@ -678,7 +704,8 @@ Also verify the mount option against the [PX-CSI Release Notes](https://docs.por
 | Mount timeout, or no route to host | NFS endpoint unreachable, routing or firewall block, or DNS failure on the node | Find the node with `kubectl get pod -o wide`, then test reachability to port 2049 from that node. |
 | Mount fails, often reported as `No such file or directory` / `reason given by server` rather than a version error | The storage class requests an NFS version the array export does not permit. An export published only for NFSv3 is simply absent from the NFSv4.1 pseudo-filesystem, so the client gets ENOENT rather than a version complaint | Align `nfsvers` with the versions enabled on the array — the array configuration takes precedence. Check the policy with `purepolicy nfs list`. Do not be misled into hunting for a wrong path or a deleted directory. |
 | Requested PVC size is not enforced | FlashArray File Services class has no quota policy | Create a FlashArray quota policy and reference it with `pure_quota_policy`. |
-| PV stays `Released`, or deletion fails | A FlashArray managed directory still contains files | Preserve anything needed, remove the files, then retry the deletion. |
+| PV stays `Released`, or deletion fails, and the **leader** controller-plugin pod logs `Managed directory overwrite is not supported since feature flag is disabled` | The array's managed directory overwrite capability is off, so PX-CSI cannot restore the directory to its `.px.base` snapshot. Volumes provision and mount but can never be reclaimed | Contact Everpure Support to enable managed directory overwrite on the array; there is no admin-accessible switch. See Step 4 for the pre-adoption check and for cleaning up directories that already leaked. |
+| PV stays `Released`, or deletion fails, with no such log message | A FlashArray managed directory still contains files | Preserve anything needed, remove the files, then retry the deletion. |
 | A newly added array is not discovered | The CSI components have not reloaded the secret | Confirm the `pure.json` content in the secret, then restart the Portworx pods in the PX-CSI namespace. |
 | Throughput plateaus at one NIC's line rate | Single TCP connection pinned to one bond member, or `xmit_hash_policy` left at `layer2` | Confirm `Transmit Hash Policy: layer3+4` in `/proc/net/bonding/bond0`, then add `nconnect` to the storage class `mountOptions`. See [LACP performance limitations](#lacp-performance-limitations). |
 | Everything reports healthy, but throughput and failover behave like the management network | The storage subnet is link-scoped and the NFS endpoint is on another subnet, so the kernel fell back to the default route | Run `ip route get <nfs-endpoint>`. If it names the primary interface, either move the endpoint onto the storage subnet or add a host route as shown in [Step 1](#step-1-configure-the-storage-network). Do not diagnose this with `ping -I <address>`, which sets only the source address. |
@@ -687,6 +714,12 @@ Also verify the mount option against the [PX-CSI Release Notes](https://docs.por
 | Small I/O works, large transfers stall or crawl | MTU mismatch somewhere in the path | Run `ping -M do -s 8972` to the NFS endpoint from the node. If it fails, align MTU 9000 across the node, both switches, and the array. |
 | `nconnect` missing from a live mount | Node kernel older than 5.3, or the option was added after the volume was mounted | Check `uname -r`, then reschedule the pod so the volume remounts with the current storage class options. |
 | Mounts work until `xprtsec=tls` is added, failing with `access denied by server` | Most often the node does not trust the array's NFS TLS certificate signer — not an export-rule problem, despite the wording. Also possible: `tlshd` not running, node OS older than RHEL 9.6, or array Purity below the TLS floor | Check `journalctl -u tlshd` first: `Certificate signer not found` means a trust-anchor problem, fixed with `x509.truststore` under `[authenticate.client]` in `/etc/tlshd.conf`. Only then check `cat /etc/redhat-release`, `systemctl status tlshd`, and the Purity version. |
+
+---
+
+## Known Issues
+
+{% include quickstart/known-issue-fa-file-reclaim.md %}
 
 ---
 
@@ -724,7 +757,8 @@ Also verify the mount option against the [PX-CSI Release Notes](https://docs.por
 ## Related Articles
 
 - [OpenShift NFS Quickstart](../../openshift/nfs/QUICKSTART.md) — the same two backends on Red Hat OpenShift, with MachineConfig node preparation
-- [Installing ktls-utils on Red Hat CoreOS](../../openshift/nfs-tls/QUICKSTART.md) — how the same TLS prerequisite is met on an immutable node, where no package manager is available
+- [Installing ktls-utils on Red Hat CoreOS](../../openshift/nfs-tls/QUICKSTART.md) — how the same `ktls-utils` prerequisite is met on an immutable node, where the package installs above do not apply and the daemon has to arrive in a custom boot image
+- [Image mode for OpenShift](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/machine_configuration/mco-coreos-layering) — Red Hat's authority on building and rolling out that image
 - [OpenShift iSCSI Multipathing and NIC Binding via MachineConfig](../../openshift/iscsi/QUICKSTART.md) — block connectivity for Kubernetes nodes on Red Hat CoreOS
 - [NFS on RHEL Quickstart](../../rhel/nfs/QUICKSTART.md) — host-level NFS mounts and the underlying mount options
 - [NFS on RHEL Best Practices](../../rhel/nfs/BEST-PRACTICES.md) — NFS tuning, `nconnect`, and failover behavior

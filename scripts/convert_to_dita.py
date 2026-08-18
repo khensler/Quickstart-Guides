@@ -20,6 +20,7 @@ Usage:
 """
 
 import os
+import posixpath
 import re
 import sys
 import argparse
@@ -86,6 +87,24 @@ def sanitize_id(text: str) -> str:
     # Remove consecutive underscores
     result = re.sub(r'_+', '_', result)
     return result.strip('_') or 'topic'
+
+
+def github_slug(text: str) -> str:
+    """Slugify a heading the way GitHub/Jekyll anchors do.
+
+    Markdown anchors in this repo are GitHub-style ('## Understanding APD (All
+    Paths Down) Events' -> 'understanding-apd-all-paths-down-events'), while DITA
+    topic IDs come from sanitize_id(). The two differ, so resolving an anchor to a
+    split BEST-PRACTICES section needs this form as the lookup key.
+    """
+    s = text.strip().lower()
+    # Strip inline markdown/code that never appears in the rendered anchor.
+    s = re.sub(r'`([^`]*)`', r'\1', s)
+    s = re.sub(r'\*\*([^*]*)\*\*', r'\1', s)
+    s = re.sub(r'\*([^*]*)\*', r'\1', s)
+    # GitHub drops everything except word chars, spaces and hyphens.
+    s = re.sub(r'[^\w\s-]', '', s)
+    return re.sub(r'[\s_]+', '-', s).strip('-')
 
 
 def escape_xml(text: str) -> str:
@@ -364,6 +383,13 @@ class MarkdownParser:
         self.blockquote_pattern = re.compile(r'^>\s*(.+)$', re.MULTILINE)
         self.hr_pattern = re.compile(r'^---+\s*$', re.MULTILINE)
         self.table_pattern = re.compile(r'^\|(.+)\|$', re.MULTILINE)
+        # Cross-reference resolution state, set by DITAGenerator before each topic.
+        # _convert_link() needs all three: the registry to look targets up in, the
+        # source dir to resolve '../..' links against, and the output dir of the
+        # topic being written so the href can be made relative to it.
+        self._link_registry = {}
+        self._current_source_dir = ""
+        self._current_topic_dir = ""
         # Set by DITAGenerator so convert_inline can render inline images; when
         # unset, inline image markup is left untouched.
         self.inline_image_hook = None
@@ -654,6 +680,93 @@ class MarkdownParser:
                       lambda m: f'<!-- {comments[int(m.group(1))]} -->', text)
         return text
 
+    def _normalize_source_ref(self, href: str) -> str:
+        """Resolve a link href to a repo-relative source path.
+
+        Handles '../..'-style relative links by resolving against the current
+        source file's directory, and strips Jekyll templating.
+        """
+        clean = re.sub(r'\{\{[^}]+\}\}', '', href).split('#', 1)[0].strip()
+        clean = clean.replace('\\', '/')
+        if not clean:
+            return ''
+        if clean.startswith('/'):
+            # Site-absolute (Jekyll baseurl form) -- already repo-relative once
+            # the leading slash is dropped.
+            return posixpath.normpath(clean.lstrip('/'))
+        base = self._current_source_dir
+        return posixpath.normpath(posixpath.join(base, clean) if base else clean)
+
+    def _registry_href(self, source_ref: str, anchor: str = '') -> str:
+        """Return a complete xref href for a source path, or '' if not convertible.
+
+        The result is relative to the topic currently being generated, so it
+        resolves from that topic's own directory the way DITA expects, and any
+        anchor is rewritten from the Markdown slug to the DITA id actually emitted.
+        """
+        entry = self._link_registry.get(source_ref)
+        if not entry:
+            return ''
+
+        cur = self._current_topic_dir or 'topics'
+        target, dita_id = '', ''
+
+        if anchor:
+            # An anchor selects both the topic that heading landed in -- which for a
+            # split BEST-PRACTICES file is not the first topic -- and its id.
+            hit = (entry.get('anchors') or {}).get(github_slug(anchor))
+            if hit:
+                target, dita_id = hit
+
+        if not target:
+            # No anchor, or an anchor with no matching heading. Land on the file's
+            # topic. Deliberately drop an unmatched anchor rather than carry it
+            # over: it would be a dangling reference in the output, whereas the
+            # topic link is correct and useful.
+            target = entry.get('path', '')
+            dita_id = ''
+
+        if not target:
+            return ''
+        rel = posixpath.relpath(target, cur)
+        return f'{rel}#{dita_id}' if dita_id else rel
+
+    def _link_candidates(self, ref: str, link_href: str):
+        """Yield the registry keys an authored link might correspond to.
+
+        Beyond the obvious one, two spellings occur in this repo and each produced
+        dangling output before being handled here:
+
+        * '.html' targets, because authored site links point at Jekyll output
+          ('{{ site.baseurl }}/distributions/x/y/BEST-PRACTICES.html') while the
+          registry is keyed by source '.md' paths.
+        * Bare or './'-prefixed links to a shared reference page, e.g.
+          '[APD Events](iscsi-multipath-config.md#...)' in _includes/glossary.md.
+          Those are correct relative to _includes/, but by the time the include is
+          inlined the current source directory is the *including* guide's, so
+          resolving them relatively lands on a path that was never converted. They
+          are matched by basename against the reference topics instead.
+
+        The basename fallback is only ever a hit when the stem is a registered
+        reference topic, so it cannot silently redirect an unrelated link.
+        """
+        yield ref
+        if ref.endswith('.html'):
+            yield ref[:-len('.html')] + '.md'
+        stem = posixpath.basename(link_href.split('#', 1)[0])
+        stem = re.sub(r'\.(md|html)$', '', stem)
+        if stem:
+            yield f'common/{stem}.md'
+
+    def _resolve_link(self, link_href: str, anchor: str) -> str:
+        """Resolve an authored link to a finished xref href, or '' if not convertible."""
+        ref = self._normalize_source_ref(link_href)
+        for candidate in self._link_candidates(ref, link_href):
+            hit = self._registry_href(candidate, anchor)
+            if hit:
+                return hit
+        return ''
+
     def _convert_link(self, match) -> str:
         """Convert a Markdown link to DITA xref, fixing .md to .dita references."""
         link_text = match.group(1)
@@ -661,8 +774,16 @@ class MarkdownParser:
 
         # Check if it's an internal link (to .md or .html files in the project)
         if link_href.endswith('.md') or ('.md#' in link_href):
-            # Internal markdown link - convert to .dita
-            # Handle anchors
+            anchor = link_href.rsplit('#', 1)[1] if '#' in link_href else ''
+            # _resolve_link returns the finished href, anchor included.
+            resolved = self._resolve_link(link_href, anchor)
+            if resolved:
+                return (f'<xref href="{escape_xml_attr(resolved)}" format="dita" '
+                        f'scope="local">{link_text}</xref>')
+
+            # Not a converted source (for example common/*.md, which the converter
+            # does not emit as topics). Fall back to the historical rewrite rather
+            # than inventing a path, so behaviour is unchanged for these.
             if '#' in link_href:
                 base_path, anchor = link_href.rsplit('#', 1)
                 base_path = base_path.replace('.md', '.dita')
@@ -678,6 +799,16 @@ class MarkdownParser:
                 new_href = re.sub(r'^.*(common|distributions)/', r'../topics/', new_href)
             return f'<xref href="{escape_xml_attr(new_href)}" format="dita" scope="local">{link_text}</xref>'
         elif link_href.endswith('.html') or ('.html#' in link_href):
+            # Jekyll-rendered internal links, e.g.
+            # '{{ site.baseurl }}/common/glossary.html'. The reference topics these
+            # point at are emitted into topics/common/ with a 'c_' prefix, so try
+            # the registry before falling back.
+            anchor = link_href.rsplit('#', 1)[1] if '#' in link_href else ''
+            resolved = self._resolve_link(link_href, anchor)
+            if resolved:
+                return (f'<xref href="{escape_xml_attr(resolved)}" format="dita" '
+                        f'scope="local">{link_text}</xref>')
+
             # HTML link within the site - may need conversion
             # Strip Jekyll templating
             clean_href = re.sub(r'\{\{[^}]+\}\}', '', link_href).strip('/')
@@ -688,7 +819,13 @@ class MarkdownParser:
                 new_href = re.sub(r'^.*(common)/', r'../topics/', new_href)
                 return f'<xref href="{escape_xml_attr(new_href)}" format="dita" scope="local">{link_text}</xref>'
             else:
-                return f'<xref href="{escape_xml_attr(link_href)}" format="html" scope="external">{link_text}</xref>'
+                # A site-relative link that nothing resolved. Emit the
+                # templating-stripped form: leaving '{{ site.baseurl }}' in an href
+                # ships a literal Jekyll expression into the DITA output, which
+                # resolves nowhere and is not even a well-formed path.
+                out_href = clean_href if '{{' in link_href else link_href
+                return (f'<xref href="{escape_xml_attr(out_href)}" format="html" '
+                        f'scope="external">{link_text}</xref>')
         else:
             # External link
             return f'<xref href="{escape_xml_attr(link_href)}" format="html" scope="external">{link_text}</xref>'
@@ -728,6 +865,14 @@ class DITAGenerator:
         """
         parts = [p for p in str(subdir or '').replace('\\', '/').split('/') if p]
         self._image_prefix = '../' * (len(parts) + 1) + 'images/'
+        # Remember where this topic lives so cross-references can be made relative
+        # to it. Stored as a collection-root-relative POSIX path, e.g.
+        # 'topics/openshift/nfs'.
+        self.parser._current_topic_dir = '/'.join(['topics'] + parts)
+
+    def set_link_registry(self, registry: dict):
+        """Provide the source-path -> output-topic mapping used for xrefs."""
+        self.parser._link_registry = registry or {}
 
     def set_source_context(self, rel_path: str):
         """Set the current source file context for human-readable diagram names.
@@ -740,6 +885,12 @@ class DITAGenerator:
         # Reset image depth; callers that write into a nested topics/ subdirectory
         # override this with set_topic_subdir() before generating content.
         self._image_prefix = "../images/"
+
+        # Remember the source file's directory so relative links such as
+        # '../../kubernetes/nfs/QUICKSTART.md' can be resolved back to a
+        # repo-relative path and looked up in the link registry.
+        norm = rel_path.replace('\\', '/')
+        self.parser._current_source_dir = norm.rsplit('/', 1)[0] if '/' in norm else ''
 
         # Convert path to human-readable context
         # e.g., "distributions/rhel/nvme-tcp/QUICKSTART.md" -> "rhel-nvme-tcp-quickstart"
@@ -1709,6 +1860,11 @@ class MarkdownToDITAConverter:
         # Create output directories
         self._create_output_dirs()
 
+        # Step 0: Work out where every convertible source file will end up, so
+        # cross-references can be rewritten to real topic filenames regardless of
+        # the order files are converted in.
+        self._build_link_registry()
+
         # Step 1: Convert include files to warehouse topics
         print("\n=== Converting include files to warehouse topics ===")
         self._convert_includes()
@@ -1971,6 +2127,159 @@ class MarkdownToDITAConverter:
         # e.g. "azure-local/disaggregated/fc".
         return "/".join(dir_parts)
 
+    # Reference files converted out of _includes into topics/common/. Shared by
+    # _convert_reference_topics() and _build_link_registry().
+    # Each entry must correspond to a common/<stem>.md wrapper page on the Jekyll
+    # site, because that is the spelling authored links use
+    # ('{{ site.baseurl }}/common/<stem>.html'). A page that renders on the site but
+    # is missing here converts to an href with no target, so the DITA output carries
+    # a dangling reference while the site link works fine -- which is how the first
+    # three shipped correct and the rest did not.
+    REFERENCE_TOPICS = [
+        ('_includes/glossary.md', 'Storage Terminology Glossary'),
+        ('_includes/network-concepts.md', 'Network Configuration Concepts'),
+        ('_includes/multipath-concepts.md', 'Multipath Configuration Concepts'),
+        ('_includes/troubleshooting-common.md', 'Troubleshooting Common Issues'),
+        ('_includes/performance-tuning.md', 'Performance Tuning'),
+        ('_includes/security-best-practices.md', 'Security Best Practices'),
+        ('_includes/monitoring-maintenance.md', 'Monitoring and Maintenance'),
+        ('_includes/iscsi-multipath-config.md', 'iSCSI Multipath Configuration'),
+        ('_includes/iscsi-performance-tuning.md', 'iSCSI Performance Tuning'),
+        ('_includes/iscsi-architecture.md', 'iSCSI Architecture'),
+    ]
+
+    def _build_link_registry(self):
+        """Map each convertible source file to the topic file(s) it will produce.
+
+        Cross-references have to be rewritten while a topic is being generated, but
+        a link can point at a file converted later in the run. Computing the whole
+        mapping up front removes the ordering problem, and it is cheap because the
+        output paths are derived from the source path, not from the content.
+
+        Registry shape -- anchors map a GitHub-style slug to (topic file, DITA id):
+            'distributions/rhel/nfs/BEST-PRACTICES.md': {
+                'path':    'topics/rhel/nfs/c_rhel_nfs_best-practices_architecture_overview.dita',
+                'anchors': {'nconnect-tuning': ('topics/rhel/nfs/c_..._performance_tuning.dita',
+                                                'nconnect_tuning')},
+            }
+
+        Two spellings have to be reconciled for anchors to work. Markdown anchors are
+        GitHub slugs ('understanding-apd-all-paths-down-events'), while the ids
+        emitted into DITA come from sanitize_id() ('understanding_apd_all_paths_down_events').
+        The map is keyed by the former and stores the latter.
+
+        Sub-headings matter as much as H2s: an H3 lands inside whichever H2's topic
+        contains it, so linking to it needs both the enclosing topic and its own id.
+        Include directives are expanded first, because much of the linkable content
+        (the APD section, for instance) arrives from _includes.
+
+        A BEST-PRACTICES file has no single topic of its own -- it is split by H2 and
+        the parent exists only in the map -- so a plain link to it resolves to its
+        first section, which is the natural landing topic.
+        """
+        registry = {}
+
+        include_re = re.compile(r'\{%\s*include\s+([^\s%}]+)\s*%\}')
+
+        def expand(text, depth=0):
+            """Inline include directives so their headings are visible to the scan."""
+            if depth > 3:
+                return text
+            def sub(m):
+                return expand(self.dita_gen._resolve_include(m.group(1)), depth + 1)
+            return include_re.sub(sub, text)
+
+        def headings(text):
+            """Every ATX heading, as (level, title)."""
+            out = []
+            fenced = False
+            for line in text.split('\n'):
+                if line.lstrip().startswith('```'):
+                    fenced = not fenced
+                    continue
+                if fenced:
+                    continue
+                m = re.match(r'^(#{2,6})\s+(.+?)\s*$', line)
+                if m:
+                    out.append((len(m.group(1)), m.group(2).strip()))
+            return out
+
+        for pattern in ['**/QUICKSTART.md', '**/GUI-QUICKSTART.md', '**/BEST-PRACTICES.md']:
+            for md_file in self.config.input_dir.glob(pattern):
+                rel_path = md_file.relative_to(self.config.input_dir)
+                if str(rel_path).startswith(('_', 'common', 'scripts')):
+                    continue
+                rel_str = str(rel_path).replace('\\', '/')
+                # Deliberately NOT filtered by -d/-p: a scoped run still needs
+                # correct hrefs for targets it is not emitting this time, and the
+                # href is a function of the path alone.
+                subdir = self._get_topic_subdir(rel_str)
+                prefix = f'topics/{subdir}' if subdir else 'topics'
+
+                base_id = sanitize_id(rel_str.replace('/', '_').replace('.md', ''))
+                base_id_short = re.sub(r'^distributions_', '', base_id)
+
+                try:
+                    raw = md_file.read_text(encoding='utf-8')
+                except Exception:
+                    continue
+
+                if 'QUICKSTART' in md_file.name:
+                    # The whole file becomes ONE task topic, and the generated topic
+                    # carries no ids for its own headings -- only the topic id. So an
+                    # anchor into a QUICKSTART can only reach the topic; mapping each
+                    # heading to a bare file reference keeps the link working instead
+                    # of emitting an id that is not there.
+                    target = f'{prefix}/t_{base_id_short}.dita'
+                    anchors = {github_slug(t): (target, '')
+                               for _lvl, t in headings(expand(raw))}
+                    registry[rel_str] = {'path': target, 'anchors': anchors}
+                    continue
+
+                # BEST-PRACTICES: mirror _convert_best_practices_sections exactly,
+                # including its skip of troubleshooting sections.
+                #
+                # Split the RAW content, not the expanded content. The real
+                # conversion splits raw, so expanding first invents H2 sections
+                # (from included files) that never become topics -- which produces
+                # hrefs to files that are never written.
+                anchors, first = {}, ''
+                for section_title, body in self._split_by_h2(raw):
+                    if 'troubleshoot' in section_title.lower():
+                        continue
+                    section_id = f'c_{base_id_short}_{sanitize_id(section_title)}'
+                    target = f'{prefix}/{section_id}.dita'
+                    # The H2 itself, then every sub-heading it contains -- all of
+                    # which live in this section's topic.
+                    # The H2 becomes this topic's TITLE, so no element inside it
+                    # carries that id -- the topic itself is the section. An anchor
+                    # to it must therefore be the bare file, or the reference dangles.
+                    anchors[github_slug(section_title)] = (target, '')
+                    # Sub-headings do become elements with ids. Expanded per section,
+                    # so headings arriving from an include (the APD section, for one)
+                    # resolve to the topic that actually contains them without
+                    # disturbing the section boundaries above.
+                    for _lvl, sub in headings(expand(body)):
+                        anchors.setdefault(github_slug(sub),
+                                           (target, sanitize_id(sub)))
+                    if not first:
+                        first = target
+                registry[rel_str] = {'path': first, 'anchors': anchors}
+
+        # Reference topics from _includes, which land in topics/common/ with a 'c_'
+        # prefix. Authored links reach these as Jekyll .html paths under common/,
+        # so register both the .md and .html spellings.
+        for include_path, _title in self.REFERENCE_TOPICS:
+            stem = include_path.rsplit('/', 1)[-1].replace('.md', '')
+            target = f'topics/common/c_{sanitize_id(stem)}.dita'
+            for spelling in (f'common/{stem}.md', f'common/{stem}.html',
+                             include_path):
+                registry[spelling] = {'path': target, 'anchors': {}}
+
+        self.dita_gen.set_link_registry(registry)
+        self._link_registry = registry
+        return registry
+
     def _convert_main_docs(self):
         """Convert main documentation files to DITA topics."""
         # Find all QUICKSTART, GUI-QUICKSTART, and BEST-PRACTICES files
@@ -2032,8 +2341,11 @@ class MarkdownToDITAConverter:
         # Copy any authored images this guide references into the output images/ dir
         self._copy_local_images(md_file, content)
 
-        # Extract title from YAML front matter or first heading
-        title = self._extract_title(content, md_file.stem)
+        # Extract title from YAML front matter or first heading. The fallback is a
+        # bare filename stem, so humanize it here -- _extract_title returns the
+        # default untouched, because its other caller passes a real title.
+        title = self._extract_title(
+            content, md_file.stem.replace('-', ' ').title())
 
         # Generate base topic ID (without prefix)
         base_id = sanitize_id(rel_path_str.replace('/', '_').replace('.md', ''))
@@ -2181,12 +2493,9 @@ class MarkdownToDITAConverter:
 
         These files are linked from the main topics and need to be converted as well.
         """
-        # List of reference files to convert from _includes
-        reference_files = [
-            ('_includes/glossary.md', 'Storage Terminology Glossary'),
-            ('_includes/network-concepts.md', 'Network Configuration Concepts'),
-            ('_includes/multipath-concepts.md', 'Multipath Configuration Concepts'),
-        ]
+        # Single source of truth, shared with _build_link_registry() so the
+        # registry cannot drift from what is actually written.
+        reference_files = self.REFERENCE_TOPICS
 
         # Create common output directory
         common_dir = self.config.output_dir / self.config.topics_dir / 'common'
@@ -2247,7 +2556,11 @@ class MarkdownToDITAConverter:
         if heading_match:
             return heading_match.group(1).strip()
 
-        return default.replace('-', ' ').title()
+        # Return the caller's default verbatim. Title-casing it here silently
+        # mangled correct product capitalization -- an explicit
+        # 'iSCSI Multipath Configuration' became 'Iscsi Multipath Configuration' --
+        # so any humanizing is the caller's job.
+        return default
 
     def _generate_map(self):
         """Generate the main DITA map and optional section maps."""

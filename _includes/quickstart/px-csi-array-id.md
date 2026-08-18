@@ -13,7 +13,7 @@ Pin the class with `portworx.io/pure-array-id`, using the array's ID from
 ```yaml
 parameters:
   backend: "pure_fa_file"
-  portworx.io/pure-array-id: "<array-id>"    # e.g. 732c61c2-d22f-4f92-a7e7-49433985267f
+  portworx.io/pure-array-id: "<array-id>"    # e.g. 12345678-1234-1234-1234-123456789abc
   pure_nfs_policy: "<nfs-policy>"
   pure_fa_file_system: "<fa-file-system>"
 ```
