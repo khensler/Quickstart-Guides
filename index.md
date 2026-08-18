@@ -31,30 +31,39 @@ Choose your distribution and protocol to get started:
 
 ## VMware to Proxmox Migration
 
-Guides for migrating VMware VMs to Proxmox VE using Everpure Data FlashArray storage.
+Guides for migrating VMware VMs to Proxmox VE using Everpure FlashArray storage.
 
 | Guide | Storage Type | Description |
 |:------|:-------------|:------------|
-| [Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) | vVol (block) | Manual migration using Everpure Data vVols with live disk move via QMP |
+| [Migration Guide (vVol)](distributions/proxmox/migration/VMware-Proxmox-Manual-Migration.md) | vVol (block) | Manual migration using Everpure vVols with live disk move via QMP |
 | [Migration Guide (NFS)](distributions/proxmox/migration/VMware-Proxmox-NFS-Migration.md) | NFS | Migrate from NFS datastores; direct VMDK attach with live `qm move_disk`, includes non-destructive managed directory copy method |
 
 ---
 
 ## Cloud & Hybrid Infrastructure
 
+**Azure Local:**
+- [Hyperconverged FC Quickstart](distributions/azure-local/hyperconverged/fc/QUICKSTART.md) — Add a FlashArray as external Fibre Channel storage to an existing Storage Spaces Direct cluster
+- [Hyperconverged iSCSI Quickstart](distributions/azure-local/hyperconverged/iscsi/QUICKSTART.md) — Add a FlashArray as external iSCSI storage to an existing Storage Spaces Direct cluster
+- [Disaggregated FC Quickstart](distributions/azure-local/disaggregated/fc/QUICKSTART.md) — Deploy Azure Local with a FlashArray as the only block storage over Fibre Channel (no S2D)
+- [Disaggregated iSCSI Quickstart](distributions/azure-local/disaggregated/iscsi/QUICKSTART.md) — Deploy Azure Local with a FlashArray as the only block storage over iSCSI (no S2D)
+
 **AWS Outposts:**
 - [FlashArray for AWS Outposts](distributions/aws-outposts/QUICKSTART.md) — Connect EC2 instances on AWS Outposts to FlashArray for data and boot volumes (NVMe-TCP and iSCSI)
 
 **OpenShift / Kubernetes:**
 - [iSCSI Multipathing & NIC Binding via MachineConfig](distributions/openshift/iscsi/QUICKSTART.md) — Configure iSCSI multipathing with NIC binding on Red Hat CoreOS worker nodes using MachineConfig
+- [OpenShift NFS Quickstart](distributions/openshift/nfs/QUICKSTART.md) — Dynamically provision NFS persistent volumes from FlashBlade and FlashArray File Services with Portworx CSI
+- [Installing ktls-utils on Red Hat CoreOS](distributions/openshift/nfs-tls/QUICKSTART.md) — Add the `tlshd` handshake daemon to a layered RHCOS image, the node prerequisite for NFS over TLS
+- [Kubernetes NFS Quickstart](distributions/kubernetes/nfs/QUICKSTART.md) — The same FlashBlade and FlashArray File Services provisioning on an upstream Kubernetes cluster
 
 ---
 
 ## OpenStack Distributions
 
 **Platform9 PCD:**
-- [Platform9 PCD iSCSI Integration Guide](distributions/pcd/iscsi/GUIDE.md) — Integrate Everpure Data FlashArray with Platform9 PCD using iSCSI and DM-Multipath
-- [Platform9 PCD Fibre Channel Integration Guide](distributions/pcd/fc/GUIDE.md) — Integrate Everpure Data FlashArray with Platform9 PCD using Fibre Channel and DM-Multipath
+- [Platform9 PCD iSCSI Integration Guide](distributions/pcd/iscsi/GUIDE.md) — Integrate Everpure FlashArray with Platform9 PCD using iSCSI and DM-Multipath
+- [Platform9 PCD Fibre Channel Integration Guide](distributions/pcd/fc/GUIDE.md) — Integrate Everpure FlashArray with Platform9 PCD using Fibre Channel and DM-Multipath
 
 ---
 

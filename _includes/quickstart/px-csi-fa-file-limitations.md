@@ -1,0 +1,1 @@
+Volumes on the `pure_fa_file` backend cannot be cloned, snapshotted, or backed up through the driver, and a non-empty volume cannot be deleted. If you need snapshot-based protection for RWX file data, use FlashBlade, or protect the data with an application-level or file-level backup instead. Only the default NFS server is supported — multiserver is not available in PX-CSI.

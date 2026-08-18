@@ -20,6 +20,7 @@ Usage:
 """
 
 import os
+import posixpath
 import re
 import sys
 import argparse
@@ -86,6 +87,24 @@ def sanitize_id(text: str) -> str:
     # Remove consecutive underscores
     result = re.sub(r'_+', '_', result)
     return result.strip('_') or 'topic'
+
+
+def github_slug(text: str) -> str:
+    """Slugify a heading the way GitHub/Jekyll anchors do.
+
+    Markdown anchors in this repo are GitHub-style ('## Understanding APD (All
+    Paths Down) Events' -> 'understanding-apd-all-paths-down-events'), while DITA
+    topic IDs come from sanitize_id(). The two differ, so resolving an anchor to a
+    split BEST-PRACTICES section needs this form as the lookup key.
+    """
+    s = text.strip().lower()
+    # Strip inline markdown/code that never appears in the rendered anchor.
+    s = re.sub(r'`([^`]*)`', r'\1', s)
+    s = re.sub(r'\*\*([^*]*)\*\*', r'\1', s)
+    s = re.sub(r'\*([^*]*)\*', r'\1', s)
+    # GitHub drops everything except word chars, spaces and hyphens.
+    s = re.sub(r'[^\w\s-]', '', s)
+    return re.sub(r'[\s_]+', '-', s).strip('-')
 
 
 def escape_xml(text: str) -> str:
@@ -324,6 +343,19 @@ def download_mermaid_image(mermaid_code: str, images_dir: Path, source_context: 
 # ============================================================================
 
 @dataclass
+class NestedListItem:
+    """A sublist item under an ordered list item.
+
+    `depth` is the raw leading-whitespace width, which is all that is needed to
+    rebuild the nesting; `ordered` records whether the marker was a number or a
+    bullet, so a numbered sublist renders as <ol> rather than <ul>.
+    """
+    depth: int
+    ordered: bool
+    text: str
+
+
+@dataclass
 class MarkdownElement:
     """Represents a parsed Markdown element."""
     type: str  # heading, paragraph, code_block, list, table, include, etc.
@@ -346,9 +378,34 @@ class MarkdownParser:
         self.link_pattern = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
         self.list_item_pattern = re.compile(r'^(\s*)[-*]\s+(.+)$', re.MULTILINE)
         self.ordered_list_pattern = re.compile(r'^(\s*)\d+\.\s+(.+)$', re.MULTILINE)
+        # Indented sublist item under an ordered list item: bullet or number
+        self.nested_list_item_pattern = re.compile(r'^(\s+)([-*]|\d+\.)\s+(.+)$')
         self.blockquote_pattern = re.compile(r'^>\s*(.+)$', re.MULTILINE)
         self.hr_pattern = re.compile(r'^---+\s*$', re.MULTILINE)
         self.table_pattern = re.compile(r'^\|(.+)\|$', re.MULTILINE)
+        # Cross-reference resolution state, set by DITAGenerator before each topic.
+        # _convert_link() needs all three: the registry to look targets up in, the
+        # source dir to resolve '../..' links against, and the output dir of the
+        # topic being written so the href can be made relative to it.
+        self._link_registry = {}
+        self._current_source_dir = ""
+        self._current_topic_dir = ""
+        # Set by DITAGenerator so convert_inline can render inline images; when
+        # unset, inline image markup is left untouched.
+        self.inline_image_hook = None
+
+    def _is_continuation(self, line: str) -> bool:
+        """True if `line` is wrapped text belonging to the list item above it.
+
+        An indented line that is not itself a list item continues the item. Code
+        fences are excluded: an indented fence under a list item is a code block,
+        and folding it into the item text would destroy it.
+        """
+        if not line.strip() or not line[:1].isspace():
+            return False
+        if line.strip().startswith('```'):
+            return False
+        return not self.nested_list_item_pattern.match(line)
 
     def parse(self, content: str) -> List[MarkdownElement]:
         """Parse Markdown content into elements."""
@@ -423,10 +480,19 @@ class MarkdownParser:
             list_match = self.list_item_pattern.match(line)
             if list_match:
                 items = []
-                while i < len(lines) and self.list_item_pattern.match(lines[i]):
+                while i < len(lines):
                     match = self.list_item_pattern.match(lines[i])
-                    items.append(match.group(2).strip())
-                    i += 1
+                    if match:
+                        items.append(match.group(2).strip())
+                        i += 1
+                        continue
+                    if self._is_continuation(lines[i]) and items:
+                        # Wrapped item text; without this the list ends here and
+                        # the remainder of the item becomes a stray paragraph.
+                        items[-1] += ' ' + lines[i].strip()
+                        i += 1
+                        continue
+                    break
                 elements.append(MarkdownElement(
                     type='unordered_list',
                     content='',
@@ -434,32 +500,61 @@ class MarkdownParser:
                 ))
                 continue
 
-            # Check for ordered list (with nested unordered sublists support)
+            # Check for ordered list (with nested sublists support)
             ol_match = self.ordered_list_pattern.match(line)
             if ol_match:
-                # Parse ordered list with potential nested bullet items
-                ol_items = []  # List of tuples: (item_text, [nested_bullet_items])
+                # Parse ordered list with potential nested bullet/numbered items
+                ol_items = []  # List of tuples: (item_text, [nested_items])
+                # The first item sets the list's own level. Usually that is column
+                # zero, but a list can also open already indented (a sublist whose
+                # parent is a plain indented paragraph); treating that as "not a
+                # list" would drop it to loose paragraphs.
+                base_indent = ol_match.group(1)
 
                 while i < len(lines):
                     current_line = lines[i]
 
-                    # Check if this is an ordered list item (at root level, no indent)
+                    # Check if this is an ordered list item at the list's own level
                     ol_item_match = self.ordered_list_pattern.match(current_line)
-                    if ol_item_match and ol_item_match.group(1) == '':  # No leading whitespace
+                    if ol_item_match and ol_item_match.group(1) == base_indent:
                         item_text = ol_item_match.group(2).strip()
                         nested_items = []
                         i += 1
 
-                        # Collect any nested unordered list items (indented bullets)
+                        # Collect nested list items (indented bullets or numbers).
+                        # Numbered sublists have to be accepted here: leaving them
+                        # to the outer loop spins forever, because an indented
+                        # ordered item re-enters this branch, collects nothing,
+                        # and never advances i.
+                        # A sublist item has to be indented deeper than the list's
+                        # own level; at exactly base_indent it is a sibling, which
+                        # the outer loop handles on the next pass.
+                        nest_min = max(2, len(base_indent) + 1)
+                        saw_blank = False
                         while i < len(lines):
                             nested_line = lines[i]
-                            # Check for indented bullet (starts with spaces then - or *)
-                            nested_match = re.match(r'^(\s+)[-*]\s+(.+)$', nested_line)
-                            if nested_match and len(nested_match.group(1)) >= 2:
-                                nested_items.append(nested_match.group(2).strip())
+                            nested_match = self.nested_list_item_pattern.match(nested_line)
+                            if nested_match and len(nested_match.group(1)) >= nest_min:
+                                nested_items.append(NestedListItem(
+                                    depth=len(nested_match.group(1)),
+                                    ordered=nested_match.group(2)[0].isdigit(),
+                                    text=nested_match.group(3).strip()
+                                ))
                                 i += 1
+                                saw_blank = False
                             elif nested_line.strip() == '':
                                 # Empty line - check if next line continues the list
+                                saw_blank = True
+                                i += 1
+                            elif not saw_blank and self._is_continuation(nested_line):
+                                # Wrapped item text. Only when it directly follows
+                                # the item: an indented block after a blank line is
+                                # separate content, not a continuation, and folding
+                                # it in would swallow whole paragraphs.
+                                if nested_items:
+                                    nested_items[-1].text += ' ' + nested_line.strip()
+                                else:
+                                    item_text += ' ' + nested_line.strip()
                                 i += 1
                             else:
                                 # Not a nested item, break out
@@ -476,9 +571,13 @@ class MarkdownParser:
                         content='',
                         items=[item[0] for item in ol_items],  # Main item texts
                         children=[MarkdownElement(type='nested_ul', content='', items=item[1])
-                                  for item in ol_items]  # Nested bullet lists
+                                  for item in ol_items]  # Nested sublists
                     ))
-                continue
+                    continue
+
+                # An indented ordered item with no root-level item to attach it
+                # to (e.g. the document opens on a sublist). Fall through to the
+                # paragraph handling below so i always advances.
 
             # Check for table
             if line.startswith('|'):
@@ -518,12 +617,16 @@ class MarkdownParser:
                       not lines[i].startswith('>') and \
                       not lines[i].startswith('|') and \
                       not self.list_item_pattern.match(lines[i]) and \
+                      not self.ordered_list_pattern.match(lines[i]) and \
                       not self.include_pattern.search(lines[i]):
                     para_lines.append(lines[i])
                     i += 1
                 elements.append(MarkdownElement(
                     type='paragraph',
-                    content=' '.join(para_lines)
+                    # Strip each line: source indentation and wrap points are not
+                    # content, and leaving them in emits <p> text that starts with
+                    # whitespace or has double spaces at every wrap.
+                    content=' '.join(l.strip() for l in para_lines)
                 ))
                 continue
 
@@ -554,6 +657,93 @@ class MarkdownParser:
                       lambda m: f'<codeph>{code_spans[int(m.group(1))]}</codeph>', text)
         return text
 
+    def _normalize_source_ref(self, href: str) -> str:
+        """Resolve a link href to a repo-relative source path.
+
+        Handles '../..'-style relative links by resolving against the current
+        source file's directory, and strips Jekyll templating.
+        """
+        clean = re.sub(r'\{\{[^}]+\}\}', '', href).split('#', 1)[0].strip()
+        clean = clean.replace('\\', '/')
+        if not clean:
+            return ''
+        if clean.startswith('/'):
+            # Site-absolute (Jekyll baseurl form) -- already repo-relative once
+            # the leading slash is dropped.
+            return posixpath.normpath(clean.lstrip('/'))
+        base = self._current_source_dir
+        return posixpath.normpath(posixpath.join(base, clean) if base else clean)
+
+    def _registry_href(self, source_ref: str, anchor: str = '') -> str:
+        """Return a complete xref href for a source path, or '' if not convertible.
+
+        The result is relative to the topic currently being generated, so it
+        resolves from that topic's own directory the way DITA expects, and any
+        anchor is rewritten from the Markdown slug to the DITA id actually emitted.
+        """
+        entry = self._link_registry.get(source_ref)
+        if not entry:
+            return ''
+
+        cur = self._current_topic_dir or 'topics'
+        target, dita_id = '', ''
+
+        if anchor:
+            # An anchor selects both the topic that heading landed in -- which for a
+            # split BEST-PRACTICES file is not the first topic -- and its id.
+            hit = (entry.get('anchors') or {}).get(github_slug(anchor))
+            if hit:
+                target, dita_id = hit
+
+        if not target:
+            # No anchor, or an anchor with no matching heading. Land on the file's
+            # topic. Deliberately drop an unmatched anchor rather than carry it
+            # over: it would be a dangling reference in the output, whereas the
+            # topic link is correct and useful.
+            target = entry.get('path', '')
+            dita_id = ''
+
+        if not target:
+            return ''
+        rel = posixpath.relpath(target, cur)
+        return f'{rel}#{dita_id}' if dita_id else rel
+
+    def _link_candidates(self, ref: str, link_href: str):
+        """Yield the registry keys an authored link might correspond to.
+
+        Beyond the obvious one, two spellings occur in this repo and each produced
+        dangling output before being handled here:
+
+        * '.html' targets, because authored site links point at Jekyll output
+          ('{{ site.baseurl }}/distributions/x/y/BEST-PRACTICES.html') while the
+          registry is keyed by source '.md' paths.
+        * Bare or './'-prefixed links to a shared reference page, e.g.
+          '[APD Events](iscsi-multipath-config.md#...)' in _includes/glossary.md.
+          Those are correct relative to _includes/, but by the time the include is
+          inlined the current source directory is the *including* guide's, so
+          resolving them relatively lands on a path that was never converted. They
+          are matched by basename against the reference topics instead.
+
+        The basename fallback is only ever a hit when the stem is a registered
+        reference topic, so it cannot silently redirect an unrelated link.
+        """
+        yield ref
+        if ref.endswith('.html'):
+            yield ref[:-len('.html')] + '.md'
+        stem = posixpath.basename(link_href.split('#', 1)[0])
+        stem = re.sub(r'\.(md|html)$', '', stem)
+        if stem:
+            yield f'common/{stem}.md'
+
+    def _resolve_link(self, link_href: str, anchor: str) -> str:
+        """Resolve an authored link to a finished xref href, or '' if not convertible."""
+        ref = self._normalize_source_ref(link_href)
+        for candidate in self._link_candidates(ref, link_href):
+            hit = self._registry_href(candidate, anchor)
+            if hit:
+                return hit
+        return ''
+
     def _convert_link(self, match) -> str:
         """Convert a Markdown link to DITA xref, fixing .md to .dita references."""
         link_text = match.group(1)
@@ -561,8 +751,16 @@ class MarkdownParser:
 
         # Check if it's an internal link (to .md or .html files in the project)
         if link_href.endswith('.md') or ('.md#' in link_href):
-            # Internal markdown link - convert to .dita
-            # Handle anchors
+            anchor = link_href.rsplit('#', 1)[1] if '#' in link_href else ''
+            # _resolve_link returns the finished href, anchor included.
+            resolved = self._resolve_link(link_href, anchor)
+            if resolved:
+                return (f'<xref href="{escape_xml_attr(resolved)}" format="dita" '
+                        f'scope="local">{link_text}</xref>')
+
+            # Not a converted source (for example common/*.md, which the converter
+            # does not emit as topics). Fall back to the historical rewrite rather
+            # than inventing a path, so behaviour is unchanged for these.
             if '#' in link_href:
                 base_path, anchor = link_href.rsplit('#', 1)
                 base_path = base_path.replace('.md', '.dita')
@@ -578,6 +776,16 @@ class MarkdownParser:
                 new_href = re.sub(r'^.*(common|distributions)/', r'../topics/', new_href)
             return f'<xref href="{escape_xml_attr(new_href)}" format="dita" scope="local">{link_text}</xref>'
         elif link_href.endswith('.html') or ('.html#' in link_href):
+            # Jekyll-rendered internal links, e.g.
+            # '{{ site.baseurl }}/common/glossary.html'. The reference topics these
+            # point at are emitted into topics/common/ with a 'c_' prefix, so try
+            # the registry before falling back.
+            anchor = link_href.rsplit('#', 1)[1] if '#' in link_href else ''
+            resolved = self._resolve_link(link_href, anchor)
+            if resolved:
+                return (f'<xref href="{escape_xml_attr(resolved)}" format="dita" '
+                        f'scope="local">{link_text}</xref>')
+
             # HTML link within the site - may need conversion
             # Strip Jekyll templating
             clean_href = re.sub(r'\{\{[^}]+\}\}', '', link_href).strip('/')
@@ -588,7 +796,13 @@ class MarkdownParser:
                 new_href = re.sub(r'^.*(common)/', r'../topics/', new_href)
                 return f'<xref href="{escape_xml_attr(new_href)}" format="dita" scope="local">{link_text}</xref>'
             else:
-                return f'<xref href="{escape_xml_attr(link_href)}" format="html" scope="external">{link_text}</xref>'
+                # A site-relative link that nothing resolved. Emit the
+                # templating-stripped form: leaving '{{ site.baseurl }}' in an href
+                # ships a literal Jekyll expression into the DITA output, which
+                # resolves nowhere and is not even a well-formed path.
+                out_href = clean_href if '{{' in link_href else link_href
+                return (f'<xref href="{escape_xml_attr(out_href)}" format="html" '
+                        f'scope="external">{link_text}</xref>')
         else:
             # External link
             return f'<xref href="{escape_xml_attr(link_href)}" format="html" scope="external">{link_text}</xref>'
@@ -609,6 +823,33 @@ class DITAGenerator:
         self.diagram_counter = 0  # Counter for diagrams within current source file
         self._include_cache = {}  # Cache for resolved include content
         self._current_source_context = "unknown"  # Human-readable source context
+        self._image_prefix = "../images/"  # Relative path to images/ from the current topic
+        self.parser.inline_image_hook = self._inline_image_dita
+
+    def _inline_image_dita(self, src: str, alt: str) -> str:
+        """Render an image that appears inside a paragraph or list item."""
+        href, scope = self._resolve_image_ref(src)
+        return (f'<image href="{escape_xml_attr(href)}" scope="{scope}">'
+                f'<alt>{escape_xml(alt or "Image")}</alt></image>')
+
+    def set_topic_subdir(self, subdir: str):
+        """Set the output subdirectory of the topic being generated.
+
+        Images live in <output>/images/ while topics live in <output>/topics/[subdir]/,
+        so the number of '../' hops depends on how deeply the topic is nested. With
+        --organize-sections topics sit in topics/<dist>/<proto>/, which needs three
+        hops, not one.
+        """
+        parts = [p for p in str(subdir or '').replace('\\', '/').split('/') if p]
+        self._image_prefix = '../' * (len(parts) + 1) + 'images/'
+        # Remember where this topic lives so cross-references can be made relative
+        # to it. Stored as a collection-root-relative POSIX path, e.g.
+        # 'topics/openshift/nfs'.
+        self.parser._current_topic_dir = '/'.join(['topics'] + parts)
+
+    def set_link_registry(self, registry: dict):
+        """Provide the source-path -> output-topic mapping used for xrefs."""
+        self.parser._link_registry = registry or {}
 
     def set_source_context(self, rel_path: str):
         """Set the current source file context for human-readable diagram names.
@@ -617,6 +858,16 @@ class DITAGenerator:
         """
         # Reset per-file diagram counter
         self.diagram_counter = 0
+
+        # Reset image depth; callers that write into a nested topics/ subdirectory
+        # override this with set_topic_subdir() before generating content.
+        self._image_prefix = "../images/"
+
+        # Remember the source file's directory so relative links such as
+        # '../../kubernetes/nfs/QUICKSTART.md' can be resolved back to a
+        # repo-relative path and looked up in the link registry.
+        norm = rel_path.replace('\\', '/')
+        self.parser._current_source_dir = norm.rsplit('/', 1)[0] if '/' in norm else ''
 
         # Convert path to human-readable context
         # e.g., "distributions/rhel/nvme-tcp/QUICKSTART.md" -> "rhel-nvme-tcp-quickstart"
@@ -708,8 +959,7 @@ class DITAGenerator:
             self.diagram_counter
         )
 
-        # Both warehouse and topics are one level deep, so path is the same
-        image_path = f"../images/{filename}"
+        image_path = f"{self._image_prefix}{filename}"
 
         # Include scope attribute for proper Heretto CCMS linking
         return f'<fig><image href="{escape_xml_attr(image_path)}" scope="local"><alt>Diagram</alt></image></fig>'
@@ -718,10 +968,11 @@ class DITAGenerator:
         """Resolve a markdown image path to a DITA-relative path.
 
         For standalone files, images are copied to the output images/ dir.
-        Topics are in topics/ so the relative path is ../images/filename.
+        The number of '../' hops depends on how deeply the topic is nested
+        (see set_topic_subdir).
         """
         filename = Path(src_path).name
-        return f"../images/{filename}"
+        return f"{self._image_prefix}{filename}"
 
     def _resolve_image_ref(self, src_path: str) -> Tuple[str, str]:
         """Return (href, scope) for an image.
@@ -968,24 +1219,33 @@ class DITAGenerator:
         prereq_conrefs = []     # Conrefs go after the list
         prereq_notes = []       # Vendor doc priority and other prereq notes
         postreq_content = []    # Content for Next Steps / postreq
+        context_content = []    # Intro content before the first H2 -> <context>
         steps = []
         current_step = None
         in_prereq = False
         in_disclaimer_section = False
         in_postreq = False
+        seen_h2 = False         # False until the first H2 - intro content goes to <context>
 
         for elem in elements:
             if elem.type == 'heading' and elem.level == 2:
+                seen_h2 = True
                 if 'prerequisite' in elem.content.lower():
                     in_prereq = True
                     in_disclaimer_section = False
                     in_postreq = False
+                    # Flush any pending step so its content is not discarded
+                    if current_step:
+                        steps.append(current_step)
                     current_step = None
                 elif 'disclaimer' in elem.content.lower() or 'important' in elem.content.lower():
                     # Disclaimer section - vendor doc priority goes to prereq
                     in_disclaimer_section = True
                     in_prereq = False
                     in_postreq = False
+                    # Flush any pending step so its content is not discarded
+                    if current_step:
+                        steps.append(current_step)
                     current_step = None
                 elif 'next step' in elem.content.lower():
                     # Next Steps section goes to postreq
@@ -1036,10 +1296,15 @@ class DITAGenerator:
                     prereq_conrefs.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
                 elif current_step:
                     current_step['content'].append(self._element_to_dita(elem))
+                elif not seen_h2:
+                    # Intro notes belong with the prerequisites, not loose in taskbody
+                    note_type = self._detect_note_type(elem.content)
+                    cleaned_content = self._strip_note_prefix(elem.content, note_type)
+                    prereq_notes.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
                 else:
                     output.append(self._element_to_dita(elem))
             elif elem.type == 'include':
-                if in_prereq or in_disclaimer_section:
+                if in_prereq or in_disclaimer_section or not seen_h2:
                     # Conrefs in prereq go after the list, not inside it
                     prereq_conrefs.append(self._generate_conref(elem.content, topic_id))
                 elif current_step:
@@ -1051,6 +1316,11 @@ class DITAGenerator:
                     prereq_list_items.append(f'            <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>')
             elif current_step:
                 current_step['content'].append(self._element_to_dita(elem))
+            elif not seen_h2:
+                # Intro prose/lists/code before the first H2 -> <context>
+                dita = self._element_to_dita(elem)
+                if dita and dita.strip():
+                    context_content.append(dita)
 
         if current_step:
             steps.append(current_step)
@@ -1069,6 +1339,12 @@ class DITAGenerator:
             for conref in prereq_conrefs:
                 output.append(conref)
             output.append('        </prereq>')
+
+        # Build context (intro content before the first H2) - must precede <steps>
+        if context_content:
+            output.append('        <context>')
+            output.extend(context_content)
+            output.append('        </context>')
 
         # Build steps
         if steps:
@@ -1212,15 +1488,58 @@ class DITAGenerator:
         li_items = '\n'.join([f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>' for item in items])
         return f'{indent}<ul>\n{li_items}\n{indent}</ul>'
 
-    def _generate_ol(self, items: List[str], indent: str = '        ', nested_items: List[List[str]] = None) -> str:
-        """Generate a DITA ordered list with proper <p> wrapping and nested <ul> support.
+    def _sublist_tree(self, nested: List[NestedListItem], start: int, depth: int):
+        """Group a flat, depth-tagged sublist into (item, children) nodes.
+
+        Returns (nodes, next_index). Items deeper than `depth` are attached to
+        the preceding sibling; items shallower end the run.
+        """
+        nodes = []
+        i = start
+        while i < len(nested):
+            item = nested[i]
+            if item.depth < depth:
+                break
+            if item.depth > depth:
+                if not nodes:
+                    # Sublist opens deeper than expected; take that as this level
+                    depth = item.depth
+                    continue
+                children, i = self._sublist_tree(nested, i, item.depth)
+                parent, existing = nodes[-1]
+                nodes[-1] = (parent, existing + children)
+                continue
+            nodes.append((item, []))
+            i += 1
+        return nodes, i
+
+    def _render_sublist(self, nodes, indent: str) -> str:
+        """Render sublist nodes as nested DITA <ol>/<ul> markup."""
+        if not nodes:
+            return ''
+        tag = 'ol' if nodes[0][0].ordered else 'ul'
+        parts = [f'{indent}<{tag}>']
+        for item, children in nodes:
+            text = self.parser.convert_inline(escape_xml(item.text))
+            if children:
+                parts.append(f'{indent}    <li><p>{text}</p>')
+                parts.append(self._render_sublist(children, indent + '        '))
+                parts.append(f'{indent}    </li>')
+            else:
+                parts.append(f'{indent}    <li><p>{text}</p></li>')
+        parts.append(f'{indent}</{tag}>')
+        return '\n'.join(parts)
+
+    def _generate_ol(self, items: List[str], indent: str = '        ', nested_items: List[List] = None) -> str:
+        """Generate a DITA ordered list with proper <p> wrapping and nested sublist support.
 
         Args:
             items: List of main ordered list item texts
             indent: Indentation string
-            nested_items: List of lists, where each inner list contains the nested bullet items
-                         for the corresponding main item. Can be None or empty lists for items
-                         without nested bullets.
+            nested_items: List of lists, where each inner list holds the NestedListItem
+                         sublist entries for the corresponding main item. Can be None or
+                         empty lists for items without sublists. Plain strings are accepted
+                         and treated as a single level of bullets.
         """
         if nested_items is None:
             nested_items = [[] for _ in items]
@@ -1228,16 +1547,15 @@ class DITAGenerator:
         li_elements = []
         for idx, item in enumerate(items):
             nested = nested_items[idx] if idx < len(nested_items) else []
+            nested = [n if isinstance(n, NestedListItem)
+                      else NestedListItem(depth=4, ordered=False, text=str(n))
+                      for n in nested]
 
             if nested:
-                # Item with nested ul
+                # Item with a sublist
                 li_content = f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p>\n'
-                # Generate nested ul
-                nested_ul_items = '\n'.join([
-                    f'{indent}            <li><p>{self.parser.convert_inline(escape_xml(n))}</p></li>'
-                    for n in nested
-                ])
-                li_content += f'{indent}        <ul>\n{nested_ul_items}\n{indent}        </ul>\n'
+                nodes, _ = self._sublist_tree(nested, 0, min(n.depth for n in nested))
+                li_content += self._render_sublist(nodes, f'{indent}        ') + '\n'
                 li_content += f'{indent}    </li>'
             else:
                 # Simple item without nested list
@@ -1519,6 +1837,11 @@ class MarkdownToDITAConverter:
         # Create output directories
         self._create_output_dirs()
 
+        # Step 0: Work out where every convertible source file will end up, so
+        # cross-references can be rewritten to real topic filenames regardless of
+        # the order files are converted in.
+        self._build_link_registry()
+
         # Step 1: Convert include files to warehouse topics
         print("\n=== Converting include files to warehouse topics ===")
         self._convert_includes()
@@ -1566,8 +1889,10 @@ class MarkdownToDITAConverter:
         # Remove TOC section (between "## Table of Contents" and "---")
         content = re.sub(r'## Table of Contents\n.*?---\n', '', content, flags=re.DOTALL)
 
-        # Extract document title
-        title_match = re.match(r'^#\s+(.+)$', content, re.MULTILINE)
+        # Extract document title. Use search, not match: a compiled document may
+        # open with a provenance comment or a table of contents, in which case an
+        # anchored match falls back to the filename stem for the map title.
+        title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
         doc_title = title_match.group(1).strip() if title_match else md_file.stem
 
         # Single task topic mode: emit one task topic from the entire file
@@ -1779,6 +2104,159 @@ class MarkdownToDITAConverter:
         # e.g. "azure-local/disaggregated/fc".
         return "/".join(dir_parts)
 
+    # Reference files converted out of _includes into topics/common/. Shared by
+    # _convert_reference_topics() and _build_link_registry().
+    # Each entry must correspond to a common/<stem>.md wrapper page on the Jekyll
+    # site, because that is the spelling authored links use
+    # ('{{ site.baseurl }}/common/<stem>.html'). A page that renders on the site but
+    # is missing here converts to an href with no target, so the DITA output carries
+    # a dangling reference while the site link works fine -- which is how the first
+    # three shipped correct and the rest did not.
+    REFERENCE_TOPICS = [
+        ('_includes/glossary.md', 'Storage Terminology Glossary'),
+        ('_includes/network-concepts.md', 'Network Configuration Concepts'),
+        ('_includes/multipath-concepts.md', 'Multipath Configuration Concepts'),
+        ('_includes/troubleshooting-common.md', 'Troubleshooting Common Issues'),
+        ('_includes/performance-tuning.md', 'Performance Tuning'),
+        ('_includes/security-best-practices.md', 'Security Best Practices'),
+        ('_includes/monitoring-maintenance.md', 'Monitoring and Maintenance'),
+        ('_includes/iscsi-multipath-config.md', 'iSCSI Multipath Configuration'),
+        ('_includes/iscsi-performance-tuning.md', 'iSCSI Performance Tuning'),
+        ('_includes/iscsi-architecture.md', 'iSCSI Architecture'),
+    ]
+
+    def _build_link_registry(self):
+        """Map each convertible source file to the topic file(s) it will produce.
+
+        Cross-references have to be rewritten while a topic is being generated, but
+        a link can point at a file converted later in the run. Computing the whole
+        mapping up front removes the ordering problem, and it is cheap because the
+        output paths are derived from the source path, not from the content.
+
+        Registry shape -- anchors map a GitHub-style slug to (topic file, DITA id):
+            'distributions/rhel/nfs/BEST-PRACTICES.md': {
+                'path':    'topics/rhel/nfs/c_rhel_nfs_best-practices_architecture_overview.dita',
+                'anchors': {'nconnect-tuning': ('topics/rhel/nfs/c_..._performance_tuning.dita',
+                                                'nconnect_tuning')},
+            }
+
+        Two spellings have to be reconciled for anchors to work. Markdown anchors are
+        GitHub slugs ('understanding-apd-all-paths-down-events'), while the ids
+        emitted into DITA come from sanitize_id() ('understanding_apd_all_paths_down_events').
+        The map is keyed by the former and stores the latter.
+
+        Sub-headings matter as much as H2s: an H3 lands inside whichever H2's topic
+        contains it, so linking to it needs both the enclosing topic and its own id.
+        Include directives are expanded first, because much of the linkable content
+        (the APD section, for instance) arrives from _includes.
+
+        A BEST-PRACTICES file has no single topic of its own -- it is split by H2 and
+        the parent exists only in the map -- so a plain link to it resolves to its
+        first section, which is the natural landing topic.
+        """
+        registry = {}
+
+        include_re = re.compile(r'\{%\s*include\s+([^\s%}]+)\s*%\}')
+
+        def expand(text, depth=0):
+            """Inline include directives so their headings are visible to the scan."""
+            if depth > 3:
+                return text
+            def sub(m):
+                return expand(self.dita_gen._resolve_include(m.group(1)), depth + 1)
+            return include_re.sub(sub, text)
+
+        def headings(text):
+            """Every ATX heading, as (level, title)."""
+            out = []
+            fenced = False
+            for line in text.split('\n'):
+                if line.lstrip().startswith('```'):
+                    fenced = not fenced
+                    continue
+                if fenced:
+                    continue
+                m = re.match(r'^(#{2,6})\s+(.+?)\s*$', line)
+                if m:
+                    out.append((len(m.group(1)), m.group(2).strip()))
+            return out
+
+        for pattern in ['**/QUICKSTART.md', '**/GUI-QUICKSTART.md', '**/BEST-PRACTICES.md']:
+            for md_file in self.config.input_dir.glob(pattern):
+                rel_path = md_file.relative_to(self.config.input_dir)
+                if str(rel_path).startswith(('_', 'common', 'scripts')):
+                    continue
+                rel_str = str(rel_path).replace('\\', '/')
+                # Deliberately NOT filtered by -d/-p: a scoped run still needs
+                # correct hrefs for targets it is not emitting this time, and the
+                # href is a function of the path alone.
+                subdir = self._get_topic_subdir(rel_str)
+                prefix = f'topics/{subdir}' if subdir else 'topics'
+
+                base_id = sanitize_id(rel_str.replace('/', '_').replace('.md', ''))
+                base_id_short = re.sub(r'^distributions_', '', base_id)
+
+                try:
+                    raw = md_file.read_text(encoding='utf-8')
+                except Exception:
+                    continue
+
+                if 'QUICKSTART' in md_file.name:
+                    # The whole file becomes ONE task topic, and the generated topic
+                    # carries no ids for its own headings -- only the topic id. So an
+                    # anchor into a QUICKSTART can only reach the topic; mapping each
+                    # heading to a bare file reference keeps the link working instead
+                    # of emitting an id that is not there.
+                    target = f'{prefix}/t_{base_id_short}.dita'
+                    anchors = {github_slug(t): (target, '')
+                               for _lvl, t in headings(expand(raw))}
+                    registry[rel_str] = {'path': target, 'anchors': anchors}
+                    continue
+
+                # BEST-PRACTICES: mirror _convert_best_practices_sections exactly,
+                # including its skip of troubleshooting sections.
+                #
+                # Split the RAW content, not the expanded content. The real
+                # conversion splits raw, so expanding first invents H2 sections
+                # (from included files) that never become topics -- which produces
+                # hrefs to files that are never written.
+                anchors, first = {}, ''
+                for section_title, body in self._split_by_h2(raw):
+                    if 'troubleshoot' in section_title.lower():
+                        continue
+                    section_id = f'c_{base_id_short}_{sanitize_id(section_title)}'
+                    target = f'{prefix}/{section_id}.dita'
+                    # The H2 itself, then every sub-heading it contains -- all of
+                    # which live in this section's topic.
+                    # The H2 becomes this topic's TITLE, so no element inside it
+                    # carries that id -- the topic itself is the section. An anchor
+                    # to it must therefore be the bare file, or the reference dangles.
+                    anchors[github_slug(section_title)] = (target, '')
+                    # Sub-headings do become elements with ids. Expanded per section,
+                    # so headings arriving from an include (the APD section, for one)
+                    # resolve to the topic that actually contains them without
+                    # disturbing the section boundaries above.
+                    for _lvl, sub in headings(expand(body)):
+                        anchors.setdefault(github_slug(sub),
+                                           (target, sanitize_id(sub)))
+                    if not first:
+                        first = target
+                registry[rel_str] = {'path': first, 'anchors': anchors}
+
+        # Reference topics from _includes, which land in topics/common/ with a 'c_'
+        # prefix. Authored links reach these as Jekyll .html paths under common/,
+        # so register both the .md and .html spellings.
+        for include_path, _title in self.REFERENCE_TOPICS:
+            stem = include_path.rsplit('/', 1)[-1].replace('.md', '')
+            target = f'topics/common/c_{sanitize_id(stem)}.dita'
+            for spelling in (f'common/{stem}.md', f'common/{stem}.html',
+                             include_path):
+                registry[spelling] = {'path': target, 'anchors': {}}
+
+        self.dita_gen.set_link_registry(registry)
+        self._link_registry = registry
+        return registry
+
     def _convert_main_docs(self):
         """Convert main documentation files to DITA topics."""
         # Find all QUICKSTART, GUI-QUICKSTART, and BEST-PRACTICES files
@@ -1798,6 +2276,33 @@ class MarkdownToDITAConverter:
         # Also convert standalone reference files from _includes that are linked from topics
         self._convert_reference_files()
 
+    def _copy_local_images(self, md_file: Path, content: str) -> int:
+        """Copy images referenced by a markdown file into the output images/ dir.
+
+        Authored screenshots live next to their guide (e.g. img/foo.png). DITA
+        topics reference them by basename out of images/, so the files have to be
+        copied or the references dangle.
+        """
+        import shutil
+        from urllib.parse import unquote
+
+        output_images = self.config.output_dir / self.config.images_dir
+        output_images.mkdir(parents=True, exist_ok=True)
+        copied = 0
+        for src in re.findall(r'!\[[^\]]*\]\(([^)]+)\)', content):
+            src = src.strip().split()[0].strip('<>')
+            if re.match(r'^https?://', src, re.IGNORECASE):
+                continue
+            # Markdown paths are URI-encoded (e.g. %20 for spaces); the file is not
+            source_file = (md_file.parent / unquote(src)).resolve()
+            if not source_file.is_file():
+                continue
+            dest = output_images / source_file.name
+            if not dest.exists():
+                shutil.copy2(source_file, dest)
+                copied += 1
+        return copied
+
     def _convert_doc_file(self, md_file: Path):
         """Convert a single documentation file to DITA."""
         rel_path = md_file.relative_to(self.config.input_dir)
@@ -1810,8 +2315,14 @@ class MarkdownToDITAConverter:
 
         content = md_file.read_text(encoding='utf-8')
 
-        # Extract title from YAML front matter or first heading
-        title = self._extract_title(content, md_file.stem)
+        # Copy any authored images this guide references into the output images/ dir
+        self._copy_local_images(md_file, content)
+
+        # Extract title from YAML front matter or first heading. The fallback is a
+        # bare filename stem, so humanize it here -- _extract_title returns the
+        # default untouched, because its other caller passes a real title.
+        title = self._extract_title(
+            content, md_file.stem.replace('-', ' ').title())
 
         # Generate base topic ID (without prefix)
         base_id = sanitize_id(rel_path_str.replace('/', '_').replace('.md', ''))
@@ -1825,6 +2336,9 @@ class MarkdownToDITAConverter:
             output_dir.mkdir(parents=True, exist_ok=True)
         else:
             output_dir = self.config.output_dir / self.config.topics_dir
+
+        # Image hrefs must account for how deeply this topic is nested
+        self.dita_gen.set_topic_subdir(topic_subdir)
 
         # Determine topic type and generate DITA
         if 'QUICKSTART' in md_file.name:
@@ -1956,12 +2470,9 @@ class MarkdownToDITAConverter:
 
         These files are linked from the main topics and need to be converted as well.
         """
-        # List of reference files to convert from _includes
-        reference_files = [
-            ('_includes/glossary.md', 'Storage Terminology Glossary'),
-            ('_includes/network-concepts.md', 'Network Configuration Concepts'),
-            ('_includes/multipath-concepts.md', 'Multipath Configuration Concepts'),
-        ]
+        # Single source of truth, shared with _build_link_registry() so the
+        # registry cannot drift from what is actually written.
+        reference_files = self.REFERENCE_TOPICS
 
         # Create common output directory
         common_dir = self.config.output_dir / self.config.topics_dir / 'common'
@@ -1977,8 +2488,11 @@ class MarkdownToDITAConverter:
 
             # Set source context for diagrams
             self.dita_gen.set_source_context(rel_path)
+            # Reference topics are written to topics/common/
+            self.dita_gen.set_topic_subdir('common')
 
             content = md_file.read_text(encoding='utf-8')
+            self._copy_local_images(md_file, content)
             title = self._extract_title(content, default_title)
 
             # Generate topic ID with 'c_' prefix (these are concept/reference topics)
@@ -2019,7 +2533,11 @@ class MarkdownToDITAConverter:
         if heading_match:
             return heading_match.group(1).strip()
 
-        return default.replace('-', ' ').title()
+        # Return the caller's default verbatim. Title-casing it here silently
+        # mangled correct product capitalization -- an explicit
+        # 'iSCSI Multipath Configuration' became 'Iscsi Multipath Configuration' --
+        # so any humanizing is the caller's job.
+        return default
 
     def _generate_map(self):
         """Generate the main DITA map and optional section maps."""

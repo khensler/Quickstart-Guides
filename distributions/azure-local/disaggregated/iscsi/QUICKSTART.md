@@ -1,10 +1,21 @@
+---
+layout: default
+title: Azure Local with Everpure FlashArray Quick Start Guide for Disaggregated Deployments (iSCSI)
+---
+
 # Azure Local with Everpure FlashArray Quick Start Guide for Disaggregated Deployments (iSCSI)
+
+---
+
+{% include quickstart/disclaimer.md %}
+
+---
 
 This guide provides a high-level workflow for integrating the Everpure FlashArray as the **only** block storage for a **disaggregated** Azure Local (formerly Azure Stack HCI) deployment over **iSCSI**. In a disaggregated deployment there is no local Storage Spaces Direct (S2D) — compute runs on the Azure Local nodes while all cluster storage is served from the FlashArray over iSCSI (TCP/IP). This combines the cloud-integrated benefits of Azure Local with the high-performance, data-reduced storage of FlashArray, and lets compute and storage scale independently.
 
 > **This document is based heavliy on the official Microsoft documentation.**  [Deploy Azure Local using the Azure portal for disaggregated deployments](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated) · [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage)
 
-> **Looking for Fibre Channel instead?** See the [Disaggregated FC guide](../fc/QUICKSTART.md). **Looking for a hyperconverged (S2D + FlashArray) cluster?** See the [Hyperconverged FC guide](../../hyperconverged/fc/QUICKSTART.md).
+> **Looking for Fibre Channel instead?** See the [Disaggregated FC guide](../fc/QUICKSTART.md). **Looking for a hyperconverged (S2D + FlashArray) cluster?** See the [Hyperconverged iSCSI guide](../../hyperconverged/iscsi/QUICKSTART.md) or the [Hyperconverged FC guide](../../hyperconverged/fc/QUICKSTART.md).
 
 ## Prerequisites to Using the Quick Start Guide
 
@@ -14,7 +25,7 @@ Before you begin, ensure that the following requirements are met:
 
 - A deployed and configured Everpure FlashArray.
 - **iSCSI** must be enabled and configured on the array, with iSCSI interfaces (target portals) assigned IP addresses and IP connectivity established between the FlashArray iSCSI ports and **all** Azure Local nodes.
-- See the [SAN Guidelines for Maximizing FlashArray Performance](https://support.purestorage.com/bundle/m_microsoft_platform_guide).
+- See the [SAN Guidelines for Maximizing FlashArray Performance](https://support.everpuredata.com/bundle/m_microsoft_platform_guide).
 - **Minimum Recommended Purity Version: 6.5.3**
 
 ### Azure Local Deployment (Base)
@@ -78,12 +89,14 @@ Enter-PSSession -ComputerName <Node_Name> -Credential (Get-Credential)
 Azure Local **2604 and later enables MPIO by default**, so this step is primarily a verification. If MPIO is not enabled (possible on earlier builds), enabling it requires a reboot.
 
 ```powershell
-# Enable the MPIO feature (no-op if already enabled)
-Enable-WindowsOptionalFeature -Online -FeatureName MultipathIO
+# Check first — do not enable blindly on a running node
+$mpio = Get-WindowsOptionalFeature -Online -FeatureName MultipathIO
+$mpio | Select-Object FeatureName, State
 
-# Verify — RestartNeeded indicates whether a reboot is required
-Get-WindowsOptionalFeature -Online -FeatureName MultipathIO |
-    Select-Object FeatureName, State, RestartNeeded
+# Only if State is 'Disabled' — -NoRestart avoids an interactive reboot prompt
+if ($mpio.State -ne 'Enabled') {
+    Enable-WindowsOptionalFeature -Online -FeatureName MultipathIO -NoRestart
+}
 ```
 
 ### 1.3 Enable the iSCSI Initiator Service
@@ -106,10 +119,10 @@ New-MSDSMSupportedHw -VendorId "PURE" -ProductId "FlashArray"
 
 This registers Everpure devices as MPIO-capable. Modern PowerShell automatically handles the character padding for these IDs.
 
-Microsoft recommends removing the generic vendor wildcard entry so MSDSM does **not** automatically claim non-Pure devices:
+Optionally, remove the default placeholder entry so MSDSM does **not** automatically claim unrelated devices. Use the exact IDs rather than a wildcard so the removal cannot match a real vendor entry:
 
 ```powershell
-Remove-MSDSMSupportedHW -VendorId 'Vendor*' -ProductId 'Product*'
+Remove-MSDSMSupportedHW -VendorId 'Vendor 8' -ProductId 'Product 16' -Confirm:$false
 ```
 
 Enable MPIO to automatically claim all iSCSI devices:
@@ -132,25 +145,23 @@ Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy RR    # 10 or fewer paths
 # Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy LQD  # more than 10 paths
 ```
 
-> For a deeper dive, see the [Setting the MPIO Policy](https://support.purestorage.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy) KB. Round Robin with Subset (RRWS) is also an option for high path counts but must be set per-volume (it cannot be a global default).
+> For a deeper dive, see the [Setting the MPIO Policy](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy) KB. Round Robin with Subset (RRWS) is also an option for high path counts but must be set per-volume (it cannot be a global default).
 
 ### 1.6 Configure Path Verification and Timeouts
 
 Tuning MPIO timers prevents premature path failovers and lets the system recover gracefully from momentary network hiccups.
 
 ```powershell
-Set-MPIOSetting -NewPathRecoveryInterval 20 -NewPathVerificationPeriod 30 -NewPDORemovePeriod 30
+Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
+    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
+    -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 ```
 
-`NewPDORemovePeriod` determines how long the OS waits for a failed path to recover. Holding failover for 30 seconds lets MPIO complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover.
+`NewPDORemovePeriod` determines how long the OS waits for a failed path to recover before the device is removed.
 
-> **Note:** These are recommended starting values from Everpure lab testing. Workloads with specific latency requirements or complex fabrics may require additional tuning.
+> **Note:** These are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
 
-> **Microsoft-documented Everpure values:** The official [Enable External Storage](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage) doc lists these Everpure FlashArray-specific overrides. They are compatible with the values above and add path-recovery and disk-timeout settings:
-> ```powershell
-> Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
->     -NewPDORemovePeriod 20 -NewDiskTimeout 60 -NewPathVerificationState Enabled
-> ```
+> **Note:** Workloads with specific latency requirements or complex fabrics may require additional tuning.
 
 ### 1.7 Configure the iSCSI Network
 
@@ -166,7 +177,7 @@ New-NetIPAddress -InterfaceAlias "iSCSI-NIC-A" -IPAddress 10.30.30.11 -PrefixLen
 New-NetIPAddress -InterfaceAlias "iSCSI-NIC-B" -IPAddress 10.31.31.11 -PrefixLength 24
 ```
 
-> **Note:** Do **not** configure a default gateway on iSCSI NICs.
+> **Important — one default gateway per node, on the management interface only.** Do **not** configure a default gateway on iSCSI NICs (or on the cluster-network NICs). Azure Local's network validation **fails if it detects more than one physical network interface with a default gateway** — the portal uses that check to determine which IP carries outbound connectivity and Arc registration. A second gateway on an iSCSI NIC is one of the more expensive mistakes you can make here: the deployment run currently takes **5–10 hours**, and this surfaces as a validation/deployment failure rather than a warning up front. Where the FlashArray target portals are one or more Layer 3 hops away, route to them with per-path persistent static routes (next code block) instead of a gateway. See [Network considerations for cloud deployment for Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/plan/cloud-deployment-network-considerations).
 
 Optionally, configure consistent MTU (jumbo frames) across the entire iSCSI path, and VLAN tags only if the switch ports are trunked:
 
@@ -179,7 +190,7 @@ Set-NetAdapter -Name "iSCSI-NIC-A" -VlanID 500
 Set-NetAdapter -Name "iSCSI-NIC-B" -VlanID 600
 ```
 
-If the FlashArray iSCSI target portals are on a different subnet, add persistent /32 routes for each target portal on both iSCSI NICs:
+If the FlashArray iSCSI target portals are on a different subnet, add persistent /32 routes for each target portal on both iSCSI NICs. This is how you reach a routed array **without** adding a second default gateway: set the next hop to the leaf switch gateway (switch virtual interface) on that iSCSI VLAN and bind the route to the storage adapter, so iSCSI traffic leaves on the storage NIC instead of leaking onto the management network. Under MPIO, **each path needs its own route** to the same targets over its own VLAN. If the array exposes many target IPs in a single subnet, route the whole target subnet through the corresponding path gateway rather than adding one route per portal.
 
 ```powershell
 New-NetRoute -DestinationPrefix <TargetPortalIP>/32 -InterfaceAlias "iSCSI-NIC-A" -NextHop <GatewayIP> -PolicyStore PersistentStore
@@ -238,11 +249,21 @@ $Conn = Connect-PFA2Array -Endpoint "<FlashArray_Management_VIP>" -Credential (G
 
 ### 2.1 Create Host Objects
 
-Create a host object for **every** node, mapping its IQN (from Phase 1.8). Use the `-Iqns` parameter (iSCSI) instead of `-Wwn` (Fibre Channel).
+Create a host object for **every** node, mapping **all** of its IQNs (from Phase 1.8). Use the `-Iqns` parameter (iSCSI) instead of `-Wwns` (Fibre Channel); both accept an array of values. A Windows node normally has one IQN, but pass a comma-separated list if `Get-InitiatorPort` returned more than one.
 
 ```powershell
-# Run once per node
-New-Pfa2Host -Array $Conn -Name "<Node_Name>" -Iqns "<Node_IQN>"
+# One host object per node
+New-Pfa2Host -Array $Conn -Name "<Node_1_Name>" -Iqns "<Node_1_IQN>"
+New-Pfa2Host -Array $Conn -Name "<Node_2_Name>" -Iqns "<Node_2_IQN>"
+
+# Or drive it from a hashtable of node name -> IQN list
+$NodeIqns = @{
+    "<Node_1_Name>" = @("<Node_1_IQN>")
+    "<Node_2_Name>" = @("<Node_2_IQN>")
+}
+foreach ($node in $NodeIqns.Keys) {
+    New-Pfa2Host -Array $Conn -Name $node -Iqns $NodeIqns[$node]
+}
 ```
 
 ### 2.2 Create and Configure the Host Group
@@ -352,9 +373,16 @@ On the **Basics** tab, set **Storage options** to **Storage Area Network (SAN)**
 
 ### 3.2 Networking — SAN-based storage
 
-On the **Networking** tab, storage is **SAN based**, so there is no SMB/storage network intent. Configure **Management** and **Compute** intents only (grouped or separated). RDMA is disabled for cluster networks.
+On the **Networking** tab, storage is **SAN based**, so there is no RDMA storage intent for Network ATC to manage. That does **not** mean networking reduces to Management and Compute — a SAN-only cluster still needs **two cluster networks**:
 
-> **iSCSI note:** The dedicated iSCSI NICs you configured in Phase 1.7 are **not** managed by Network ATC and must **not** be added to a Management or Compute intent. Keep them isolated on their own adapters.
+- **Management and Compute intent** (grouped or separated), configured through Network ATC on a Switch Embedded Teaming (SET) virtual switch.
+- **Two cluster networks**, carrying cluster heartbeat, Cluster Shared Volume (CSV), and Live Migration traffic over SMB Multichannel. These run on **standalone network ports that Network ATC does not manage**, so you define them explicitly: for each cluster network, specify the cluster network name, network adapter, VLAN ID, and subnet. Microsoft's default cluster VLANs are **1711** and **1712**. Give each cluster network its own VLAN and subnet, and **no default gateway** — only the management interface gets one.
+
+RDMA is disabled for cluster networks, and because all cluster and storage traffic is TCP (SMB Multichannel for the cluster networks, iSCSI over TCP for storage), neither Priority Flow Control nor host-side DCB/ETS is required.
+
+Microsoft's validated iSCSI port layout is the **6-port dedicated-path** pattern per node: two ports for the Management and Compute SET team, two standalone ports for the cluster networks (VLANs 1711/1712), and two more standalone ports for dedicated iSCSI path A and path B (for example VLANs 300/400). Storage adapters must be at least 10 GbE — 25 GbE or higher for high-throughput workloads. Each standalone cluster and iSCSI port carries a single VLAN, so you can set that VLAN as the access (native) VLAN on the ToR port and leave the host interface untagged. See [Network considerations for cloud deployment for Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/plan/cloud-deployment-network-considerations).
+
+> **iSCSI note:** The dedicated iSCSI NICs you configured in Phase 1.7 are **not** managed by Network ATC and must **not** be added to a Management or Compute intent. Keep them isolated on their own adapters. If your design shares adapters between cluster and iSCSI traffic instead of using the 6-port layout, select the already-configured iSCSI adapters when you define the cluster network, VLAN ID, and subnet.
 
 ![Networking tab of the disaggregated Azure Local deployment](https://learn.microsoft.com/en-us/azure/azure-local/deploy/media/deploy-via-portal-disaggregated/screenshot-2026-04-14-163448.png)
 *Networking tab — Management and Compute intents (no storage intent for SAN). (Source: Microsoft Learn)*
@@ -489,13 +517,15 @@ Get-ClusterSharedVolume | Select-Object Name -ExpandProperty SharedVolumeInfo |
 
 # --- On each Azure Local node (remote session) ---
 Enter-PSSession -ComputerName <Node_Name> -Credential (Get-Credential)
-Enable-WindowsOptionalFeature -Online -FeatureName MultipathIO   # enabled by default on 2604+
+Get-WindowsOptionalFeature -Online -FeatureName MultipathIO      # enabled by default on 2604+; enable with -NoRestart only if Disabled
 Set-Service -Name MSiSCSI -StartupType Automatic; Start-Service -Name MSiSCSI
 New-MSDSMSupportedHw -VendorId "PURE" -ProductId "FlashArray"
-Remove-MSDSMSupportedHW -VendorId 'Vendor*' -ProductId 'Product*'  # don't claim non-Pure devices
+Remove-MSDSMSupportedHW -VendorId 'Vendor 8' -ProductId 'Product 16' -Confirm:$false  # optional: drop the placeholder entry
 Enable-MSDSMAutomaticClaim -BusType iSCSI
 Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy RR        # RR <=10 paths, LQD >10 paths
-Set-MPIOSetting -NewPathRecoveryInterval 20 -NewPathVerificationPeriod 30 -NewPDORemovePeriod 30
+Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
+    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
+    -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 # Configure dedicated iSCSI NICs (static IPs, no gateway)
 New-NetIPAddress -InterfaceAlias "iSCSI-NIC-A" -IPAddress 10.30.30.11 -PrefixLength 24
 New-NetIPAddress -InterfaceAlias "iSCSI-NIC-B" -IPAddress 10.31.31.11 -PrefixLength 24
@@ -509,7 +539,7 @@ if (!(Get-Module -ListAvailable -Name PureStoragePowerShellSDK2)) {
 Import-Module -Name PureStoragePowerShellSDK2
 $Conn = Connect-PFA2Array -Endpoint "<FlashArray_Management_VIP>" -Credential (Get-Credential) -IgnoreCertificateError
 
-New-Pfa2Host         -Array $Conn -Name "<Node_Name>" -Iqns "<Node_IQN>"   # per node
+New-Pfa2Host         -Array $Conn -Name "<Node_Name>" -Iqns "<Node_IQN>"   # per node; -Iqns takes an array
 New-Pfa2HostGroup    -Array $Conn -Name "<Host_Group_Name>"
 New-Pfa2HostGroupHost -Array $Conn -GroupName "<Host_Group_Name>" -MemberName "<Node_1_Name>", "<Node_2_Name>"
 
@@ -555,8 +585,8 @@ Add-ClusterSharedVolume -Name $ClusterDisk.Name
 
 - [Azure Local Quick Start Guide - Disaggregated FC](../fc/QUICKSTART.md)
 - [Azure Local Quick Start Guide - Hyperconverged FC](../../hyperconverged/fc/QUICKSTART.md)
-- [Azure Local with Everpure (Everpure Microsoft Platform Guide)](https://support.purestorage.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
+- [Azure Local with Everpure (Everpure Microsoft Platform Guide)](https://support.everpuredata.com/bundle/m_microsoft_platform_guide/page/Solutions/Microsoft_Platform_Guide/topics/concept/c_azure_local.html)
 - [Enable External Storage on Azure Local (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage)
 - [Deploy Azure Local for disaggregated deployments (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated)
 - [Supported SAN solutions on Azure Local (Microsoft Learn)](https://learn.microsoft.com/en-us/azure/azure-local/concepts/san-requirements)
-- [Setting the MPIO Policy (Everpure)](https://support.purestorage.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy)
+- [Setting the MPIO Policy (Everpure)](https://support.everpuredata.com/Solutions/Microsoft_Platform_Guide/Multipath-IO_and_Storage_Settings/Setting_the_MPIO_Policy)
