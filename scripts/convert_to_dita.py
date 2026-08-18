@@ -636,19 +636,6 @@ class MarkdownParser:
 
     def convert_inline(self, text: str) -> str:
         """Convert inline Markdown formatting to DITA."""
-        # Protect HTML comments first. Authored annotations (<!-- xref: ... -->,
-        # <!-- SCREENSHOT REQUIRED ... -->) reach here already XML-escaped by the
-        # caller; without this they land in the output as literal "&lt;!--" text.
-        comments: List[str] = []
-
-        def _stash_comment(match):
-            body = html.unescape(match.group(1))
-            body = re.sub(r'-{2,}', '-', body).strip()  # '--' is illegal in an XML comment
-            comments.append(body)
-            return f'\x00CMT{len(comments) - 1}\x00'
-
-        text = re.sub(r'(?:<|&lt;)!--(.*?)--(?:>|&gt;)', _stash_comment, text, flags=re.DOTALL)
-
         # Protect inline code spans FIRST so their contents are not treated as
         # emphasis or links. Without this, `sd*` ... `dm-*` would be parsed as an
         # italic run spanning the two code spans, producing mismatched <i> tags.
@@ -659,13 +646,6 @@ class MarkdownParser:
             return f'\x00CODE{len(code_spans) - 1}\x00'
 
         text = re.sub(r'`([^`]+)`', _stash_code, text)
-        # Images inside a paragraph or list item. Block-level images are handled
-        # by the parser; these have to be converted before the link handling
-        # below, which would otherwise match ![alt](src) as a link and leave a
-        # stray '!' plus a broken xref behind.
-        if self.inline_image_hook:
-            text = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)',
-                          lambda m: self.inline_image_hook(m.group(2), m.group(1)), text)
         # Bold
         text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', text)
         # Italic
@@ -675,9 +655,6 @@ class MarkdownParser:
         # Restore inline code spans as <codeph>
         text = re.sub(r'\x00CODE(\d+)\x00',
                       lambda m: f'<codeph>{code_spans[int(m.group(1))]}</codeph>', text)
-        # Restore HTML comments as real XML comments
-        text = re.sub(r'\x00CMT(\d+)\x00',
-                      lambda m: f'<!-- {comments[int(m.group(1))]} -->', text)
         return text
 
     def _normalize_source_ref(self, href: str) -> str:
