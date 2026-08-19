@@ -31,12 +31,15 @@ include:
   - Proxmox
 
 # Exclude files from build
+# CLAUDE.md documents Liquid syntax literally (including a bare `{% include %}`),
+# which jekyll-optional-front-matter would otherwise try to render as a page.
 exclude:
   - LICENSE
   - Gemfile
   - Gemfile.lock
   - vendor
   - node_modules
+  - CLAUDE.md
 
 # Default front matter
 defaults:

@@ -248,12 +248,14 @@ oc create token image-pusher -n openshift-machine-config-operator --duration=6h
 
 Take the entitlement certificates from the cluster:
 
+{% raw %}
 ```bash
 oc get secret etc-pki-entitlement -n openshift-config-managed \
   -o go-template='{{index .data "entitlement.pem" | base64decode}}' > entitlement/entitlement.pem
 oc get secret etc-pki-entitlement -n openshift-config-managed \
   -o go-template='{{index .data "entitlement-key.pem" | base64decode}}' > entitlement/entitlement-key.pem
 ```
+{% endraw %}
 
 > **Note:** Enabling `defaultRoute` triggers an `openshift-apiserver` rollout. On a
 > single-node cluster the replacement pod cannot schedule until the old one has gone, so

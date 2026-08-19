@@ -414,6 +414,12 @@ class MarkdownParser:
         # Remove YAML front matter
         content = re.sub(r'^---\n.*?\n---\n', '', content, flags=re.DOTALL)
 
+        # Drop {% raw %}/{% endraw %} markers. They exist only to stop Jekyll from
+        # interpreting Go/Helm templating in code blocks as Liquid; the DITA side
+        # has no such problem, and leaving them in would print them verbatim.
+        content = re.sub(r'^[ \t]*\{%-?\s*(?:end)?raw\s*-?%\}[ \t]*\n?', '',
+                         content, flags=re.MULTILINE)
+
         # Process content line by line and block by block
         lines = content.split('\n')
         i = 0

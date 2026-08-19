@@ -79,6 +79,15 @@ Hard rules:
 - A `## Next Steps` section becomes `<postreq>`. Guides without one produce no postreq.
 - Prefer existing `_includes/quickstart/*.md` snippets over restating shared content.
 
+**Literal Liquid in guides.** `jekyll-optional-front-matter` makes Jekyll render *every*
+`.md` in the repo, front matter or not. Any `{{ ... }}` that isn't valid Liquid warns and
+renders empty (this silently blanked the `oc get secret -o go-template='{{index .data ...}}'`
+commands in the OpenShift NFS-TLS guide), and a malformed `{% include %}` is a **hard build
+failure**. Wrap Go/Helm/Jinja templating in `{% raw %}` / `{% endraw %}` on their own lines
+around the fence — `convert_to_dita.py` strips those markers, so DITA output is unaffected.
+Root-level dev docs that discuss Liquid syntax (`CLAUDE.md`) are listed in `_config.yml`
+`exclude:` instead.
+
 Some older guides (the Azure Local disaggregated pair) use `## Phase N` / `### N.N`
 instead of numbered steps. That still converts, but new guides should use `## Step N:`.
 
