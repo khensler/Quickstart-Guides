@@ -446,18 +446,20 @@ The four recommended settings are:
 **Raw file content for `/etc/udev/rules.d/99-pure-storage.rules`:**
 ```
 # Recommended settings for Everpure FlashArray.
+# Use none scheduler for high-performance solid-state storage for SCSI devices
+ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", OPTIONS="nowatch", ATTR{queue/scheduler}="none"
+ACTION=="add|change", KERNEL=="dm-[0-9]*", SUBSYSTEM=="block", ENV{DM_NAME}=="3624a937*", OPTIONS="nowatch", ATTR{queue/scheduler}="none"
 
-# Use none scheduler for high-performance solid-state storage.
-ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", ATTR{queue/scheduler}="none"
+# Reduce CPU overhead due to entropy collection
+ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", OPTIONS="nowatch", ATTR{queue/add_random}="0"
+ACTION=="add|change", KERNEL=="dm-[0-9]*", SUBSYSTEM=="block", ENV{DM_NAME}=="3624a937*", OPTIONS="nowatch", ATTR{queue/add_random}="0"
 
-# Reduce CPU overhead due to entropy collection.
-ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", ATTR{queue/add_random}="0"
+# Spread CPU load by redirecting completions to originating CPU
+ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", OPTIONS="nowatch", ATTR{queue/rq_affinity}="2"
+ACTION=="add|change", KERNEL=="dm-[0-9]*", SUBSYSTEM=="block", ENV{DM_NAME}=="3624a937*", OPTIONS="nowatch", ATTR{queue/rq_affinity}="2"
 
-# Spread CPU load by redirecting completions to originating CPU.
-ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", ATTR{queue/rq_affinity}="2"
-
-# Set the HBA/SCSI command timeout to 60 seconds.
-ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", ATTR{device/timeout}="60"
+# Set the HBA timeout to 60 seconds
+ACTION=="add|change", KERNEL=="sd*[!0-9]", SUBSYSTEM=="block", ENV{ID_VENDOR}=="PURE", OPTIONS="nowatch", ATTR{device/timeout}="60"
 ```
 
 **MachineConfig spec:**
@@ -648,7 +650,7 @@ oc get mcp worker -o jsonpath='{.spec.configuration.source}' | jq .
 
 ## CSI Driver Integration
 
-MachineConfig prepares the node's iSCSI infrastructure. The **actual iSCSI discovery and session login** is performed by your CSI driver (e.g., Everpure CSI, Portworx) when it attaches a volume to a pod.
+MachineConfig prepares the node's iSCSI infrastructure. The **actual iSCSI discovery and session login** is performed by your CSI driver (e.g., Portworx to configure both FlashArray and FlashBlade CSI or Portworx Enterprise) when it attaches a volume to a pod.
 
 The MachineConfig ensures:
 1. Storage NICs have correct IPs and MTU before the CSI driver runs
@@ -658,7 +660,7 @@ The MachineConfig ensures:
 
 **No manual `iscsiadm discovery` or `--login` commands are needed** — the CSI driver handles this per-volume.
 
-> **Everpure CSI:** Configure the iSCSI interface names in the CSI driver's `StorageClass` or `Secret` as appropriate. The driver uses the iface bindings automatically when `iscsid` is configured for NIC-bound sessions.
+> **Portworx Operator Configurations:** Configure the iSCSI interface names in the Portworx Operator's  `StorageCluster`. The CRD uses the iface bindings automatically when `iscsid` is configured for NIC-bound sessions.
 
 ---
 
