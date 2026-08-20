@@ -265,6 +265,18 @@ Proxmox HA monitors VM and container availability. When a node fails, HA automat
 | `dev_loss_tmo` | 60 seconds | Device retention during transient fabric events |
 | `failback` | `immediate` | Use optimized paths as soon as controller failover resolves |
 
+> **Why `fast_io_fail_tmo 5` here, when the iSCSI guidance uses `10`?** FC is
+> expected to be more stable than Ethernet, and the fabric reports link-down
+> directly (RSCN) rather than relying on a keepalive probe to time out. FC
+> therefore has no `noop_out_*` equivalent: path failure is detected almost
+> immediately, so a shorter `fast_io_fail_tmo` is safe and gives faster failover.
+>
+> The practical consequence is that the same `no_path_retry` value buys **less**
+> tolerance on FC than on iSCSI — roughly `fast_io_fail_tmo + (no_path_retry x
+> polling_interval)`, so about 5 s at `no_path_retry 0` and 55 s at `5`, against
+> ~20 s and ~70 s on iSCSI. Size `no_path_retry` for the transport, not by copying
+> the iSCSI value.
+
 ### Testing Path Failover
 
 ```bash

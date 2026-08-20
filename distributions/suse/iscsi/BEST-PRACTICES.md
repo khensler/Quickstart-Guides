@@ -475,6 +475,8 @@ sudo firewall-cmd --list-all
 
 {% include iscsi-multipath-config.md %}
 
+{% include quickstart/iscsi-apd-tolerance.md %}
+
 ### SUSE-Specific Multipath Setup
 
 **Enable and configure multipath:**

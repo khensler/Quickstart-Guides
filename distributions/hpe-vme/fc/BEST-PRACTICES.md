@@ -160,7 +160,7 @@ devices {
         hardware_handler        "1 alua"
         failback                immediate
         path_checker            tur
-        fast_io_fail_tmo        10
+        fast_io_fail_tmo        5
         dev_loss_tmo            60
         no_path_retry           0
         user_friendly_names     no
@@ -179,7 +179,7 @@ sudo multipath -ll
 | `user_friendly_names` | `no` | Forces the `/dev/mapper/<wwid>` name, which is identical on every node — required for the shared datastore |
 | `find_multipaths` | `no` | Claims all FlashArray paths immediately instead of waiting to see a second path; avoids the datastore device appearing late |
 | `no_path_retry` | `0` | Fails I/O immediately when all paths are down rather than queueing — lets VME/GFS2 react instead of hanging |
-| `fast_io_fail_tmo` | `10` | Fails I/O on a path 10 s after the fabric reports link-down, fast enough to fail over before app timeouts |
+| `fast_io_fail_tmo` | `5` | Fails I/O on a path 5 s after the fabric reports link-down. FC is expected to be more stable than Ethernet and the fabric signals link-down directly (RSCN), so a shorter value is safe here than the `10` used for iSCSI |
 | `dev_loss_tmo` | `60` | Keeps the device for 60 s during transient events before removing it; raise if using ActiveCluster |
 | `prio alua` / `group_by_prio` | — | Honors the array's ALUA state; on active/active FlashArray this yields the single optimized group described above |
 
@@ -263,7 +263,7 @@ flowchart TB
 
 | Parameter | Value | Effect |
 |-----------|-------|--------|
-| `fast_io_fail_tmo` | 10 s | Fail I/O on a path shortly after link-down, before application/VM timeouts |
+| `fast_io_fail_tmo` | 5 s | Fail I/O on a path shortly after link-down, before application/VM timeouts |
 | `dev_loss_tmo` | 60 s | Retain the device through transient switch/controller events; remove only on sustained loss |
 | `failback` | `immediate` | Return to optimized paths as soon as they recover after a controller failover |
 
