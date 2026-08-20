@@ -51,6 +51,9 @@ Guides for migrating VMware VMs to Proxmox VE using Everpure FlashArray storage.
 **AWS Outposts:**
 - [FlashArray for AWS Outposts](distributions/aws-outposts/QUICKSTART.md) — Connect EC2 instances on AWS Outposts to FlashArray for data and boot volumes (NVMe-TCP and iSCSI)
 
+**Nutanix:**
+- [FlashBlade as a Nutanix MST Snapshot Target](distributions/nutanix/object/QUICKSTART.md) — Configure a FlashBlade S3 bucket as the object-storage target for Nutanix Multicloud Snapshot Technology, deployed from the Prism Central Marketplace
+
 **OpenShift / Kubernetes:**
 - [iSCSI Multipathing & NIC Binding via MachineConfig](distributions/openshift/iscsi/QUICKSTART.md) — Configure iSCSI multipathing with NIC binding on Red Hat CoreOS worker nodes using MachineConfig
 - [OpenShift NFS Quickstart](distributions/openshift/nfs/QUICKSTART.md) — Dynamically provision NFS persistent volumes from FlashBlade and FlashArray File Services with Portworx CSI

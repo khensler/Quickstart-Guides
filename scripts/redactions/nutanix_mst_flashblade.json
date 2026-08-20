@@ -1,0 +1,16 @@
+{
+  "_comment": "Lab IP addresses visible in the Nutanix MST / FlashBlade quickstart captures. Paths are relative to the repo root. Boxes are [x0,y0,x1,y1] (fill tightens to the ink inside) or [x0,y0,x1,y1,'exact'] (fill as given - needed for Prism Central's light-grey read-only fields, whose glyphs sit above the INK_MAX threshold and would otherwise be missed). Originals are backed up in validation/nutanix-mst-flashblade/img-originals/. Run from the repo root: python scripts/redact_screenshots.py redact scripts/redactions/nutanix_mst_flashblade.json",
+
+  "_mst-bucket-details": "Object Store Endpoint field holds the FlashBlade data VIP. The field is otherwise empty, so a full-width box tightens onto just the address.",
+  "distributions/nutanix/object/img/mst-bucket-details.png": [
+    [652, 345, 1190, 371]
+  ],
+
+  "_mst-cluster-network": "Clean capture of a correctly filled Cluster & Network tab (the earlier one showed a name-length validation error and was superseded). Gateway IP is greyed read-only text so it needs 'exact' - its glyphs sit above INK_MAX. The three static IPs are dark text inside tag chips and tighten normally; each box stops short of the chip's own x glyph so the chips still read as tags.",
+  "distributions/nutanix/object/img/mst-cluster-network.png": [
+    [644, 876, 726, 898, "exact"],
+    [646, 949, 733, 971],
+    [759, 949, 846, 971],
+    [872, 949, 959, 971]
+  ]
+}

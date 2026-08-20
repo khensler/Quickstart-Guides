@@ -1,0 +1,13 @@
+{
+  "_comment": "Credentials visible in the Nutanix PCBR / FlashBlade quickstart captures. Paths are relative to the repo root. Boxes are [x0,y0,x1,y1] (fill tightens to the ink inside) or [x0,y0,x1,y1,'exact']. Originals are backed up in validation/nutanix-pcbr-flashblade/img-originals/. Run from the repo root: python scripts/redact_screenshots.py redact scripts/redactions/nutanix_pcbr_flashblade.json",
+
+  "_pcbr-fb-objectstore": "The Access Keys panel lists the S3 access key ID Prism Central authenticates with. Dark text on white, so the box tightens onto the key itself and the row still reads as a populated table cell. The Prism Central captures in this article contain no addresses or credentials and need no redaction.",
+  "articles/nutanix_prism_central_backup_flashblade/images/pcbr-fb-objectstore.png": [
+    [225, 568, 545, 588]
+  ],
+
+  "_pcbr-edit-backup": "The Edit Backup dialog replays the saved target configuration. Only the 'IP Address or Host Name' field carries a lab address - Port Number, Region Name and Bucket Name are all generic and are deliberately left visible, since showing the populated defaults is the point of the figure.",
+  "articles/nutanix_prism_central_backup_flashblade/images/pcbr-edit-backup.png": [
+    [578, 398, 660, 419]
+  ]
+}
