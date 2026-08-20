@@ -330,7 +330,22 @@ blacklist {
 EOF
 ```
 
-> **Parameter reference:** The device-level settings shown commented above (`path_selector`, `path_grouping_policy`, `prio`, `failback`, `fast_io_fail_tmo`, `dev_loss_tmo`, `no_path_retry`) are explained in the [Path Failure Detection](#path-failure-detection) and [Understanding APD (All Paths Down) Events](#understanding-apd-all-paths-down-events) sections above. In particular, `no_path_retry 0` is recommended to prevent APD-related system hangs.
+> **Parameter reference:** The device-level settings shown commented above
+> (`path_selector`, `path_grouping_policy`, `prio`, `failback`,
+> `fast_io_fail_tmo`, `dev_loss_tmo`, `no_path_retry`) are explained in
+> [How long an outage the host survives](#how-long-an-outage-the-host-survives)
+> below. `no_path_retry 0` is recommended so that a genuine all-paths-down
+> condition surfaces as an I/O error rather than an indefinite hang — but note
+> that it still absorbs roughly the first 20 seconds of an outage, so it is not
+> an "instant failure" setting.
+
+> **Note on `polling_interval`:** the `defaults {}` block above sets
+> `polling_interval 5`, which is the multipath built-in value. The rest of the
+> Everpure Linux guidance uses `polling_interval 10`. This directly scales how
+> long the host tolerates an outage — see the table below — so pick one value and
+> keep it consistent with whatever `no_path_retry` you publish alongside it.
+
+{% include quickstart/iscsi-apd-tolerance.md %}
 
 **Enable and start multipath:**
 ```bash
@@ -354,8 +369,20 @@ echo "InitiatorName=iqn.2024-01.com.yourcompany:proxmox-node1" > /etc/iscsi/init
 # Configure iSCSI settings
 cat >> /etc/iscsi/iscsid.conf << 'EOF'
 
-# Timeouts optimized for storage arrays
-node.session.timeo.replacement_timeout = 20
+# Connection failure detection. These two are what actually determine how
+# quickly a dead path is noticed: a NOP-Out is sent noop_out_interval after the
+# last successful receive, then noop_out_timeout is allowed for the reply.
+# 5 + 5 means detection takes 5-10 seconds.
+node.conn[0].timeo.noop_out_interval = 5
+node.conn[0].timeo.noop_out_timeout = 5
+
+# NOTE: replacement_timeout has NO effect on multipathed devices -- multipathd
+# overwrites the session's recovery_tmo with fast_io_fail_tmo from
+# multipath.conf. It remains live for single-path iSCSI devices, where it
+# governs how long I/O is held before failing. Do not tune this expecting it to
+# change multipath behaviour; change fast_io_fail_tmo instead.
+node.session.timeo.replacement_timeout = 120
+
 node.conn[0].timeo.login_timeout = 30
 node.conn[0].timeo.logout_timeout = 15
 

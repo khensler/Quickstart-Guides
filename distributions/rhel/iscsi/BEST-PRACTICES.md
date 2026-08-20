@@ -485,6 +485,8 @@ sudo firewall-cmd --reload
 
 {% include iscsi-multipath-config.md %}
 
+{% include quickstart/iscsi-apd-tolerance.md %}
+
 ### RHEL-Specific Multipath Setup
 
 **Enable and configure multipath:**

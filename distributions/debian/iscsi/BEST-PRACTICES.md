@@ -534,6 +534,8 @@ sudo nft list ruleset
 
 {% include iscsi-multipath-config.md %}
 
+{% include quickstart/iscsi-apd-tolerance.md %}
+
 ### Debian/Ubuntu-Specific Multipath Setup
 
 **Enable and configure multipath:**

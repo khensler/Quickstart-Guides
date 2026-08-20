@@ -479,6 +479,8 @@ sudo firewall-cmd --zone=storage --list-all
 
 {% include iscsi-multipath-config.md %}
 
+{% include quickstart/iscsi-apd-tolerance.md %}
+
 ### Oracle Linux-Specific Multipath Setup
 
 **Enable and configure multipath:**
