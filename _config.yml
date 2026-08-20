@@ -21,6 +21,11 @@ minima:
 # Only show these pages in header (empty = none)
 header_pages: []
 
+# Analytics — GoatCounter site code (dashboard: https://<code>.goatcounter.com).
+# Blank this out to disable analytics entirely; _includes/analytics.html emits
+# nothing when it is unset.
+goatcounter_code: khensler
+
 plugins:
   - jekyll-seo-tag
 
