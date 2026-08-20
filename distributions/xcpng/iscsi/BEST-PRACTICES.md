@@ -345,6 +345,12 @@ devices {
         no_path_retry    0
     }
 }
+
+# XCP-ng defaults to polling_interval 5; set it explicitly so the
+# no_path_retry tolerances match the rest of the Linux guidance.
+defaults {
+    polling_interval 10
+}
 EOF
 
 # Restart multipathd to apply
@@ -362,9 +368,25 @@ multipath -ll
 | `path_grouping_policy` | `group_by_prio` | Groups paths by ALUA priority |
 | `prio` | `alua` | Uses ALUA for path prioritization |
 | `failback` | `immediate` | Returns to preferred path immediately when available |
-| `no_path_retry` | `0` | **Fail immediately when all paths down** (prevents hangs) |
+| `no_path_retry` | `0` | Fails I/O in bounded time once all paths are down, rather than queueing indefinitely |
+| `polling_interval` | `10` | Path-check interval. Scales how long any `no_path_retry` above `0` tolerates an outage |
 
-> **⚠️ Critical**: Setting `no_path_retry 0` is recommended to prevent system hangs during APD (All Paths Down) events.
+> **`no_path_retry 0` does not fail immediately.** Measured on XCP-ng 8.3, it absorbs
+> the first **~20 seconds** of an all-paths-down window before the application sees an
+> I/O error, because the iSCSI transport has not yet declared the paths dead
+> (`noop_out_interval` + `noop_out_timeout` + `recovery_tmo`). A normal controller
+> failover completes inside that window. Choose `0` because you want the layer above
+> the device to receive an error in bounded time, not because you expect an instant
+> failure.
+
+> **XCP-ng sets `polling_interval` to `5` by default, not `10`.** That halves the
+> tolerance of every `no_path_retry` value above `0`. Measured on XCP-ng 8.3,
+> `no_path_retry 5` failed at **46.5 s** against 70.5 s on hosts using
+> `polling_interval 10`. Set `polling_interval 10` explicitly, as shown above, if you
+> raise `no_path_retry`.
+
+> **⚠️ Critical**: `no_path_retry queue` is not recommended for shared pool storage — a
+> hung I/O blocks fencing. Use `0` so XCP-ng receives the error and can react.
 
 ### Enable Pool Multipathing
 
