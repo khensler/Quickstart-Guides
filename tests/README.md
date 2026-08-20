@@ -71,22 +71,26 @@ link registry (anchors, slug forms, `.html` spellings, basename fallback,
 unresolvable fallback); every map variant and href resolution; ASCII-only output;
 and XML well-formedness across all output.
 
-## Known-limitation tests
+## Regression tests for fixed bugs
 
-Tests ending in `_known_limitation` or `_known_gap` lock in behaviour that is
-wrong-but-current, so a fix is noticed instead of silently breaking something
-downstream. When you fix the converter, invert the assertion rather than deleting
-the test.
+The suite originally documented seven wrong-but-current behaviours. All are fixed;
+these tests now assert the correct behaviour and fail if it regresses.
 
-| Test | Behaviour |
-|------|-----------|
-| `test_nested_emphasis_is_a_known_limitation` | `**bold with *italic* inside**` emits broken `*<i>` markup |
-| `test_indented_code_fence_under_a_list_item_known_limitation` | an indented fence under a bullet degrades to a paragraph |
-| `test_intro_before_first_h2_is_dropped_known_limitation` | BEST-PRACTICES prose between the H1 and first H2 is discarded |
-| `test_prose_in_an_important_h2_is_dropped_known_limitation` | non-note content in a `## Important…` H2 has nowhere to go |
-| `test_conref_paths_break_under_organize_sections_known_gap` | conrefs are hard-coded `../warehouse/`, which only resolves in flat mode |
-| `test_sanitize_id_can_start_with_a_digit_known_gap` | `.strip('_')` undoes the NCName guard for headings starting with a digit |
-| `test_standalone_map_root_lacks_xml_lang_known_gap` | the standalone `<map>` root omits `xml:lang="en-US"` |
+| Test | Bug it guards |
+|------|---------------|
+| `test_nested_emphasis_converts_both_levels` | `**bold with *italic* inside**` emitted broken `*<i>` markup |
+| `test_bold_span_wrapping_across_source_lines` | a bold span wrapping across source lines left stray `*` in the text (blockquote lines are newline-joined, so the bold pattern needs DOTALL) |
+| `test_indented_code_fence_under_a_list_item_is_a_code_block` | an indented fence degraded to a paragraph, backticks and all |
+| `test_intro_before_first_h2_is_prepended_to_the_first_section` | BEST-PRACTICES prose between the H1 and first H2 was discarded |
+| `test_prose_in_an_important_h2_is_kept_in_prereq`, `test_prereq_prose_before_the_list_precedes_the_ul` | prose/code/tables in `## Prerequisites` or `## Important…` matched no branch and were dropped |
+| `test_conref_paths_track_topic_nesting_under_organize_sections` | conrefs were hard-coded `../warehouse/`, resolving only in the flat layout |
+| `test_sanitize_id_never_starts_with_a_digit` | `.strip('_')` undid the NCName guard, so `### 1.1 …` produced an illegal id |
+| `test_standalone_map_root_declares_xml_lang` | the standalone `<map>` root omitted `xml:lang="en-US"` |
+| `test_disclaimers_are_important_even_when_emoji_decorated` | disclaimer notes were typed `note`/`warning` instead of `important` |
+
+If you ever need to keep a behaviour that is wrong-but-deliberate, name the test
+`..._known_limitation` / `..._known_gap` and say why in a comment, so a later fix is
+noticed rather than silently breaking something downstream.
 
 ## Adding coverage
 

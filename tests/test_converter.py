@@ -14,10 +14,10 @@ Usage:
 No third-party packages required (stdlib unittest). --skip-diagrams is always
 passed, so no network access and no Kroki server are needed.
 
-Tests whose names end in `_known_limitation` or `_known_gap` lock in behaviour
-that is wrong-but-current. They exist so a fix is noticed rather than silently
-breaking a downstream expectation: when you fix the converter, invert the
-assertion instead of deleting the test.
+If a converter behaviour is wrong-but-deliberately-kept, name the test
+`..._known_limitation` / `..._known_gap` and say why in a comment, so a later fix
+is noticed rather than silently breaking a downstream expectation. There are
+currently none: every limitation this suite originally documented has been fixed.
 """
 
 import importlib.util
@@ -134,11 +134,12 @@ class TestUtilityFunctions(unittest.TestCase):
                          'understanding_apd_all_paths_down')
         self.assertEqual(conv.sanitize_id('!!!'), 'topic')
 
-    def test_sanitize_id_can_start_with_a_digit_known_gap(self):
-        # The leading-underscore guard is undone by the trailing .strip('_'), so a
-        # heading starting with a number yields an id that is not a legal XML
-        # NCName. No guide currently triggers it; flip this when it is fixed.
-        self.assertEqual(conv.sanitize_id('123 numeric start'), '123_numeric_start')
+    def test_sanitize_id_never_starts_with_a_digit(self):
+        # XML NCNames may not start with a digit, and the Azure Local guides use
+        # '### 1.1 ...' style subheadings.
+        self.assertEqual(conv.sanitize_id('123 numeric start'), '_123_numeric_start')
+        self.assertEqual(conv.sanitize_id('1.1 HBA Driver and Firmware'),
+                         '_1_1_hba_driver_and_firmware')
 
     def test_github_slug_matches_jekyll_anchors(self):
         self.assertEqual(conv.github_slug('Understanding APD (All Paths Down) Events'),
@@ -242,11 +243,31 @@ class TestInlineFormatting(unittest.TestCase):
             '<xref href="https://support.everpuredata.com/bundle/x" format="html" '
             'scope="external">docs</xref>')
 
-    def test_nested_emphasis_is_a_known_limitation(self):
-        # CLAUDE.md: "**bold with *italic* inside**" mangles. One level per span.
-        got = self.inline('**bold with *italic* inside**')
-        self.assertNotEqual(got, '<b>bold with <i>italic</i> inside</b>')
-        self.assertIn('*<i>', got)
+    def test_nested_emphasis_converts_both_levels(self):
+        self.assertEqual(self.inline('**bold with *italic* inside**'),
+                         '<b>bold with <i>italic</i> inside</b>')
+        self.assertEqual(self.inline('*italic with **bold** inside*'),
+                         '<i>italic with <b>bold</b> inside</i>')
+
+    def test_adjacent_bold_spans_stay_separate(self):
+        # The bold pattern is non-greedy, so two spans must not merge into one
+        self.assertEqual(self.inline('**one** and **two**'),
+                         '<b>one</b> and <b>two</b>')
+        self.assertEqual(self.inline('a **b** c *d* e **f**'),
+                         'a <b>b</b> c <i>d</i> e <b>f</b>')
+
+    def test_bold_span_wrapping_across_source_lines(self):
+        # Blockquote lines are newline-joined before conversion, and authored bold
+        # spans routinely wrap. A bold pattern that cannot cross a newline leaves
+        # the markers behind and lets the italic pass chew them into stray '*'.
+        self.assertEqual(self.inline('**bold across\ntwo lines** tail'),
+                         '<b>bold across\ntwo lines</b> tail')
+        self.assertEqual(self.inline('**wrapped with *italic*\ninside** tail'),
+                         '<b>wrapped with <i>italic</i>\ninside</b> tail')
+
+    def test_unpaired_bold_marker_is_left_alone(self):
+        self.assertEqual(self.inline('**bold** and a stray **'),
+                         '<b>bold</b> and a stray **')
 
 
 # ==========================================================================
@@ -272,9 +293,12 @@ class TestNoteTypes(unittest.TestCase):
         self.assertEqual(self.detect('**Tip:** try this'), 'tip')
         self.assertEqual(self.detect('just some prose'), 'note')
 
-    def test_note_type_precedence_warning_beats_important(self):
-        # Both keywords present: warning is checked first
-        self.assertEqual(self.detect('**⚠️ Important Disclaimer:** x'), 'warning')
+    def test_disclaimers_are_important_even_when_emoji_decorated(self):
+        # STYLEGUIDE.md: the disclaimer lands in <prereq> as an important note
+        self.assertEqual(self.detect('**⚠️ Important Disclaimer:** x'), 'important')
+        self.assertEqual(self.detect('**Vendor Documentation Priority:** x'), 'important')
+        # A plain warning emoji with no disclaimer wording is still a warning
+        self.assertEqual(self.detect('⚠️ careful'), 'warning')
 
     def test_prefix_stripping(self):
         self.assertEqual(self.strip('**Warning:** boom'), 'boom')
@@ -432,12 +456,17 @@ class TestParser(unittest.TestCase):
         self.assertEqual(els[0].content, 'img/x.png')
         self.assertEqual(els[0].language, 'Alt text')
 
-    def test_indented_code_fence_under_a_list_item_known_limitation(self):
-        # An indented fence is not recognised as a code block: the parser's fence
-        # test is `line.startswith('```')`, so the block degrades to a paragraph.
+    def test_indented_code_fence_under_a_list_item_is_a_code_block(self):
         els = self.p.parse('- bullet\n  ```bash\n  echo hi\n  ```\n')
-        self.assertEqual([e.type for e in els], ['unordered_list', 'paragraph'])
-        self.assertNotIn('code_block', [e.type for e in els])
+        self.assertEqual([e.type for e in els], ['unordered_list', 'code_block'])
+        self.assertEqual(els[1].language, 'bash')
+        # The fence's own indentation is removed: <codeblock> is preformatted
+        self.assertEqual(els[1].content, 'echo hi')
+
+    def test_indented_fence_keeps_relative_indentation_inside_the_block(self):
+        els = self.p.parse('1. step\n   ```yaml\n   a:\n     b: 1\n   ```\n')
+        block = [e for e in els if e.type == 'code_block'][0]
+        self.assertEqual(block.content, 'a:\n  b: 1')
 
 
 class TestTaskBodyRouting(unittest.TestCase):
@@ -492,15 +521,28 @@ class TestSplitByH2(unittest.TestCase):
               '## Table of Contents\n\n- x\n\n## Alpha\n\nA\n\n## Beta\n\nB\n')
         got = self.c._split_by_h2(md)
         self.assertEqual([t for t, _ in got], ['Alpha', 'Beta'])
-        self.assertEqual(got[0][1], 'A')
+        # The intro is carried into the first kept section; the TOC section is not
+        self.assertEqual(got[0][1], 'intro\n\nA')
+        self.assertEqual(got[1][1], 'B')
 
     def test_content_without_h2_becomes_a_single_overview_section(self):
         got = self.c._split_by_h2('# Doc\n\nBody only.\n')
         self.assertEqual([t for t, _ in got], ['Overview'])
 
-    def test_intro_before_first_h2_is_dropped_known_limitation(self):
+    def test_intro_before_first_h2_is_prepended_to_the_first_section(self):
         got = self.c._split_by_h2('# Doc\n\nMARKER_INTRO\n\n## Alpha\n\nA\n')
-        self.assertNotIn('MARKER_INTRO', ''.join(b for _, b in got))
+        self.assertEqual([t for t, _ in got], ['Alpha'])
+        self.assertEqual(got[0][1], 'MARKER_INTRO\n\nA')
+
+    def test_h1_title_is_not_mistaken_for_intro_prose(self):
+        # Front matter removal leaves a newline before the H1, so the H1 strip has
+        # to tolerate leading whitespace or the title text leaks into the body.
+        got = self.c._split_by_h2('---\ntitle: T\n---\n\n# Doc Title\n\n## Alpha\n\nA\n')
+        self.assertNotIn('Doc Title', got[0][1])
+
+    def test_a_preamble_of_only_horizontal_rules_is_ignored(self):
+        got = self.c._split_by_h2('# Doc\n\n---\n\n## Alpha\n\nA\n')
+        self.assertEqual(got[0][1], 'A')
 
 
 class TestChooseSectionLevel(unittest.TestCase):
@@ -598,10 +640,18 @@ class TestTaskTopic(ConverterCase):
         prereq = self.qs.split('<prereq>')[1].split('</prereq>')[0]
         self.assertIn('MARKER_IMPORTANT_SECTION_NOTE', prereq)
 
-    def test_prose_in_an_important_h2_is_dropped_known_limitation(self):
-        # A disclaimer/important H2 routes notes to <prereq> but has nowhere to put
-        # plain prose, so the paragraph is silently discarded.
-        self.assertNotIn('MARKER_IMPORTANT_SECTION_PARAGRAPH', self.qs)
+    def test_prose_in_an_important_h2_is_kept_in_prereq(self):
+        prereq = self.qs.split('<prereq>')[1].split('</prereq>')[0]
+        self.assertIn('MARKER_IMPORTANT_SECTION_PARAGRAPH', prereq)
+
+    def test_prereq_prose_before_the_list_precedes_the_ul(self):
+        prereq = self.qs.split('<prereq>')[1].split('</prereq>')[0]
+        self.assertOrdered(prereq, 'MARKER_PREREQ_INTRO_PARAGRAPH', '<ul>')
+
+    def test_prereq_code_block_after_the_list_is_kept(self):
+        prereq = self.qs.split('<prereq>')[1].split('</prereq>')[0]
+        self.assertOrdered(prereq, '</ul>',
+                           '<codeblock>echo "MARKER_PREREQ_CODE_AFTER_LIST"</codeblock>')
 
     def test_every_h2_becomes_a_step_including_overview_and_troubleshooting(self):
         for cmd in ('<cmd>Overview</cmd>', '<cmd>Background</cmd>',
@@ -702,10 +752,22 @@ class TestTaskTopic(ConverterCase):
         self.assertIn('host -&gt; array, an em-dash, "smart quotes", and a [WARNING] emoji',
                       self.qs)
 
-    def test_indented_fence_under_a_bullet_known_limitation(self):
-        # Locked in: the fence degrades to a paragraph rather than a <codeblock>.
-        self.assertIn('MARKER_FENCE_AFTER_LIST', self.qs)
-        self.assertNotIn('<codeblock>echo "MARKER_FENCE_AFTER_LIST"', self.qs)
+    def test_indented_fence_under_a_bullet_becomes_a_codeblock(self):
+        self.assertIn('<codeblock>echo "MARKER_FENCE_AFTER_LIST"</codeblock>', self.qs)
+        self.assertNotIn('<codeph>bash', self.qs)
+
+    def test_nested_emphasis_survives_end_to_end(self):
+        self.assertIn('<b>MARKER_NESTED_EMPHASIS is bold with <i>italic</i> inside</b>',
+                      self.qs)
+        self.assertIn('<i>italic with <b>bold</b> inside</i>', self.qs)
+
+    def test_bold_wrapping_across_source_lines_closes_in_a_note(self):
+        # Blockquote lines are newline-joined, so the newline survives inside <p>
+        self.assertIn('<note type="note"><p><b>MARKER_WRAPPED_BOLD spans two source '
+                      'lines and contains an <i>italic</i> run, and\nmust still close.'
+                      '</b> Trailing prose after the bold span.</p></note>', self.qs)
+        # No orphaned emphasis markers anywhere in the topic
+        self.assertNotRegex(self.qs, r'(?<![\w*])\*(?![\w*])')
 
 
 # ==========================================================================
@@ -834,9 +896,15 @@ class TestConceptTopics(ConverterCase):
         blob = ''.join(p.read_text(encoding='utf-8') for p in self.all_topics())
         self.assertNotIn('MARKER_BP_TOC_ITEM', blob)
 
-    def test_intro_before_first_h2_is_dropped_known_limitation(self):
-        blob = ''.join(p.read_text(encoding='utf-8') for p in self.all_topics())
-        self.assertNotIn('MARKER_BP_INTRO_BEFORE_FIRST_H2', blob)
+    def test_intro_before_first_h2_lands_in_the_first_section_topic(self):
+        text = self.read(BP + 'architecture_overview.dita')
+        self.assertOrdered(text, '<conbody>', 'MARKER_BP_INTRO_BEFORE_FIRST_H2',
+                           'MARKER_BP_ARCH_PARAGRAPH')
+
+    def test_numbered_subheading_gets_a_legal_ncname_id(self):
+        text = self.read(BP + 'performance_tuning.dita')
+        self.assertIn('<section id="_1_1_numbered_subheading">', text)
+        self.assertIn('MARKER_BP_NUMBERED_HEADING', text)
 
     def test_h3_subsections_become_sections_with_ids(self):
         text = self.read(BP + 'architecture_overview.dita')
@@ -1096,10 +1164,8 @@ class TestOutputValidity(ConverterCase):
         limitation); each is asserted individually in the tests above.
         """
         expected_dropped = {
-            'MARKER_BP_INTRO_BEFORE_FIRST_H2',   # content before the first H2 of a BP file
             'MARKER_BP_TOC_ITEM',                # Table of Contents section
             'MARKER_BP_TROUBLESHOOTING_BODY',    # troubleshooting excluded from BP
-            'MARKER_IMPORTANT_SECTION_PARAGRAPH',  # prose in a disclaimer/important H2
         }
         authored = set()
         for md in list((FIXTURES / 'distributions').rglob('*.md')) + \
@@ -1185,16 +1251,16 @@ class TestConrefMode(ConverterCase):
         text = self.read('topics/t_testdist_iscsi_quickstart.dita')
         self.assertNotIn('MARKER_OUTER_INCLUDE_CODE', text)
 
-    def test_conref_paths_break_under_organize_sections_known_gap(self):
-        # Conrefs are hard-coded to '../warehouse/', which only resolves for the flat
-        # layout. The canonical run uses --inline-includes, so this combination is
-        # unused; flip this assertion if conref+organized is ever supported.
+    def test_conref_paths_track_topic_nesting_under_organize_sections(self):
         out = run_converter('--organize-sections')
         topic = out / ISCSI_DIR / 't_testdist_iscsi_quickstart.dita'
         conrefs = re.findall(r'<div conref="([^"]+)"/>',
                              topic.read_text(encoding='utf-8'))
         self.assertTrue(conrefs)
-        self.assertFalse((topic.parent / conrefs[0].split('#')[0]).resolve().is_file())
+        for conref in conrefs:
+            self.assertTrue(conref.startswith('../../../warehouse/'), conref)
+            self.assertTrue((topic.parent / conref.split('#')[0]).resolve().is_file(),
+                            f'conref target missing: {conref}')
 
 
 class TestScopedRun(ConverterCase):
@@ -1266,9 +1332,8 @@ class TestStandaloneChapters(ConverterCase):
         for href in re.findall(r'href="([^"]+)"', text):
             self.assertTrue((self.out() / 'maps' / href).resolve().is_file(), href)
 
-    def test_standalone_map_root_lacks_xml_lang_known_gap(self):
-        # Every other root element carries xml:lang="en-US"; this one does not.
-        self.assertIn('<map>\n', self.read('maps/standalone.ditamap'))
+    def test_standalone_map_root_declares_xml_lang(self):
+        self.assertIn('<map xml:lang="en-US">', self.read('maps/standalone.ditamap'))
 
 
 class TestStandaloneSingleTask(ConverterCase):

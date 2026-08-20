@@ -8,10 +8,10 @@ title: iSCSI on XCP-ng - Best Practices Guide
 Comprehensive best practices for deploying iSCSI storage on XCP-ng in production environments.
 
 > **Distribution-Specific Guides:** For detailed best practices tailored to specific Linux distributions, see:
-> - [RHEL/Rocky/AlmaLinux Best Practices](../rhel/iscsi/BEST-PRACTICES.md)
-> - [Debian/Ubuntu Best Practices](../debian/iscsi/BEST-PRACTICES.md)
-> - [SUSE/openSUSE Best Practices](../suse/iscsi/BEST-PRACTICES.md)
-> - [Oracle Linux Best Practices](../oracle/iscsi/BEST-PRACTICES.md)
+> - [RHEL/Rocky/AlmaLinux Best Practices](../../rhel/iscsi/BEST-PRACTICES.md)
+> - [Debian/Ubuntu Best Practices](../../debian/iscsi/BEST-PRACTICES.md)
+> - [SUSE/openSUSE Best Practices](../../suse/iscsi/BEST-PRACTICES.md)
+> - [Oracle Linux Best Practices](../../oracle/iscsi/BEST-PRACTICES.md)
 
 ---
 

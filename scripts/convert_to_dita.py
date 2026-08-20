@@ -81,12 +81,26 @@ def sanitize_id(text: str) -> str:
     """Convert text to a valid DITA ID (XML NCName)."""
     # Remove or replace invalid characters
     result = re.sub(r'[^a-zA-Z0-9_-]', '_', text.lower())
-    # Ensure it starts with a letter or underscore
-    if result and not result[0].isalpha() and result[0] != '_':
+    # Collapse and trim underscores first: doing this after the NCName guard
+    # below strips the very underscore the guard just added, which is how
+    # '### 3.1 Configure MPIO' used to produce the illegal id '3_1_configure_mpio'.
+    result = re.sub(r'_+', '_', result).strip('_')
+    if not result:
+        return 'topic'
+    # An XML NCName may not start with a digit.
+    if not (result[0].isalpha() or result[0] == '_'):
         result = '_' + result
-    # Remove consecutive underscores
-    result = re.sub(r'_+', '_', result)
-    return result.strip('_') or 'topic'
+    return result
+
+
+def dedent_line(line: str, width: int) -> str:
+    """Strip up to ``width`` leading whitespace characters from a line."""
+    if width <= 0:
+        return line
+    idx = 0
+    while idx < len(line) and idx < width and line[idx] in ' \t':
+        idx += 1
+    return line[idx:]
 
 
 def github_slug(text: str) -> str:
@@ -100,7 +114,7 @@ def github_slug(text: str) -> str:
     s = text.strip().lower()
     # Strip inline markdown/code that never appears in the rendered anchor.
     s = re.sub(r'`([^`]*)`', r'\1', s)
-    s = re.sub(r'\*\*([^*]*)\*\*', r'\1', s)
+    s = re.sub(r'\*\*(.*?)\*\*', r'\1', s)
     s = re.sub(r'\*([^*]*)\*', r'\1', s)
     # GitHub drops everything except word chars, spaces and hyphens.
     s = re.sub(r'[^\w\s-]', '', s)
@@ -374,7 +388,7 @@ class MarkdownParser:
         self.heading_pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
         self.code_block_pattern = re.compile(r'```(\w*)\n(.*?)```', re.DOTALL)
         self.inline_code_pattern = re.compile(r'`([^`]+)`')
-        self.bold_pattern = re.compile(r'\*\*([^*]+)\*\*')
+        self.bold_pattern = re.compile(r'\*\*(.+?)\*\*')
         self.link_pattern = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
         self.list_item_pattern = re.compile(r'^(\s*)[-*]\s+(.+)$', re.MULTILINE)
         self.ordered_list_pattern = re.compile(r'^(\s*)\d+\.\s+(.+)$', re.MULTILINE)
@@ -449,13 +463,20 @@ class MarkdownParser:
                 i += 1
                 continue
 
-            # Check for code block start
-            if line.startswith('```'):
-                lang = line[3:].strip()
+            # Check for code block start. The fence may be indented: a fence under
+            # a list item is authored that way, and a column-zero-only test leaves
+            # it to the paragraph handler, which folds the whole block -- backticks
+            # and all -- into one <p>.
+            fence = line.lstrip()
+            if fence.startswith('```'):
+                fence_indent = len(line) - len(fence)
+                lang = fence[3:].strip()
                 code_lines = []
                 i += 1
-                while i < len(lines) and not lines[i].startswith('```'):
-                    code_lines.append(lines[i])
+                while i < len(lines) and not lines[i].lstrip().startswith('```'):
+                    # Remove the fence's own indentation so the code is not
+                    # re-indented inside <codeblock>, which is preformatted.
+                    code_lines.append(dedent_line(lines[i], fence_indent))
                     i += 1
                 elements.append(MarkdownElement(
                     type='code_block',
@@ -619,7 +640,7 @@ class MarkdownParser:
                 i += 1
                 while i < len(lines) and lines[i].strip() and \
                       not lines[i].startswith('#') and \
-                      not lines[i].startswith('```') and \
+                      not lines[i].lstrip().startswith('```') and \
                       not lines[i].startswith('>') and \
                       not lines[i].startswith('|') and \
                       not self.list_item_pattern.match(lines[i]) and \
@@ -652,9 +673,16 @@ class MarkdownParser:
             return f'\x00CODE{len(code_spans) - 1}\x00'
 
         text = re.sub(r'`([^`]+)`', _stash_code, text)
-        # Bold
-        text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', text)
-        # Italic
+        # Bold. The span content is matched non-greedily rather than as
+        # "anything but a star", so that an italic run nested inside a bold run
+        # survives: '**bold with *italic* inside**' used to fall through to the
+        # italic pass and emit mismatched '*<i>' markup.
+        # DOTALL is required: blockquote lines are joined with newlines before they
+        # get here, and authored bold spans routinely wrap across source lines.
+        # ('[^*]+' matched newlines for free; '.+?' does not.)
+        text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text, flags=re.DOTALL)
+        # Italic. Runs second, so it also picks up emphasis nested in the bold
+        # content substituted above.
         text = re.sub(r'\*([^*]+)\*', r'<i>\1</i>', text)
         # Links - handle internal .md links vs external links
         text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', self._convert_link, text)
@@ -1224,6 +1252,7 @@ class DITAGenerator:
         prereq_list_items = []  # List items for the <ul>
         prereq_conrefs = []     # Conrefs go after the list
         prereq_notes = []       # Vendor doc priority and other prereq notes
+        prereq_intro = []       # Prereq/disclaimer content authored before the list
         postreq_content = []    # Content for Next Steps / postreq
         context_content = []    # Intro content before the first H2 -> <context>
         steps = []
@@ -1320,6 +1349,18 @@ class DITAGenerator:
             elif in_prereq and elem.type == 'unordered_list':
                 for item in elem.items:
                     prereq_list_items.append(f'            <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>')
+            elif (in_prereq or in_disclaimer_section) and elem.type != 'heading':
+                # Prose, ordered lists, code blocks and tables authored inside
+                # Prerequisites or a disclaimer/important H2. These matched no
+                # branch at all before and were silently dropped. Headings stay
+                # dropped on purpose: an H3 under Prerequisites is a grouping label
+                # whose bullets are flattened into the single prereq list.
+                dita = self._element_to_dita(elem)
+                if dita and dita.strip():
+                    if prereq_list_items:
+                        prereq_conrefs.append(dita)
+                    else:
+                        prereq_intro.append(dita)
             elif current_step:
                 current_step['content'].append(self._element_to_dita(elem))
             elif not seen_h2:
@@ -1331,12 +1372,14 @@ class DITAGenerator:
         if current_step:
             steps.append(current_step)
 
-        # Build prerequisites - vendor doc priority note first, then list items, then conrefs
-        if prereq_notes or prereq_list_items or prereq_conrefs:
+        # Build prerequisites - vendor doc priority note first, then any prose that
+        # preceded the list, then the list items, then conrefs
+        if prereq_notes or prereq_intro or prereq_list_items or prereq_conrefs:
             output.append('        <prereq>')
             # Vendor doc priority note first
             for note in prereq_notes:
                 output.append(note)
+            output.extend(prereq_intro)
             if prereq_list_items:
                 output.append('            <ul>')
                 output.extend(prereq_list_items)
@@ -1430,7 +1473,14 @@ class DITAGenerator:
             warehouse_id = 'warehouse_' + sanitize_id(include_path.replace('/', '_').replace('.md', ''))
             div_id = sanitize_id(include_path.replace('/', '_').replace('.md', '')) + '_content'
             warehouse_file = warehouse_id + '.dita'
-            return f'        <div conref="../warehouse/{warehouse_file}#{warehouse_id}/{div_id}"/>'
+            # A conref href is resolved relative to the topic holding it, so the hop
+            # count depends on how deeply that topic is nested. A hard-coded
+            # '../warehouse/' only resolves for the flat layout and pointed at
+            # topics/<dist>/warehouse/ under --organize-sections.
+            prefix = posixpath.relpath(
+                self.config.warehouse_dir,
+                self.parser._current_topic_dir or self.config.topics_dir)
+            return f'        <div conref="{prefix}/{warehouse_file}#{warehouse_id}/{div_id}"/>'
 
     def _wrap_section(self, title: str, content: List[str], section_id: str = None) -> str:
         """Wrap content in a DITA section."""
@@ -1453,6 +1503,11 @@ class DITAGenerator:
     def _detect_note_type(self, content: str) -> str:
         """Detect the appropriate DITA note type from content."""
         content_lower = content.lower()
+        # A disclaimer is an 'important' note by convention (see STYLEGUIDE.md),
+        # even when it is decorated with a warning emoji -- which is why this is
+        # tested ahead of the emoji rule below.
+        if 'disclaimer' in content_lower or 'vendor documentation priority' in content_lower:
+            return 'important'
         if 'warning' in content_lower or '⚠️' in content:
             return 'warning'
         elif 'important' in content_lower:
@@ -2005,7 +2060,7 @@ class MarkdownToDITAConverter:
         topicrefs_str = '\n'.join(topicrefs)
         return f'''<?xml version="1.0" encoding="UTF-8"?>
 {self.config.map_doctype}
-<map>
+<map xml:lang="en-US">
     <title>{escape_xml(title)}</title>
 {topicrefs_str}
 </map>
@@ -2385,8 +2440,10 @@ class MarkdownToDITAConverter:
         # Remove YAML front matter
         content = re.sub(r'^---\n.*?---\n', '', content, flags=re.DOTALL)
 
-        # Remove the main H1 title
-        content = re.sub(r'^#\s+[^\n]+\n', '', content)
+        # Remove the main H1 title. Allow leading whitespace: stripping the front
+        # matter leaves a newline in front of the H1, so an anchored '^#' misses it
+        # and the title text would be picked up as body content below.
+        content = re.sub(r'^\s*#\s+[^\n]+\n', '', content, count=1)
 
         sections = []
         # Split by H2 headings
@@ -2397,6 +2454,14 @@ class MarkdownToDITAConverter:
 
         if not h2_matches:
             return [('Overview', content.strip())]
+
+        # Intro prose between the H1 and the first H2. Sections are built from each
+        # heading's end onward, so this text used to be dropped on the floor; it is
+        # prepended to the first section, which is also the topic a bare link to the
+        # document resolves to.
+        preamble = content[:h2_matches[0].start()].strip()
+        if not re.sub(r'^-{3,}$', '', preamble, flags=re.MULTILINE).strip():
+            preamble = ''  # nothing but horizontal rules
 
         for i, match in enumerate(h2_matches):
             section_title = match.group(1).strip()
@@ -2412,6 +2477,9 @@ class MarkdownToDITAConverter:
 
             # Skip empty sections and Table of Contents
             if section_content and 'table of contents' not in section_title.lower():
+                if preamble:
+                    section_content = f'{preamble}\n\n{section_content}'
+                    preamble = ''
                 sections.append((section_title, section_content))
 
         return sections

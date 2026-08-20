@@ -100,11 +100,23 @@ Facts worth remembering before debugging output:
 - H2s matching `prerequisite` / `disclaimer` / `important` / `next step` are routed to
   `<prereq>` / `<postreq>` instead.
 - H3 bullets under `## Prerequisites` are flattened into the prereq `<ul>`; the H3
-  subheading itself is dropped.
+  subheading itself is dropped. Prose, code and tables in that section land in
+  `<prereq>` too — before the `<ul>` if authored above the bullets, after it
+  otherwise. Same for a `## Important…` / `## Disclaimer…` section.
 - Content before the first H2 goes to `<context>`; intro notes and includes go to
   `<prereq>`. `<taskbody>` order is enforced as prereq → context → steps → postreq.
-- **Nested emphasis mangles.** `**bold with *italic* inside**` produces broken
-  `*<i>…</i>` markup. Use one level of emphasis per span.
+- In a BEST-PRACTICES file, prose between the H1 and the first H2 is prepended to
+  the first section's topic (which is also where a bare link to the file lands).
+- Notes mentioning `disclaimer` or `vendor documentation priority` are typed
+  `important`, ahead of the `warning`/⚠️ rule, so the standard disclaimer include
+  is consistent whether or not it carries an emoji.
+- Emphasis nests: `**bold with *italic* inside**` converts correctly. The bold
+  pattern is non-greedy **and** DOTALL — authored spans wrap across source lines
+  (blockquote lines are newline-joined), so dropping DOTALL silently leaves stray
+  `*` in the output.
+- Indented code fences are recognised, including under a list item, and the
+  fence's own indentation is stripped. They emit a `<codeblock>` as a sibling of
+  the list, not inside the `<li>`.
 - Image `href`s are computed from the topic's nesting depth (`set_topic_subdir`).
   With `--organize-sections` topics sit three levels deep, so hrefs are
   `../../../images/`. Touching image path logic means re-checking both layouts.
@@ -135,6 +147,21 @@ hrefs resolve from each topic's directory, and no topic lost text versus the pre
 build. When changing the converter, diff a full-repo run against a run from the
 pre-change script (`git show HEAD:scripts/convert_to_dita.py`) — a fix that quietly
 drops content elsewhere is worse than the bug.
+
+## Testing the converter
+
+`python tests/test_converter.py` runs the converter over the fixture tree in
+`tests/fixtures/` and asserts on the DITA. It is stdlib `unittest` (no pytest) and
+needs no network — `--skip-diagrams` is always passed. Run it before and after any
+converter change; see `tests/README.md` for what is covered and how to extend it.
+
+`tests/` is in `_config.yml` `exclude:` — the fixtures reference includes that exist
+only under `tests/fixtures/_includes/`, and a missing include is a hard Jekyll build
+failure. The converter also skips a `tests/` prefix when globbing guides, so a
+repo-root run does not pick the fixtures up.
+
+A passing suite is not a substitute for the full-repo diff above: the fixtures cover
+constructs, the diff covers the 60-odd real guides.
 
 ## Technical accuracy in guides
 
