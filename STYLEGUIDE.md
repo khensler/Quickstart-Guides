@@ -169,6 +169,10 @@ Links and references...
 The following BEST-PRACTICES sections are **not** converted:
 
 - `## Troubleshooting` (and variants) — excluded by design
+- `## Table of Contents` — the site and Heretto both generate navigation
+
+Prose between the H1 and the first H2 **is** kept: it is prepended to the first
+section's topic, which is also where a link to the file with no anchor lands.
 
 ---
 
@@ -270,6 +274,11 @@ The following BEST-PRACTICES sections are **not** converted:
 | `` `code` `` | `<codeph>code</codeph>` | `code` |
 | `[link](url)` | `<xref href="url">link</xref>` | [link](url) |
 
+Emphasis may nest one level either way — `**bold with *italic* inside**` and
+`*italic with **bold** inside*` both convert — and a span may wrap across source
+lines. Inline code spans are protected first, so `` `sd*` `` and `` `dm-*` `` are
+never read as an italic run spanning the two.
+
 ---
 
 ## Notes and Callouts
@@ -278,13 +287,23 @@ Blockquotes (`>`) are converted to DITA `<note>` elements. The note type is dete
 
 ### Note Types
 
+Keywords are tested in this order, so the first match wins:
+
 | Keyword in Content | DITA Note Type |
 |--------------------|----------------|
+| `disclaimer`, `vendor documentation priority` | `<note type="important">` |
 | `warning`, `⚠️` | `<note type="warning">` |
 | `important` | `<note type="important">` |
 | `caution` | `<note type="caution">` |
 | `tip` | `<note type="tip">` |
 | (default) | `<note type="note">` |
+
+Disclaimers are checked first so that the standard disclaimer include is an
+`important` note whether or not it is decorated with a ⚠️ emoji.
+
+> **Note**: detection is a plain substring match on the whole note, so a note whose
+> prose merely contains one of these words is typed from it — "more important than
+> load distribution" makes an authored **Tip:** an `important` note.
 
 ### Example
 
@@ -315,6 +334,10 @@ sudo systemctl start iscsid
 ```xml
 <codeblock>sudo systemctl start iscsid</codeblock>
 ```
+
+A fence may be indented — under a numbered step, for instance. The fence's own
+indentation is stripped from the block, and the `<codeblock>` is emitted after the
+list rather than inside the `<li>`.
 
 ### Mermaid Diagrams
 

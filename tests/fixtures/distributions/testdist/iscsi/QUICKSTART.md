@@ -28,7 +28,13 @@ MARKER_OVERVIEW_PARAGRAPH with **bold**, *italic*, `codeph`, and an
 
 Unicode round-trip: host → array, an em—dash, "smart quotes", and a ⚠️ emoji.
 
+Nested emphasis: **MARKER_NESTED_EMPHASIS is bold with *italic* inside** it, and
+*italic with **bold** inside* it.
+
 ## Prerequisites
+
+MARKER_PREREQ_INTRO_PARAGRAPH is authored above the bullet list, so it belongs in
+prereq ahead of the `<ul>`.
 
 - MARKER_PREREQ_ONE with `codeph` and a [sibling protocol guide](../nvme-tcp/QUICKSTART.md)
 - MARKER_PREREQ_TWO that wraps across two source lines and
@@ -37,6 +43,10 @@ Unicode round-trip: host → array, an em—dash, "smart quotes", and a ⚠️ e
 ### Additional Requirements
 
 - MARKER_PREREQ_H3_ITEM flattened up into the same prereq list
+
+```bash
+echo "MARKER_PREREQ_CODE_AFTER_LIST"
+```
 
 > **Note:** MARKER_PREREQ_NOTE belongs inside prereq, after the list.
 
@@ -80,6 +90,9 @@ iscsiadm -m session -P 3
 
 > MARKER_PLAIN_NOTE with no keyword prefix at all.
 
+> **MARKER_WRAPPED_BOLD spans two source lines and contains an *italic* run, and
+> must still close.** Trailing prose after the bold span.
+
 ### Subheading Inside A Step
 
 MARKER_STEP2_H3_BODY — the H3 above becomes a bold paragraph, not a step.
@@ -93,8 +106,8 @@ MARKER_STEP2_H3_BODY — the H3 above becomes a bold paragraph, not a step.
 
 ## Important Notes
 
-MARKER_IMPORTANT_SECTION_PARAGRAPH is dropped: non-note content in a
-disclaimer/important H2 has nowhere to go.
+MARKER_IMPORTANT_SECTION_PARAGRAPH is prose in a disclaimer/important H2, which
+is routed into prereq alongside that section's notes.
 
 > **Important:** MARKER_IMPORTANT_SECTION_NOTE is routed to `<prereq>`.
 

@@ -48,6 +48,11 @@ MARKER_BP_NCONNECT_BODY — the anchor target for `#nconnect-tuning`.
 
 MARKER_BP_QUEUE_DEPTH_BODY.
 
+### 1.1 Numbered Subheading
+
+MARKER_BP_NUMBERED_HEADING body — the generated section id must still be a legal
+XML NCName, so it cannot start with a digit.
+
 ### Understanding APD (All Paths Down)
 
 MARKER_BP_APD_BODY — heading punctuation must be dropped when the anchor slug is
