@@ -1,0 +1,31 @@
+{%- if site.goatcounter_code and site.goatcounter_code != "" -%}
+<!-- GoatCounter analytics: pageviews + outbound link clicks -->
+<script data-goatcounter="https://{{ site.goatcounter_code }}.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+<script>
+  // Record clicks on links leaving this site as GoatCounter events, so they
+  // land under the Events tab instead of mixing into pageview paths.
+  document.addEventListener("click", function (e) {
+    var link = e.target.closest && e.target.closest("a[href]");
+    if (!link) return;
+
+    var url;
+    try {
+      url = new URL(link.href, window.location.href);
+    } catch (err) {
+      return;
+    }
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") return;
+    if (url.host === window.location.host) return;
+
+    if (window.goatcounter && typeof window.goatcounter.count === "function") {
+      window.goatcounter.count({
+        path: url.host + url.pathname,
+        title: "Outbound: " + url.host,
+        event: true
+      });
+    }
+  }, true);
+</script>
+{%- endif -%}
