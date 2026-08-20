@@ -1405,6 +1405,15 @@ class DITAGenerator:
             note_type = self._detect_note_type(elem.content)
             cleaned_content = self._strip_note_prefix(elem.content, note_type)
             return f'                    <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>'
+        elif elem.type == 'table':
+            # Tables inside an H2 section were previously dropped silently: this
+            # branch was missing, so any table in a <step> fell through to ''.
+            # _generate_table emits at an 8-space base indent; step content sits
+            # at 20, so shift every line right by 12.
+            table = self._generate_table(elem.content)
+            if not table:
+                return ''
+            return '\n'.join(' ' * 12 + line for line in table.split('\n'))
         return ''
 
     def _generate_conref(self, include_path: str, topic_id: str) -> str:
@@ -2190,7 +2199,7 @@ class MarkdownToDITAConverter:
         for pattern in ['**/QUICKSTART.md', '**/GUI-QUICKSTART.md', '**/BEST-PRACTICES.md']:
             for md_file in self.config.input_dir.glob(pattern):
                 rel_path = md_file.relative_to(self.config.input_dir)
-                if str(rel_path).startswith(('_', 'common', 'scripts')):
+                if str(rel_path).startswith(('_', 'common', 'scripts', 'tests')):
                     continue
                 rel_str = str(rel_path).replace('\\', '/')
                 # Deliberately NOT filtered by -d/-p: a scoped run still needs
@@ -2270,7 +2279,7 @@ class MarkdownToDITAConverter:
             for md_file in self.config.input_dir.glob(pattern):
                 # Skip files in _includes, common, etc.
                 rel_path = md_file.relative_to(self.config.input_dir)
-                if str(rel_path).startswith(('_', 'common', 'scripts')):
+                if str(rel_path).startswith(('_', 'common', 'scripts', 'tests')):
                     continue
 
                 # Apply distribution/protocol filters

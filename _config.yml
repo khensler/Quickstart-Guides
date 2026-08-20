@@ -33,6 +33,9 @@ include:
 # Exclude files from build
 # CLAUDE.md documents Liquid syntax literally (including a bare `{% include %}`),
 # which jekyll-optional-front-matter would otherwise try to render as a page.
+# tests/ holds converter fixtures, not site content. They reference includes that
+# only exist inside tests/fixtures/_includes/, so rendering them would be a hard
+# build failure.
 exclude:
   - LICENSE
   - Gemfile
@@ -40,6 +43,7 @@ exclude:
   - vendor
   - node_modules
   - CLAUDE.md
+  - tests
 
 # Default front matter
 defaults:
