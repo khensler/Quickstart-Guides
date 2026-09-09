@@ -18,7 +18,7 @@ Complete these on the FlashArray and FC fabric **before** starting — they are 
 | Requirement | Details |
 |-------------|---------|
 | HPE VME Cluster | Deployed and operational (3+ nodes for a shared clustered datastore) |
-| FlashArray host setup | A host entry per VME node (OS type `Linux`) with each node's WWPNs, all added to one **Host Group** |
+| FlashArray host setup | A host entry per VME node with each node's WWPNs, Personality left as `None`, all added to one **Host Group** |
 | Volume connected | Target volume connected to that Host Group |
 | Fabric zoning | Single-initiator zoning complete on both fabrics for every node's HBA WWPNs |
 | HBAs | Installed in each node and cabled to both fabrics |

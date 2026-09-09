@@ -99,6 +99,25 @@ Facts worth remembering before debugging output:
   `## Related Articles` all show up as steps. That is expected, not a bug.
 - H2s matching `prerequisite` / `disclaimer` / `important` / `next step` are routed to
   `<prereq>` / `<postreq>` instead.
+- Under `--inline-includes` an include's elements are **spliced into the parent's**
+  element stream (`_splice_inlined_includes`), so an H2 the include carries becomes a
+  real `<step>` — that is how `## Quick Reference` and `## Step 2: Enable Native NVMe
+  Multipath` get their own steps. The include's own sectioning is scoped to it: the
+  region an include opens closes again at its end, so the `disclaimer.md` H2 cannot
+  swallow the intro prose that follows it into `<prereq>`. Without the flag an
+  include stays a conref and none of this applies.
+- Emoji decorating a heading is **dropped**, not transliterated (`strip_heading_marker`),
+  and a decorative token leading a bold run is stripped from the finished string
+  (`tidy_emphasis`). Elsewhere in prose `⚠️` still becomes `[WARNING]`. Without this
+  `## ⚠️ Important Disclaimers` published as `[WARNING] Important Disclaimers`.
+- Bullets authored inside a blockquote become a real `<ul>` in the note
+  (`_note_body`); notes with no bullets keep their single-`<p>` shape, which is what
+  `collapse_consecutive_notes` matches on. `## Next Steps` bullets likewise become a
+  `<ul>` in `<postreq>` rather than one `<p>- text</p>` per bullet.
+- `Go to: A -> B` after a trigger verb (`Go to` / `Navigate to` / `Browse to` /
+  `Click`) becomes `<menucascade>`. A label must be quoted or capitalised, which is
+  what keeps trailing prose out of the chain — in `Go to Pool -> Advanced tab`, `tab`
+  stays narrative.
 - H3 bullets under `## Prerequisites` are flattened into the prereq `<ul>`; the H3
   subheading itself is dropped. Prose, code and tables in that section land in
   `<prereq>` too — before the `<ul>` if authored above the bullets, after it
@@ -107,6 +126,11 @@ Facts worth remembering before debugging output:
   `<prereq>`. `<taskbody>` order is enforced as prereq → context → steps → postreq.
 - In a BEST-PRACTICES file, prose between the H1 and the first H2 is prepended to
   the first section's topic (which is also where a bare link to the file lands).
+- **A `## Troubleshooting` section in a BEST-PRACTICES file is deliberately not
+  converted.** It stays on the GitHub Pages site and is withheld from the support site,
+  which has its own troubleshooting KBs — about 1,900 lines across the 25 guides. Both
+  `_convert_best_practices_sections` and `_build_link_registry` skip it, in step.
+  Intentional; don't "restore" it. Every other H2 becomes its own topic.
 - Notes mentioning `disclaimer` or `vendor documentation priority` are typed
   `important`, ahead of the `warning`/⚠️ rule, so the standard disclaimer include
   is consistent whether or not it carries an emoji.
@@ -187,3 +211,4 @@ Windows-first environment. The Bash tool is Git Bash; PowerShell is the primary
 shell and each takes its own syntax. There is no `.gitattributes`; the repo relies on
 `core.autocrlf=true`, so `git diff --stat` emits "LF will be replaced by CRLF"
 warnings for files you didn't touch — that's noise, not a change you introduced.
+

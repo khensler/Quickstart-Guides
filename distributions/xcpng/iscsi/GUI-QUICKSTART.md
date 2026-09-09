@@ -28,6 +28,8 @@ This guide walks you through configuring iSCSI storage on XCP-ng using **Xen Orc
 
 {% include quickstart/glossary-link-iscsi.md %}
 
+{% include quickstart/arp-warning.md %}
+
 ---
 
 ## Step 1: Configure Storage Network (All Hosts)

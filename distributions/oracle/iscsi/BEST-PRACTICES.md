@@ -21,6 +21,7 @@ Comprehensive best practices for deploying iSCSI storage on Oracle Linux with Un
 - [SELinux Configuration](#selinux-configuration)
 - [Firewall Configuration](#firewall-configuration)
 - [iSCSI Architecture](#iscsi-architecture)
+- [Target-Driven Rescan](#target-driven-rescan)
 - [Multipath Configuration](#multipath-configuration)
 - [UEK-Specific Optimizations](#uek-specific-optimizations)
 - [High Availability with Ksplice](#high-availability-with-ksplice)
@@ -472,6 +473,12 @@ sudo firewall-cmd --zone=storage --list-all
 - Static IP addressing (no DHCP)
 - No default gateway on storage interfaces
 - MTU 9000 end-to-end
+
+---
+
+## Target-Driven Rescan
+
+{% include bestpractices/target-driven-rescan.md %}
 
 ---
 

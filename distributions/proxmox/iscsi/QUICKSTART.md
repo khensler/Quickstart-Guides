@@ -36,7 +36,13 @@ systemctl enable --now iscsid multipathd
 
 ## Step 2: Create iSCSI Interface Bindings
 
-In this step the iscsi interfaces will be created.  This is similar to portbinding on ESXI.  This will allow the multipath to use the specific interfaces for the iscsi traffic.  Replace `<INTERFACE_NAME_1>` and `<INTERFACE_NAME_2>` with your actual interface names (ens1f0np0, ens2f0np0, etc.).  Replace `<PORTAL_IP_1>` and `<PORTAL_IP_2>` with your actual portal IP addresses.  Replace `<PORT>` with your actual port (Default is 3260).  The example below assumes you have 2 portals.  If you have more or less, adjust accordingly.
+In this step the iscsi interfaces will be created. This is similar to port binding on ESXi. This will allow the multipath to use the specific interfaces for the iscsi traffic.
+
+- Replace `<INTERFACE_NAME_1>` and `<INTERFACE_NAME_2>` with your actual interface names (`ens1f0np0`, `ens2f0np0`, etc.).
+- Replace `<PORTAL_IP_1>` and `<PORTAL_IP_2>` with your actual portal IP addresses.
+- Replace `<PORT>` with your actual port (default is 3260).
+
+The example below assumes you have 2 portals. If you have more or less, adjust accordingly.
 
 ```bash
 # Create and bind first interface
@@ -155,7 +161,12 @@ Go to: Datacenter -> Storage.  Click "Add" -> "LVM".
 
 ![Add LVM Storage](./img/disk-configuration-1.png)
 
-Name the storage in the ID field.  Select the volume group in the Volume Group drop down.  Check the "Shared" box.  Select the appropriate Content (Disk Image, Container).  Enable the volume on other nodes by either selecting them in the Nodes drop down or by clearing the Nodes field by clicking the "x" to the right of the field.  Click "Add".
+1. Name the storage in the **ID** field.
+2. Select the volume group in the **Volume Group** drop down.
+3. Check the **Shared** box.
+4. Select the appropriate **Content** (Disk Image, Container).
+5. Enable the volume on other nodes by either selecting them in the **Nodes** drop down, or by clearing the Nodes field by clicking the **x** to the right of the field.
+6. Click **Add**.
 
 ![Configure Storage](./img/disk-configuration-2.png)
 

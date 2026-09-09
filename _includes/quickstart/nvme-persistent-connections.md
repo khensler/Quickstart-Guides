@@ -5,16 +5,97 @@ does the first — it is a one-shot that runs at boot, not a reconnect daemon.
 **1. Reconnect at boot**
 
 ```bash
-# Discovery configuration - list EVERY array this host uses
+# Discovery configuration - list EVERY array this host uses.
+# --persistent --ctrl-loss-tmo=-1 keeps a discovery controller alive per portal,
+# which is what makes the path-failure recovery in step 2 work after a reboot.
 sudo tee /etc/nvme/discovery.conf > /dev/null <<EOF
--t tcp -a <PORTAL_IP_1> -s 4420 --host-traddr <HOST_IP_1>
--t tcp -a <PORTAL_IP_2> -s 4420 --host-traddr <HOST_IP_1>
--t tcp -a <PORTAL_IP_3> -s 4420 --host-traddr <HOST_IP_2>
--t tcp -a <PORTAL_IP_4> -s 4420 --host-traddr <HOST_IP_2>
+-t tcp -a <PORTAL_IP_1> -s 4420 --host-traddr <HOST_IP_1> --persistent --ctrl-loss-tmo=-1
+-t tcp -a <PORTAL_IP_2> -s 4420 --host-traddr <HOST_IP_1> --persistent --ctrl-loss-tmo=-1
+-t tcp -a <PORTAL_IP_3> -s 4420 --host-traddr <HOST_IP_2> --persistent --ctrl-loss-tmo=-1
+-t tcp -a <PORTAL_IP_4> -s 4420 --host-traddr <HOST_IP_2> --persistent --ctrl-loss-tmo=-1
 EOF
 
 sudo systemctl enable --now nvmf-autoconnect.service
 ```
+
+`--persistent` and `--ctrl-loss-tmo` are honoured per portal here, so the discovery
+controllers that step 2 depends on are re-established at every boot rather than
+only for the current uptime.
+
+> **Check your version first — this file changed.** Run `nvme --version`.
+> `discovery.conf` is correct for **2.x**, which is what current distributions
+> ship (verified on 2.13). It was **retired in nvme-cli 3.0**, which uses
+> `/etc/nvme/nvme-fabrics.conf` instead — see below.
+
+**1b. Reconnect at boot — nvme-cli 3.0 and later**
+
+On 3.0 the same configuration lives in `/etc/nvme/nvme-fabrics.conf`, in INI
+format. The reliable way to get there is to convert a working 2.x file rather than
+hand-write it:
+
+```bash
+# Convert an existing discovery.conf, then check what it produced
+sudo nvme config convert
+sudo nvme config-show
+```
+
+Convert **deliberately**. If you do not, the first fabrics command converts it for
+you — you do not want that happening for the first time during an incident.
+
+Hand-authored, the equivalent of the 2.x file above is:
+
+```ini
+[Discovery Controller Defaults]
+ctrl-loss-tmo = -1
+
+[Discovery Controller]
+controller = transport=tcp;traddr=<PORTAL_IP_1>;trsvcid=4420;host-traddr=<HOST_IP_1>
+controller = transport=tcp;traddr=<PORTAL_IP_2>;trsvcid=4420;host-traddr=<HOST_IP_1>
+controller = transport=tcp;traddr=<PORTAL_IP_3>;trsvcid=4420;host-traddr=<HOST_IP_2>
+controller = transport=tcp;traddr=<PORTAL_IP_4>;trsvcid=4420;host-traddr=<HOST_IP_2>
+```
+
+One `controller` line per path, each pinned to the host address that should carry
+it — the direct equivalent of `--host-traddr` in the 2.x file. To pin by interface
+name instead of host address, use `host-iface=<NIC>`:
+
+```ini
+controller = transport=tcp;traddr=<PORTAL_IP_1>;trsvcid=4420;host-iface=<NIC_A>
+```
+
+Three things to know when you migrate:
+
+- **You no longer need to ask for persistence.** From 3.0 discovery controllers are
+  persistent by default, which is the behaviour step 2 relies on — so the
+  `--persistent` flag required in the 2.x file has no counterpart to set here.
+- **The keys inside a `controller` value are the `nvme connect` option names**,
+  hyphenated — so `host-traddr`, `host-iface`, `ctrl-loss-tmo`, `keep-alive-tmo`,
+  `reconnect-delay`. Any of them may appear on a `controller` line as a per-path
+  override, which is how you give one fabric different timers from the other.
+- **Security parameters are the exception** — they are not overridable per path
+  and stay at the section level.
+
+The same `controller` syntax applies in a `[Subsystem]` section, so I/O
+connections are pinned the same way.
+
+> **Verify pinning before the host goes into service.** On a dual-fabric host,
+> connections that are not pinned will appear to work while quietly using one
+> fabric for everything — you find out during a fabric failure, not before.
+>
+> ```bash
+> sudo nvme config-show     # confirm each controller line carries its host-traddr
+> sudo nvme list-subsys     # confirm each path is established over the intended NIC
+> ```
+
+> **Confirm the discovery controllers came back after a reboot**, not just after
+> running the command:
+>
+> ```bash
+> sudo nvme list-subsys | grep -c discovery    # must be non-zero
+> ```
+>
+> If this returns `0` after a reboot, run the `nvme discover` loop from step 2 out
+> of a `systemd` unit ordered before your storage consumers instead.
 
 **2. Reconnect after a path failure (persistent discovery controllers)**
 
@@ -40,6 +121,15 @@ done
 # Verify - this must be non-zero, or automatic recovery cannot happen
 sudo nvme list-subsys | grep -c discovery
 ```
+
+Run this once per host interface, so each interface keeps its own discovery
+controllers. The same flags belong in `/etc/nvme/discovery.conf` (step 1) so the
+controllers are recreated at boot rather than only for the current uptime.
+
+With the discovery controllers in place, a subsystem that has been torn down comes
+back on its own: `udev` raises the discovery-log-change event, `nvmf-connect@`
+runs, and the I/O controllers are re-established without anyone logging in. In
+testing this took roughly 20 seconds from connectivity returning.
 
 > **Automatic reconnect restores the storage, not the workload.** Once paths return
 > you may still need to remount filesystems, restart VMs, rescan LVM volume groups

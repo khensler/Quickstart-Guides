@@ -118,11 +118,13 @@ Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy RR
 
 # MPIO path-recovery and timeout settings for Azure Local with FlashArray
 Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
-    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
+    -NewPDORemovePeriod 30 -NewDiskTimeout 60 `
     -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 ```
 
-> **Note:** The values above are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service treats the disk as gone. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
+> **Note:** `NewPDORemovePeriod` determines how many seconds the OS waits for a failed path to recover before removing the device. Holding the failover for 30 seconds lets MPIO complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a resource failover to another node. Apply the same value consistently on **every** node.
+
+> **Note:** Microsoft's [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage) documents `-NewPDORemovePeriod 20` for external block storage. Everpure's guidance for iSCSI on Azure Local is `30`, which is the value used above — iSCSI path loss is detected by TCP keepalive expiry rather than a fabric link-down event, so recovery needs the longer grace period. Use `30` unless you have a specific reason to follow the Microsoft value.
 
 > **Note:** Use `New-MSDSMSupportedHW` (rather than the MPIO GUI) — it enforces the required 8-char Vendor / 16-char Product string formatting automatically.
 > For hosts with **more than 10 paths** to a volume, Everpure recommends Least Queue Depth (`-Policy LQD`) instead of Round Robin.

@@ -128,7 +128,7 @@ cat /etc/iscsi/initiatorname.iscsi
 
 1. Navigate to **Storage > Hosts**
 2. Click **+** to create a host entry for each VME node
-3. Set **OS Type** to `Linux`
+3. Leave **Personality** set to `None` — Purity has no Linux host personality, and VME hosts do not need one
 4. Under **iSCSI**, paste the IQN from the corresponding host
 5. Repeat for all cluster hosts
 6. Create a **Host Group** and add all host entries to it

@@ -498,10 +498,36 @@ class TestTaskBodyRouting(unittest.TestCase):
                         '## Prerequisites\n\n- first\n\n## Step 1: Go\n\nA\n')
         self.assertOrder(got, '<prereq>', '<context>', '<steps>', '<postreq>')
 
-    def test_next_steps_bullets_become_dash_paragraphs(self):
+    def test_note_bullets_become_a_list_not_literal_hyphens(self):
+        # A blockquote carrying a list reaches the note as one newline-joined
+        # string. It used to emit a single <p> with the hyphens intact, which is
+        # what Heretto received and had to be re-marked-up by hand.
+        got = self.body('## Step 1: X\n\n'
+                        '> **Why?**\n> - first reason\n> - second reason\n')
+        self.assertIn('<ul>', got)
+        self.assertIn('<li><p>first reason</p></li>', got)
+        self.assertIn('<li><p>second reason</p></li>', got)
+        self.assertNotIn('- first reason', got)
+
+    def test_note_without_bullets_keeps_its_single_paragraph_shape(self):
+        got = self.body('## Step 1: X\n\n> **Heads up:** just prose here.\n')
+        self.assertIn('<note type="note"><p>', got)
+        self.assertNotIn('<ul>', got)
+
+    def test_next_steps_bullets_become_a_real_list(self):
+        # These used to be emitted as '<p>- one</p>': one paragraph per bullet
+        # with the Markdown hyphen surviving as literal text.
         got = self.body('## Next Steps\n\n- one\n- two\n')
-        self.assertIn('<p>- one</p>', got)
-        self.assertIn('<p>- two</p>', got)
+        self.assertIn('<ul>', got)
+        self.assertIn('<li><p>one</p></li>', got)
+        self.assertIn('<li><p>two</p></li>', got)
+        self.assertNotIn('<p>- one</p>', got)
+
+    def test_next_steps_numbered_list_becomes_an_ol(self):
+        got = self.body('## Next Steps\n\n1. first\n2. second\n')
+        self.assertIn('<ol>', got)
+        self.assertIn('first', got)
+        self.assertNotIn('<p>- first</p>', got)
 
     def assertOrder(self, hay, *needles):
         pos = -1
@@ -509,6 +535,117 @@ class TestTaskBodyRouting(unittest.TestCase):
             i = hay.find(n, pos + 1)
             self.assertNotEqual(i, -1, f'{n} missing or out of order')
             pos = i
+
+
+class TestIncludeSectioning(unittest.TestCase):
+    """An inlined include's own headings participate in the parent's structure.
+
+    Previously the include was rendered to DITA on its own, so every heading it
+    carried became a bold paragraph -- demoting structure the parent would have
+    honoured. Its sectioning is still scoped to the include, though: a region the
+    include opens must close when its content runs out.
+    """
+
+    def setUp(self):
+        cfg = conv.ConversionConfig()
+        cfg.inline_includes = True
+        self.g = conv.DITAGenerator(cfg)
+        self.g._resolve_include = self._fake_include
+
+    FAKE = {
+        'quickstart/qref.md': '## Quick Reference\n\nMARKER_QREF body.\n',
+        'quickstart/disc.md': ('## Important Disclaimers\n\n'
+                               '> **Vendor Documentation Priority:** MARKER_DISC.\n'),
+        'quickstart/plain.md': 'MARKER_PLAIN prose.\n',
+    }
+
+    def _fake_include(self, path):
+        return self.FAKE.get(path, '')
+
+    def body(self, md):
+        return self.g._elements_to_task_body(self.g.parser.parse(md), 't_x')
+
+    def test_include_h2_becomes_its_own_step(self):
+        got = self.body('## Step 1: First\n\nA\n\n'
+                        '{% include quickstart/qref.md %}\n')
+        self.assertIn('<cmd>Quick Reference</cmd>', got)
+        self.assertEqual(got.count('<step>'), 2)
+        self.assertNotIn('<p><b>Quick Reference</b></p>', got)
+
+    def test_disclaimer_include_does_not_swallow_the_following_context(self):
+        # The disclaimer include sits above the intro prose in every guide. Its
+        # H2 must not end the <context> region.
+        got = self.body('{% include quickstart/disc.md %}\n\n'
+                        'MARKER_INTRO prose before the first real H2.\n\n'
+                        '## Step 1: First\n\nA\n')
+        self.assertIn('MARKER_DISC', got.split('</prereq>')[0])
+        context = got.split('<context>')[1].split('</context>')[0]
+        self.assertIn('MARKER_INTRO', context)
+
+    def test_a_region_opened_by_the_parent_survives_an_include(self):
+        got = self.body('## Prerequisites\n\n- MARKER_BULLET\n\n'
+                        '{% include quickstart/plain.md %}\n\n'
+                        '- MARKER_AFTER_INCLUDE\n')
+        prereq = got.split('<prereq>')[1].split('</prereq>')[0]
+        self.assertIn('MARKER_BULLET', prereq)
+        self.assertIn('MARKER_PLAIN', prereq)
+        self.assertIn('MARKER_AFTER_INCLUDE', prereq)
+
+    def test_includes_stay_conrefs_when_not_inlining(self):
+        cfg = conv.ConversionConfig()
+        cfg.inline_includes = False
+        g = conv.DITAGenerator(cfg)
+        got = g._elements_to_task_body(
+            g.parser.parse('## Step 1: First\n\n{% include quickstart/qref.md %}\n'), 't_x')
+        self.assertIn('conref=', got)
+        self.assertNotIn('<cmd>Quick Reference</cmd>', got)
+
+
+class TestHeadingMarkers(unittest.TestCase):
+    """Emoji decoration is dropped from headings rather than transliterated."""
+
+    def test_warning_emoji_is_dropped_from_a_heading(self):
+        self.assertEqual(conv.strip_heading_marker('⚠️ Important Disclaimers'),
+                         'Important Disclaimers')
+
+    def test_substituted_token_is_dropped_too(self):
+        self.assertEqual(conv.strip_heading_marker('[WARNING] Important Disclaimers'),
+                         'Important Disclaimers')
+
+    def test_plain_heading_is_untouched(self):
+        self.assertEqual(conv.strip_heading_marker('Configure Multipath'),
+                         'Configure Multipath')
+
+    def test_a_heading_that_is_only_a_marker_becomes_empty(self):
+        self.assertEqual(conv.strip_heading_marker('⚠️'), '')
+
+
+class TestMenucascade(unittest.TestCase):
+    """GUI navigation chains become <menucascade>, not literal arrows."""
+
+    def test_chain_after_a_trigger_becomes_menucascade(self):
+        got = conv.link_menucascade('Go to: Datacenter -&gt; Storage.')
+        self.assertIn('<menucascade><uicontrol>Datacenter</uicontrol>'
+                      '<uicontrol>Storage</uicontrol></menucascade>', got)
+        self.assertNotIn('-&gt;', got)
+
+    def test_quoted_labels_lose_their_quotes(self):
+        got = conv.link_menucascade('Click "Add" -&gt; "LVM".')
+        self.assertIn('<uicontrol>Add</uicontrol><uicontrol>LVM</uicontrol>', got)
+
+    def test_trailing_prose_stays_outside_the_chain(self):
+        # 'Go to Pool -> Advanced tab': 'tab' is narrative, not a menu label.
+        got = conv.link_menucascade('Go to Pool -&gt; Advanced tab')
+        self.assertIn('<uicontrol>Pool</uicontrol><uicontrol>Advanced</uicontrol>', got)
+        self.assertTrue(got.endswith('tab'))
+
+    def test_arrow_without_a_trigger_verb_is_left_alone(self):
+        got = conv.link_menucascade('traffic flows host -&gt; array directly')
+        self.assertEqual(got, 'traffic flows host -&gt; array directly')
+
+    def test_single_label_is_not_a_cascade(self):
+        got = conv.link_menucascade('Go to Storage for details')
+        self.assertNotIn('<menucascade>', got)
 
 
 class TestSplitByH2(unittest.TestCase):
@@ -745,7 +882,8 @@ class TestTaskTopic(ConverterCase):
     def test_postreq_holds_next_steps_content(self):
         postreq = self.qs.split('<postreq>')[1].split('</postreq>')[0]
         self.assertIn('<p>MARKER_POSTREQ_PARAGRAPH.</p>', postreq)
-        self.assertIn('<p>- MARKER_POSTREQ_BULLET_ONE</p>', postreq)
+        self.assertIn('<li><p>MARKER_POSTREQ_BULLET_ONE</p></li>', postreq)
+        self.assertNotIn('<p>- MARKER_POSTREQ_BULLET_ONE</p>', postreq)
         self.assertIn('<note type="tip"><p>MARKER_POSTREQ_NOTE.</p></note>', postreq)
 
     def test_unicode_is_replaced_with_ascii_equivalents(self):
@@ -947,12 +1085,15 @@ class TestConceptTopics(ConverterCase):
         self.assertEqual(text.count('<note type="note">'), 1)
         self.assertIn('<note type="warning"><p>MARKER_BP_WARNING.</p></note>', text)
 
-    def test_quick_reference_subsection_is_wrapped_in_a_tip_note(self):
+    def test_quick_reference_subsection_is_a_section_not_a_note(self):
+        # It used to be wrapped in <note type="tip">, which published as a bare
+        # 'Note:' label above the command table. A reference table is not an
+        # aside, so it is a section with a real title like any other.
         text = self.read(BP + 'performance_tuning.dita')
-        self.assertIn('<note type="tip">', text)
-        self.assertIn('<p><b>Quick Reference</b></p>', text)
+        self.assertIn('<section id="quick_reference">', text)
+        self.assertIn('<title>Quick Reference</title>', text)
         self.assertIn('MARKER_BP_INLINE_QUICKREF', text)
-        self.assertNotIn('<section id="quick_reference">', text)
+        self.assertNotIn('<p><b>Quick Reference</b></p>', text)
 
     def test_reference_topics_are_emitted_into_topics_common(self):
         text = self.read('topics/common/c_glossary.dita')

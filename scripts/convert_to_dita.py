@@ -150,6 +150,11 @@ def remove_non_ascii(text: str) -> str:
         '←': '&lt;-',  # arrow
         '⚠️': '[WARNING]',  # warning emoji
         '📖': '[INFO]',  # book emoji
+        # 📘 is dropped rather than tokenised. It only ever decorates a bold note
+        # lead-in ('**📘 For detailed explanations:**'), where a '[INFO]' token
+        # would land inside the <b> run; _strip_note_prefix removes the bare
+        # emoji first, and this is the backstop for anywhere it does not reach.
+        '📘': '',  # blue book emoji
         '✅': '[OK]',  # checkmark
         '❌': '[X]',  # X mark
         '📋': '[NOTE]',  # clipboard
@@ -164,6 +169,85 @@ def remove_non_ascii(text: str) -> str:
         text = text.replace(old, new)
     # Remove any remaining non-ASCII characters
     return text.encode('ascii', 'ignore').decode('ascii')
+
+
+# A decorative emoji leading a heading. remove_non_ascii() runs over the finished
+# DITA string, long after headings are emitted, so at emission time the raw emoji
+# is still there -- '## ⚠️ Important Disclaimers' would reach it and publish as
+# '[WARNING] Important Disclaimers'. In a note the type attribute already carries
+# that meaning; a heading has nowhere to put it, so it is dropped here instead.
+# The bracket-token alternative is a backstop for text already substituted.
+_HEADING_MARKERS = ('WARNING', 'INFO', 'OK', 'X', 'NOTE', 'FOLDER',
+                    'CONFIG', 'TIP', 'START', 'TIME', 'SECURE')
+_heading_marker_re = re.compile(
+    r'^\s*(?:'
+    rf'\[(?:{"|".join(_HEADING_MARKERS)})\]'   # already-substituted token
+    r'|[^\x00-\x7F\s]'                          # or a raw non-ASCII glyph
+    r')[\s️]*',
+    re.IGNORECASE)
+
+
+def strip_heading_marker(text: str) -> str:
+    """Drop leading emoji / emoji-substitution tokens from a heading's text."""
+    previous = None
+    while previous != text:
+        previous = text
+        text = _heading_marker_re.sub('', text)
+    return text.strip()
+
+
+_emphasis_marker_re = re.compile(
+    rf'<(b|i)>\s*(?:\[(?:{"|".join(_HEADING_MARKERS)})\]\s*)+', re.IGNORECASE)
+
+
+def tidy_emphasis(dita: str) -> str:
+    """Clean decoration out of emphasis runs, on the finished DITA string.
+
+    Must run after remove_non_ascii(): an authored '**⚠️ Requires ARP config**'
+    still holds the raw emoji while inline conversion happens, and only becomes
+    '<b>[WARNING] Requires ARP config</b>' at the very end. A decorative token
+    leading a bold label is noise the way it is in a heading -- and where the
+    emoji is dropped outright rather than tokenised it leaves the padding
+    behind, as '<b> NFSv3 required</b>'.
+    """
+    dita = _emphasis_marker_re.sub(r'<\1>', dita)
+    dita = re.sub(r'<(b|i)>[ \t]+', r'<\1>', dita)
+    dita = re.sub(r'[ \t]+</(b|i)>', r'</\1>', dita)
+    return dita
+
+
+# A GUI navigation chain: a trigger verb, then two or more labels joined by '->'.
+# Runs over already-escaped text, so the arrow reads '-&gt;'. The label class
+# excludes '<' and '&' so a chain can never reach across an element boundary
+# (a <codeph> or <xref> emitted by convert_inline ends the match).
+# A menu label is either quoted, or a run of capitalised words. Requiring the
+# capital is what keeps trailing prose out of the chain: in 'Go to Pool ->
+# Advanced tab' the label stops at 'Advanced', leaving 'tab' as narrative. '.'
+# is excluded from the character class so a sentence-ending period is not
+# swallowed into the last <uicontrol>.
+_MENU_LABEL = r'(?:"[^"]+"|[A-Z0-9][\w\-/]*(?:\s+[A-Z0-9][\w\-/]*)*)'
+_menucascade_re = re.compile(
+    r'(?P<lead>\b(?:Go to|Navigate to|Browse to|Click)\b:?\s+)'
+    rf'(?P<chain>{_MENU_LABEL}(?:\s*(?:-&gt;|→)\s*{_MENU_LABEL})+)')
+
+
+def link_menucascade(text: str) -> str:
+    """Turn 'Go to: Datacenter -> Storage' into a DITA <menucascade>.
+
+    Authors write GUI paths with ASCII arrows, which published as the literal
+    text 'Datacenter -&gt; Storage'; Heretto's editors were retyping them as
+    <menucascade>/<uicontrol> by hand on every guide.
+    """
+    def _replace(match):
+        labels = [seg.strip().strip('"').strip()
+                  for seg in re.split(r'-&gt;|→', match.group('chain'))]
+        labels = [l for l in labels if l]
+        if len(labels) < 2:
+            return match.group(0)
+        controls = ''.join(f'<uicontrol>{l}</uicontrol>' for l in labels)
+        return f'{match.group("lead")}<menucascade>{controls}</menucascade>'
+
+    return _menucascade_re.sub(_replace, text)
 
 
 def remove_step_prefix(text: str) -> str:
@@ -378,6 +462,10 @@ class MarkdownElement:
     language: str = ""  # For code blocks
     items: List[str] = field(default_factory=list)  # For lists
     children: List['MarkdownElement'] = field(default_factory=list)
+    # True when the element came from an inlined include rather than the guide
+    # itself. An include's own sectioning is local to it: a heading it carries
+    # must not end the parent's <context> region. See _splice_inlined_includes.
+    from_include: bool = False
 
 
 class MarkdownParser:
@@ -689,6 +777,14 @@ class MarkdownParser:
         # Restore inline code spans as <codeph>
         text = re.sub(r'\x00CODE(\d+)\x00',
                       lambda m: f'<codeph>{code_spans[int(m.group(1))]}</codeph>', text)
+        # Runs after the restore, so a navigation chain can never start inside a
+        # <codeph> or an <xref> label.
+        text = link_menucascade(text)
+        # An emoji stripped from a bold lead-in ('**📘 For detailed ...:**') leaves
+        # its trailing space inside the run, as '<b> For detailed ...'. Move the
+        # padding outside the emphasis.
+        text = re.sub(r'<(b|i)>[ \t]+', r'<\1>', text)
+        text = re.sub(r'[ \t]+</(b|i)>', r'</\1>', text)
         return text
 
     def _normalize_source_ref(self, href: str) -> str:
@@ -943,7 +1039,7 @@ class DITAGenerator:
         for elem in elements:
             if elem.type == 'heading':
                 # Headings in included content become bold paragraphs (they're sections in context)
-                output.append(f'{indent}<p><b>{escape_xml(elem.content)}</b></p>')
+                output.append(f'{indent}<p><b>{escape_xml(strip_heading_marker(elem.content))}</b></p>')
             elif elem.type == 'paragraph':
                 output.append(f'{indent}<p>{self.parser.convert_inline(escape_xml(elem.content))}</p>')
             elif elem.type == 'code_block':
@@ -955,7 +1051,7 @@ class DITAGenerator:
             elif elem.type == 'note':
                 note_type = self._detect_note_type(elem.content)
                 cleaned_content = self._strip_note_prefix(elem.content, note_type)
-                output.append(f'{indent}<note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
+                output.append(f'{indent}<note type="{note_type}">{self._note_body(cleaned_content)}</note>')
             elif elem.type == 'unordered_list':
                 output.append(self._generate_ul(elem.items, indent=indent))
             elif elem.type == 'ordered_list':
@@ -1052,7 +1148,7 @@ class DITAGenerator:
         for elem in elements:
             if elem.type == 'heading':
                 # Headings in warehouse topics become bold paragraphs
-                output.append(f'            <p><b>{escape_xml(elem.content)}</b></p>')
+                output.append(f'            <p><b>{escape_xml(strip_heading_marker(elem.content))}</b></p>')
             elif elem.type == 'paragraph':
                 output.append(f'            <p>{self.parser.convert_inline(escape_xml(elem.content))}</p>')
             elif elem.type == 'code_block':
@@ -1065,7 +1161,7 @@ class DITAGenerator:
             elif elem.type == 'note':
                 note_type = self._detect_note_type(elem.content)
                 cleaned_content = self._strip_note_prefix(elem.content, note_type)
-                output.append(f'            <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
+                output.append(f'            <note type="{note_type}">{self._note_body(cleaned_content)}</note>')
             elif elem.type == 'unordered_list':
                 output.append(self._generate_ul(elem.items, indent='            '))
             elif elem.type == 'ordered_list':
@@ -1217,7 +1313,7 @@ class DITAGenerator:
         """
         t = elem.type
         if t == 'heading':
-            buf.append(f'        <p><b>{escape_xml(elem.content)}</b></p>')
+            buf.append(f'        <p><b>{escape_xml(strip_heading_marker(elem.content))}</b></p>')
         elif t == 'include':
             buf.append(self._generate_conref(elem.content, topic_id))
         elif t == 'paragraph':
@@ -1231,7 +1327,7 @@ class DITAGenerator:
         elif t == 'note':
             note_type = self._detect_note_type(elem.content)
             cleaned_content = self._strip_note_prefix(elem.content, note_type)
-            buf.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
+            buf.append(f'        <note type="{note_type}">{self._note_body(cleaned_content)}</note>')
         elif t == 'unordered_list':
             buf.append(self._generate_ul(elem.items))
         elif t == 'ordered_list':
@@ -1262,9 +1358,25 @@ class DITAGenerator:
         in_postreq = False
         seen_h2 = False         # False until the first H2 - intro content goes to <context>
 
+        elements = self._splice_inlined_includes(elements)
+        region_stack = []       # section flags saved at each include boundary
+
         for elem in elements:
+            if elem.type == 'include_start':
+                region_stack.append((in_prereq, in_disclaimer_section, in_postreq))
+                continue
+            elif elem.type == 'include_end':
+                if region_stack:
+                    in_prereq, in_disclaimer_section, in_postreq = region_stack.pop()
+                continue
             if elem.type == 'heading' and elem.level == 2:
-                seen_h2 = True
+                # An H2 that opens a step ends the <context> region. One that only
+                # routes content elsewhere (Prerequisites, a disclaimer, Next
+                # Steps) does not -- and when it arrives from an include it must
+                # not, or the guide's own intro prose after the include would be
+                # orphaned instead of landing in <context>.
+                if not elem.from_include:
+                    seen_h2 = True
                 if 'prerequisite' in elem.content.lower():
                     in_prereq = True
                     in_disclaimer_section = False
@@ -1290,14 +1402,12 @@ class DITAGenerator:
                     if current_step:
                         steps.append(current_step)
                     current_step = None
-                elif 'step' in elem.content.lower() or re.match(r'step\s*\d+', elem.content.lower()):
-                    in_prereq = False
-                    in_disclaimer_section = False
-                    in_postreq = False
-                    if current_step:
-                        steps.append(current_step)
-                    current_step = {'title': elem.content, 'content': []}
                 else:
+                    # Everything else opens a step -- including an H2 an include
+                    # carried in, which is how '## Quick Reference' and
+                    # '## Step 2: Enable Native NVMe Multipath' become steps of
+                    # their own rather than bold text inside the previous step.
+                    seen_h2 = True
                     in_prereq = False
                     in_disclaimer_section = False
                     in_postreq = False
@@ -1309,12 +1419,23 @@ class DITAGenerator:
                 if elem.type == 'paragraph':
                     postreq_content.append(f'            <p>{self.parser.convert_inline(escape_xml(elem.content))}</p>')
                 elif elem.type == 'unordered_list':
-                    for item in elem.items:
-                        postreq_content.append(f'            <p>- {self.parser.convert_inline(escape_xml(item))}</p>')
+                    # A real <ul>. These were emitted as '<p>- text</p>' -- one
+                    # paragraph per bullet with the hyphen left as literal text.
+                    postreq_content.append(self._generate_ul(elem.items, indent='            '))
+                elif elem.type == 'ordered_list':
+                    postreq_content.append(self._generate_ol(elem.items, indent='            '))
+                elif elem.type == 'ordered_list_nested':
+                    postreq_content.append(self._generate_ol(
+                        elem.items, indent='            ',
+                        nested_items=[child.items for child in elem.children]))
+                elif elem.type in ('code_block', 'table'):
+                    dita = self._element_to_dita(elem)
+                    if dita and dita.strip():
+                        postreq_content.append(dita)
                 elif elem.type == 'note':
                     note_type = self._detect_note_type(elem.content)
                     cleaned_content = self._strip_note_prefix(elem.content, note_type)
-                    postreq_content.append(f'            <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
+                    postreq_content.append(f'            <note type="{note_type}">{self._note_body(cleaned_content)}</note>')
                 elif elem.type == 'include':
                     postreq_content.append(self._generate_conref(elem.content, topic_id))
             elif elem.type == 'note':
@@ -1324,18 +1445,18 @@ class DITAGenerator:
                     # Move to prereq as a note
                     note_type = self._detect_note_type(elem.content)
                     cleaned_content = self._strip_note_prefix(elem.content, note_type)
-                    prereq_notes.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
+                    prereq_notes.append(f'        <note type="{note_type}">{self._note_body(cleaned_content)}</note>')
                 elif in_prereq:
                     note_type = self._detect_note_type(elem.content)
                     cleaned_content = self._strip_note_prefix(elem.content, note_type)
-                    prereq_conrefs.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
+                    prereq_conrefs.append(f'        <note type="{note_type}">{self._note_body(cleaned_content)}</note>')
                 elif current_step:
                     current_step['content'].append(self._element_to_dita(elem))
                 elif not seen_h2:
                     # Intro notes belong with the prerequisites, not loose in taskbody
                     note_type = self._detect_note_type(elem.content)
                     cleaned_content = self._strip_note_prefix(elem.content, note_type)
-                    prereq_notes.append(f'        <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>')
+                    prereq_notes.append(f'        <note type="{note_type}">{self._note_body(cleaned_content)}</note>')
                 else:
                     output.append(self._element_to_dita(elem))
             elif elem.type == 'include':
@@ -1403,7 +1524,7 @@ class DITAGenerator:
                 # Remove "Step X:" prefix from title since DITA uses numbered list
                 step_title = remove_step_prefix(step['title'])
                 output.append(f'''            <step>
-                <cmd>{escape_xml(step_title)}</cmd>
+                <cmd>{escape_xml(strip_heading_marker(step_title))}</cmd>
                 <info>
 {step_content}
                 </info>
@@ -1425,7 +1546,7 @@ class DITAGenerator:
             return f'                    <p>{self.parser.convert_inline(escape_xml(elem.content))}</p>'
         elif elem.type == 'heading' and elem.level >= 3:
             # H3+ headings become bold paragraphs
-            return f'                    <p><b>{escape_xml(elem.content)}</b></p>'
+            return f'                    <p><b>{escape_xml(strip_heading_marker(elem.content))}</b></p>'
         elif elem.type == 'code_block':
             # Handle Mermaid diagrams as local images
             if elem.language == 'mermaid':
@@ -1447,7 +1568,7 @@ class DITAGenerator:
         elif elem.type == 'note':
             note_type = self._detect_note_type(elem.content)
             cleaned_content = self._strip_note_prefix(elem.content, note_type)
-            return f'                    <note type="{note_type}"><p>{self.parser.convert_inline(escape_xml(cleaned_content))}</p></note>'
+            return f'                    <note type="{note_type}">{self._note_body(cleaned_content)}</note>'
         elif elem.type == 'table':
             # Tables inside an H2 section were previously dropped silently: this
             # branch was missing, so any table in a <step> fell through to ''.
@@ -1483,19 +1604,18 @@ class DITAGenerator:
             return f'        <div conref="{prefix}/{warehouse_file}#{warehouse_id}/{div_id}"/>'
 
     def _wrap_section(self, title: str, content: List[str], section_id: str = None) -> str:
-        """Wrap content in a DITA section."""
+        """Wrap content in a DITA section.
+
+        A 'Quick Reference' section used to be emitted as <note type="tip">, which
+        published as a bare 'Note:' label sitting above the command table -- the
+        table is reference material, not an aside. It is a section like any other.
+        """
+        title = strip_heading_marker(title)
         if section_id is None:
             section_id = sanitize_id(title)
         content_str = '\n'.join(content) if content else ''
 
-        # Quick Reference sections are wrapped in a note
-        if 'quick reference' in title.lower():
-            return f'''        <note type="tip">
-            <p><b>{escape_xml(title)}</b></p>
-{content_str}
-        </note>'''
-        else:
-            return f'''        <section id="{section_id}">
+        return f'''        <section id="{section_id}">
             <title>{escape_xml(title)}</title>
 {content_str}
         </section>'''
@@ -1529,6 +1649,11 @@ class DITAGenerator:
             r'⚠️\s*',                       # ⚠️ alone
             r'\*\*📖\s*[^*:]+:\*\*\s*',    # **📖 Info:**
             r'📖\s*',                       # 📖 alone
+            # 📘 deliberately has no '**📘 text:**' rule. That lead-in carries real
+            # content ('**📘 For detailed explanations, ... troubleshooting:**'),
+            # so only the emoji is removed -- matching the '**' rule would delete
+            # the whole sentence.
+            r'📘\s*',                       # 📘 alone
         ]
         result = content
         for pattern in emoji_patterns:
@@ -1552,6 +1677,91 @@ class DITAGenerator:
         for pattern in patterns:
             result = re.sub(pattern, '', result, flags=re.IGNORECASE)
         return result.strip()
+
+    def _splice_inlined_includes(self, elements: List[MarkdownElement],
+                                 depth: int = 0) -> List[MarkdownElement]:
+        """Replace include elements with the include's own parsed elements.
+
+        Only under --inline-includes; without it an include stays a conref.
+
+        The include used to be rendered to DITA on its own (see
+        _inline_include_to_dita), which turned *every* heading it contained into a
+        bold paragraph. That silently demoted structure the parent would have
+        honoured: '## Quick Reference' ended up buried in the previous step's
+        <info> instead of becoming its own <step>, '## Step 2: Enable Native NVMe
+        Multipath' collapsed into step 1, and '## ⚠️ Important Disclaimers' became
+        body text rather than routing to <prereq>. Splicing the elements in means
+        the parent's H2 handling sees them.
+        """
+        if not self.config.inline_includes:
+            return elements
+        if depth > 8:       # cycle guard: an include that (transitively) includes itself
+            return [e for e in elements if e.type != 'include']
+
+        spliced: List[MarkdownElement] = []
+        for elem in elements:
+            if elem.type != 'include':
+                spliced.append(elem)
+                continue
+            content = self._resolve_include(elem.content)
+            if not content:
+                spliced.append(elem)    # unresolved: leave it for the comment path
+                continue
+            inner = self._splice_inlined_includes(self.parser.parse(content), depth + 1)
+            for child in inner:
+                child.from_include = True
+            # Bracket the include so the caller can scope its sectioning: whatever
+            # region the include opens is closed again when its content runs out.
+            spliced.append(MarkdownElement(type='include_start', content=elem.content))
+            spliced.extend(inner)
+            spliced.append(MarkdownElement(type='include_end', content=elem.content))
+        return spliced
+
+    def _note_body(self, content: str) -> str:
+        """Render a note's inner XML, promoting authored bullets into a <ul>.
+
+        A blockquote carrying a list arrives here as one string with the source
+        newlines intact:
+
+            **Why blacklist local and NVMe devices?**
+            - **Local devices**: Prevents dm-multipath from ...
+            - **NVMe devices**: NVMe uses native kernel multipath ...
+
+        Emitting that as a single <p> left the hyphens as literal text, which is
+        what reached Heretto and had to be rebuilt into a list by hand. Notes
+        with no bullets keep their existing single-<p> shape (newlines and all),
+        both to hold the diff down and because collapse_consecutive_notes()
+        matches notes on one line.
+        """
+        blocks: List[Tuple[str, object]] = []
+        for raw in content.split('\n'):
+            line = raw.strip()
+            if not line:
+                continue
+            bullet = re.match(r'^[-*+]\s+(.+)$', line)
+            if bullet:
+                if blocks and blocks[-1][0] == 'ul':
+                    blocks[-1][1].append(bullet.group(1))
+                else:
+                    blocks.append(('ul', [bullet.group(1)]))
+            elif blocks and blocks[-1][0] == 'p':
+                blocks[-1] = ('p', f'{blocks[-1][1]} {line}')
+            else:
+                blocks.append(('p', line))
+
+        if not any(kind == 'ul' for kind, _ in blocks):
+            return f'<p>{self.parser.convert_inline(escape_xml(content))}</p>'
+
+        parts = []
+        for kind, payload in blocks:
+            if kind == 'p':
+                parts.append(f'<p>{self.parser.convert_inline(escape_xml(payload))}</p>')
+            else:
+                items = ''.join(
+                    f'<li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>'
+                    for item in payload)
+                parts.append(f'<ul>{items}</ul>')
+        return ''.join(parts)
 
     def _generate_ul(self, items: List[str], indent: str = '        ') -> str:
         """Generate a DITA unordered list with proper <p> wrapping."""
@@ -1971,7 +2181,7 @@ class MarkdownToDITAConverter:
             topic_id = f"t_{base_id}"
             self.dita_gen.set_source_context(md_file.stem)
             dita_content = self.dita_gen.generate_task_topic(doc_title, content, topic_id)
-            dita_content = remove_non_ascii(dita_content)
+            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
             output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
             output_file.write_text(dita_content, encoding='utf-8')
             print(f"  Created: {topic_id}.dita ({doc_title})")
@@ -2002,7 +2212,7 @@ class MarkdownToDITAConverter:
             topic_id = f"c_{base_id}"
             self.dita_gen.set_source_context(md_file.stem)
             dita_content = self.dita_gen.generate_concept_topic(doc_title, content, topic_id)
-            dita_content = remove_non_ascii(dita_content)
+            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
             output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
             output_file.write_text(dita_content, encoding='utf-8')
             self.converted_topics.append({
@@ -2028,7 +2238,7 @@ class MarkdownToDITAConverter:
                 dita_content = self.dita_gen.generate_concept_topic(
                     chapter_title, chapter_content, topic_id
                 )
-                dita_content = remove_non_ascii(dita_content)
+                dita_content = tidy_emphasis(remove_non_ascii(dita_content))
 
                 output_file = topics_dir / f"{topic_id}.dita"
                 output_file.write_text(dita_content, encoding='utf-8')
@@ -2417,7 +2627,7 @@ class MarkdownToDITAConverter:
             dita_content = self.dita_gen.generate_task_topic(title, content, topic_id)
 
             # Clean non-ASCII characters from output
-            dita_content = remove_non_ascii(dita_content)
+            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
 
             # Write output file
             output_file = output_dir / f"{topic_id}.dita"
@@ -2499,7 +2709,13 @@ class MarkdownToDITAConverter:
         is_first_topic = True
 
         for section_title, section_content in sections:
-            # Skip troubleshooting sections
+            # Troubleshooting sections are deliberately NOT published. They stay in the
+            # Markdown guides on the GitHub Pages site, but Everpure's support site
+            # carries its own troubleshooting KBs and per-guide troubleshooting is not
+            # wanted there. This is a content decision, not an oversight -- roughly 1,900
+            # lines across the 25 BEST-PRACTICES guides are withheld by this branch.
+            # _build_link_registry mirrors this skip so no href points at a topic that
+            # never gets written. Do not "fix" this.
             if 'troubleshoot' in section_title.lower():
                 continue
 
@@ -2522,7 +2738,7 @@ class MarkdownToDITAConverter:
             )
 
             # Clean non-ASCII characters from output
-            dita_content = remove_non_ascii(dita_content)
+            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
 
             # Write output file
             output_file = output_dir / f"{section_id}.dita"
@@ -2586,7 +2802,7 @@ class MarkdownToDITAConverter:
             dita_content = self.dita_gen.generate_concept_topic(title, content, topic_id)
 
             # Clean non-ASCII characters from output
-            dita_content = remove_non_ascii(dita_content)
+            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
 
             # Write output file
             output_file = common_dir / f"{topic_id}.dita"

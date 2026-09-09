@@ -135,13 +135,13 @@ Tuning MPIO timers prevents premature path failovers and lets the system recover
 
 ```powershell
 Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
-    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
+    -NewPDORemovePeriod 30 -NewDiskTimeout 60 `
     -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 ```
 
 `NewPDORemovePeriod` determines how long the OS waits for a failed path to recover before the device is removed.
 
-> **Note:** These are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
+> **Note:** Microsoft's [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage) documents `-NewPDORemovePeriod 20` for external block storage. Everpure's guidance for Azure Local is `30`, which is the value used above: holding a failed path 30 seconds lets MPIO complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. Apply the same value consistently on **every** node, and use `30` unless you have a specific reason to follow the Microsoft value.
 
 > **Note:** Workloads with specific latency requirements or complex fabrics may require additional tuning.
 
@@ -419,7 +419,7 @@ New-MSDSMSupportedHw -VendorId "PURE" -ProductId "FlashArray"
 Remove-MSDSMSupportedHW -VendorId 'Vendor 8' -ProductId 'Product 16' -Confirm:$false  # optional: drop the placeholder entry
 Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy RR        # RR <=10 paths, LQD >10 paths
 Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
-    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
+    -NewPDORemovePeriod 30 -NewDiskTimeout 60 `
     -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 Get-InitiatorPort                                          # record ALL WWPNs per node
 # Reboot the node after registering the hardware ID

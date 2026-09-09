@@ -1,5 +1,6 @@
 dita_output/
 validation/
+tickets/
 _lessons-learned-local.md
 mcp-screenshot-server/
 external docs/
@@ -25,3 +26,4 @@ scripts/redactions/vmware_srm_user_guide.json
 env.md
 .claude/
 *.zip
+.mcp.json
