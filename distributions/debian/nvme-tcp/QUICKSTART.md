@@ -7,11 +7,13 @@ title: NVMe-TCP on Debian/Ubuntu - Quick Start Guide
 
 This guide provides a streamlined path to configure NVMe-TCP storage on Debian and Ubuntu systems.
 
-> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [NVMe-TCP Best Practices](./BEST-PRACTICES.md)
-
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-nvme.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [NVMe-TCP Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -22,7 +24,6 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Debian a
 - Dedicated storage network interfaces
 - Root or sudo access
 
-{% include quickstart/glossary-link-nvme.md %}
 
 ## Step 1: Install NVMe Tools
 

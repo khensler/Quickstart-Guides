@@ -8,11 +8,16 @@ title: Fibre Channel on XCP-ng - Quick Start Guide
 This guide provides a streamlined path to configure Fibre Channel storage on XCP-ng using the `xe` CLI.
 
 > **📘 For GUI-based setup with Xen Orchestra:** See [FC GUI Quick Start](./GUI-QUICKSTART.md)
-> **📘 For detailed explanations and troubleshooting:** See [XCP-ng Storage Documentation](https://docs.xcp-ng.org/storage/)
+
+> **📘 Vendor documentation:** See the [XCP-ng Storage Documentation](https://docs.xcp-ng.org/storage/)
 
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-fc.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [Fibre Channel Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -23,7 +28,6 @@ This guide provides a streamlined path to configure Fibre Channel storage on XCP
 - Fabric zoning and volume presentation configured by your SAN administrator
 - Root access to all pool hosts
 
-{% include quickstart/glossary-link-fc.md %}
 
 ---
 

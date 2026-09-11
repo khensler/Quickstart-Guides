@@ -19,6 +19,7 @@ Comprehensive best practices for deploying Fibre Channel storage on Debian/Ubunt
 - [Fabric & Zoning Guidance](#fabric--zoning-guidance)
 - [AppArmor Configuration](#apparmor-configuration)
 - [FC Architecture](#fc-architecture)
+- [Target-Driven Rescan](#target-driven-rescan)
 - [Multipath Configuration](#multipath-configuration)
 - [Performance Tuning](#performance-tuning)
 - [High Availability](#high-availability)
@@ -213,6 +214,12 @@ FC Fabric
 - dm-multipath aggregates all `sdX` devices for the same LUN into `/dev/mapper/mpathX`
 - Always target `/dev/mapper/` devices, never raw `sdX` paths
 - ALUA identifies preferred (active/optimized) vs. available (active/non-optimized) paths
+
+---
+
+## Target-Driven Rescan
+
+{% include bestpractices/target-driven-rescan.md %}
 
 ---
 

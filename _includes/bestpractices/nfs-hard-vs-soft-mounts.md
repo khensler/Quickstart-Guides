@@ -45,7 +45,7 @@ mount -t nfs4 -o vers=4.1,soft,timeo=300,retrans=2 ...
 
 **Behavior during outage:**
 - I/O operations wait for timeout period
-- After `timeo × (retrans + 1)` ≈ 90-180 seconds, returns I/O error
+- After `timeo × (retrans + 1)` ~90-180 seconds, returns I/O error
 - Application receives error and must handle it
 - **Risk of data corruption if write operations fail**
 
@@ -71,7 +71,7 @@ mount -t nfs4 -o vers=4.1,soft,timeo=300,retrans=2 ...
 The total timeout before soft mount returns an error:
 
 ```
-Total timeout ≈ timeo × (retrans + 1) × TCP_RETRIES
+Total timeout ~ timeo × (retrans + 1) × TCP_RETRIES
 ```
 
 With `timeo=300` (30 seconds) and `retrans=2`:

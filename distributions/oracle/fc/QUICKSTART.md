@@ -7,11 +7,13 @@ title: Fibre Channel on Oracle Linux - Quick Start Guide
 
 This guide provides a streamlined path to configure Fibre Channel storage on Oracle Linux.
 
-> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [FC Best Practices](./BEST-PRACTICES.md)
-
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-fc.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [Fibre Channel Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -22,7 +24,6 @@ This guide provides a streamlined path to configure Fibre Channel storage on Ora
 - Fabric zoning and volume presentation configured by your SAN administrator
 - Root or sudo access
 
-{% include quickstart/glossary-link-fc.md %}
 
 ## Step 1: Install Packages
 

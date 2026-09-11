@@ -20,6 +20,7 @@ Comprehensive best practices for deploying iSCSI storage on Debian and Ubuntu sy
 - [AppArmor Configuration](#apparmor-configuration)
 - [Firewall Configuration](#firewall-configuration)
 - [iSCSI Architecture](#iscsi-architecture)
+- [Target-Driven Rescan](#target-driven-rescan)
 - [Multipath Configuration](#multipath-configuration)
 - [Performance Tuning](#performance-tuning)
 - [High Availability](#high-availability)
@@ -527,6 +528,12 @@ sudo nft list ruleset
 - Static IP addressing (no DHCP)
 - No default gateway on storage interfaces
 - MTU 9000 end-to-end
+
+---
+
+## Target-Driven Rescan
+
+{% include bestpractices/target-driven-rescan.md %}
 
 ---
 

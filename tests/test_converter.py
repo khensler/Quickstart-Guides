@@ -149,15 +149,75 @@ class TestUtilityFunctions(unittest.TestCase):
                          'code-and-bold-and-italic')
         self.assertEqual(conv.github_slug('Step 1: Connect'), 'step-1-connect')
 
-    def test_remove_non_ascii_uses_xml_safe_replacements(self):
+    def test_normalize_characters_uses_xml_safe_replacements(self):
         # Runs on already-escaped XML, so arrows must become entities, never raw < >
-        self.assertEqual(conv.remove_non_ascii('host → array'), 'host -&gt; array')
-        self.assertEqual(conv.remove_non_ascii('array ← host'), 'array &lt;- host')
-        self.assertEqual(conv.remove_non_ascii('em—dash and en–dash'), 'em-dash and en-dash')
-        self.assertEqual(conv.remove_non_ascii('⚠️ careful'), '[WARNING] careful')
-        self.assertEqual(conv.remove_non_ascii('✅ ok ❌ no 💡 tip'), '[OK] ok [X] no [TIP] tip')
-        # Anything left over is dropped rather than shipped as non-ASCII
-        self.assertEqual(conv.remove_non_ascii('naive é test'), 'naive  test')
+        self.assertEqual(conv.normalize_characters('host → array'), 'host -&gt; array')
+        self.assertEqual(conv.normalize_characters('array ← host'), 'array &lt;- host')
+        self.assertEqual(conv.normalize_characters('em—dash and en–dash'),
+                         'em-dash and en-dash')
+        self.assertEqual(conv.normalize_characters('volume (≥ 250 GB)'),
+                         'volume (&gt;= 250 GB)')
+        self.assertEqual(conv.normalize_characters('at most ≤ 4'), 'at most &lt;= 4')
+
+    def test_normalize_characters_keeps_extended_ascii(self):
+        # Latin-1 passes through: dropping U+00D7 turned '2x2' into '22'.
+        for kept in ('Minimum 2×2 topology', '2 NICs × 2 portals = 4 paths',
+                     'no_path_retry × polling_interval',
+                     '± 5%', '90° C', 'a · b', 'naive é test'):
+            self.assertEqual(conv.normalize_characters(kept), kept)
+
+    def test_normalize_characters_folds_above_latin1(self):
+        self.assertEqual(conv.normalize_characters('≈ 20.4 s'), '~ 20.4 s')
+        self.assertEqual(conv.normalize_characters('a ≠ b'), 'a != b')
+        # Letters above Latin-1 fold to a base letter rather than vanishing
+        self.assertEqual(conv.normalize_characters('ĀĒĪ'), 'AEI')
+        # Invisible traps are normalised away
+        self.assertEqual(conv.normalize_characters('a b'), 'a b')
+        self.assertEqual(conv.normalize_characters('a​b'), 'ab')
+
+    def test_normalize_characters_folds_box_drawing(self):
+        # The ASCII-art topology diagrams have to keep their alignment.
+        self.assertEqual(conv.normalize_characters('├── Node 1'), '+-- Node 1')
+        self.assertEqual(conv.normalize_characters('└── /dev/mapper/mpatha'),
+                         '+-- /dev/mapper/mpatha')
+        self.assertEqual(conv.normalize_characters('│  x'), '|  x')
+        self.assertEqual(conv.normalize_characters('──► FlashArray'),
+                         '--&gt; FlashArray')
+
+    def test_normalize_characters_publishes_no_emoji(self):
+        # Decoration: the emoji goes, the text stays. No bracket tokens -- a
+        # note's @type already says 'warning', so '[WARNING]' was pure noise.
+        self.assertEqual(conv.normalize_characters('⚠️ careful'), 'careful')
+        self.assertEqual(conv.normalize_characters('✅ ok ❌ no 💡 tip'), 'ok no tip')
+        self.assertEqual(conv.normalize_characters('🚨 critical'), 'critical')
+        self.assertEqual(conv.normalize_characters('done 🎉 now'), 'done now')
+        self.assertEqual(conv.normalize_characters('team 👍🏽 ok'), 'team ok')
+        self.assertEqual(conv.normalize_characters('<p><b>📘 See also:</b></p>'),
+                         '<p><b>See also:</b></p>')
+
+    def test_normalize_characters_keeps_meaning_of_a_lone_emoji(self):
+        # A tick alone in a table cell *is* the cell's meaning; dropping it
+        # would empty the column, so it becomes a word instead.
+        self.assertEqual(conv.normalize_characters('<entry>✓</entry>'),
+                         '<entry>Yes</entry>')
+        self.assertEqual(conv.normalize_characters('<entry>❌</entry>'),
+                         '<entry>No</entry>')
+        self.assertEqual(conv.normalize_characters('<entry><b>✅</b></entry>'),
+                         '<entry><b>Yes</b></entry>')
+        # Next to text it is redundant and just goes
+        self.assertEqual(conv.normalize_characters('<entry>✓ Yes</entry>'),
+                         '<entry>Yes</entry>')
+        self.assertEqual(conv.normalize_characters('<entry>✓ Supported</entry>'),
+                         '<entry>Supported</entry>')
+
+    def test_normalize_characters_leaves_codeblock_whitespace_alone(self):
+        # Dropping a glyph must not reindent preformatted content.
+        src = '<codeblock>line one 💡\n    indented two\n\n    after blank</codeblock>'
+        self.assertEqual(conv.normalize_characters(src),
+                         '<codeblock>line one \n    indented two\n\n    after blank</codeblock>')
+
+    def test_remove_non_ascii_alias_still_works(self):
+        self.assertIs(conv.remove_non_ascii, conv.normalize_characters)
 
     def test_remove_step_prefix(self):
         self.assertEqual(conv.remove_step_prefix('Step 1: Verify the initiator'),
@@ -498,10 +558,36 @@ class TestTaskBodyRouting(unittest.TestCase):
                         '## Prerequisites\n\n- first\n\n## Step 1: Go\n\nA\n')
         self.assertOrder(got, '<prereq>', '<context>', '<steps>', '<postreq>')
 
-    def test_next_steps_bullets_become_dash_paragraphs(self):
+    def test_note_bullets_become_a_list_not_literal_hyphens(self):
+        # A blockquote carrying a list reaches the note as one newline-joined
+        # string. It used to emit a single <p> with the hyphens intact, which is
+        # what Heretto received and had to be re-marked-up by hand.
+        got = self.body('## Step 1: X\n\n'
+                        '> **Why?**\n> - first reason\n> - second reason\n')
+        self.assertIn('<ul>', got)
+        self.assertIn('<li><p>first reason</p></li>', got)
+        self.assertIn('<li><p>second reason</p></li>', got)
+        self.assertNotIn('- first reason', got)
+
+    def test_note_without_bullets_keeps_its_single_paragraph_shape(self):
+        got = self.body('## Step 1: X\n\n> **Heads up:** just prose here.\n')
+        self.assertIn('<note type="note"><p>', got)
+        self.assertNotIn('<ul>', got)
+
+    def test_next_steps_bullets_become_a_real_list(self):
+        # These used to be emitted as '<p>- one</p>': one paragraph per bullet
+        # with the Markdown hyphen surviving as literal text.
         got = self.body('## Next Steps\n\n- one\n- two\n')
-        self.assertIn('<p>- one</p>', got)
-        self.assertIn('<p>- two</p>', got)
+        self.assertIn('<ul>', got)
+        self.assertIn('<li><p>one</p></li>', got)
+        self.assertIn('<li><p>two</p></li>', got)
+        self.assertNotIn('<p>- one</p>', got)
+
+    def test_next_steps_numbered_list_becomes_an_ol(self):
+        got = self.body('## Next Steps\n\n1. first\n2. second\n')
+        self.assertIn('<ol>', got)
+        self.assertIn('first', got)
+        self.assertNotIn('<p>- first</p>', got)
 
     def assertOrder(self, hay, *needles):
         pos = -1
@@ -509,6 +595,117 @@ class TestTaskBodyRouting(unittest.TestCase):
             i = hay.find(n, pos + 1)
             self.assertNotEqual(i, -1, f'{n} missing or out of order')
             pos = i
+
+
+class TestIncludeSectioning(unittest.TestCase):
+    """An inlined include's own headings participate in the parent's structure.
+
+    Previously the include was rendered to DITA on its own, so every heading it
+    carried became a bold paragraph -- demoting structure the parent would have
+    honoured. Its sectioning is still scoped to the include, though: a region the
+    include opens must close when its content runs out.
+    """
+
+    def setUp(self):
+        cfg = conv.ConversionConfig()
+        cfg.inline_includes = True
+        self.g = conv.DITAGenerator(cfg)
+        self.g._resolve_include = self._fake_include
+
+    FAKE = {
+        'quickstart/qref.md': '## Quick Reference\n\nMARKER_QREF body.\n',
+        'quickstart/disc.md': ('## Important Disclaimers\n\n'
+                               '> **Vendor Documentation Priority:** MARKER_DISC.\n'),
+        'quickstart/plain.md': 'MARKER_PLAIN prose.\n',
+    }
+
+    def _fake_include(self, path):
+        return self.FAKE.get(path, '')
+
+    def body(self, md):
+        return self.g._elements_to_task_body(self.g.parser.parse(md), 't_x')
+
+    def test_include_h2_becomes_its_own_step(self):
+        got = self.body('## Step 1: First\n\nA\n\n'
+                        '{% include quickstart/qref.md %}\n')
+        self.assertIn('<cmd>Quick Reference</cmd>', got)
+        self.assertEqual(got.count('<step>'), 2)
+        self.assertNotIn('<p><b>Quick Reference</b></p>', got)
+
+    def test_disclaimer_include_does_not_swallow_the_following_context(self):
+        # The disclaimer include sits above the intro prose in every guide. Its
+        # H2 must not end the <context> region.
+        got = self.body('{% include quickstart/disc.md %}\n\n'
+                        'MARKER_INTRO prose before the first real H2.\n\n'
+                        '## Step 1: First\n\nA\n')
+        self.assertIn('MARKER_DISC', got.split('</prereq>')[0])
+        context = got.split('<context>')[1].split('</context>')[0]
+        self.assertIn('MARKER_INTRO', context)
+
+    def test_a_region_opened_by_the_parent_survives_an_include(self):
+        got = self.body('## Prerequisites\n\n- MARKER_BULLET\n\n'
+                        '{% include quickstart/plain.md %}\n\n'
+                        '- MARKER_AFTER_INCLUDE\n')
+        prereq = got.split('<prereq>')[1].split('</prereq>')[0]
+        self.assertIn('MARKER_BULLET', prereq)
+        self.assertIn('MARKER_PLAIN', prereq)
+        self.assertIn('MARKER_AFTER_INCLUDE', prereq)
+
+    def test_includes_stay_conrefs_when_not_inlining(self):
+        cfg = conv.ConversionConfig()
+        cfg.inline_includes = False
+        g = conv.DITAGenerator(cfg)
+        got = g._elements_to_task_body(
+            g.parser.parse('## Step 1: First\n\n{% include quickstart/qref.md %}\n'), 't_x')
+        self.assertIn('conref=', got)
+        self.assertNotIn('<cmd>Quick Reference</cmd>', got)
+
+
+class TestHeadingMarkers(unittest.TestCase):
+    """Emoji decoration is dropped from headings rather than transliterated."""
+
+    def test_warning_emoji_is_dropped_from_a_heading(self):
+        self.assertEqual(conv.strip_heading_marker('⚠️ Important Disclaimers'),
+                         'Important Disclaimers')
+
+    def test_substituted_token_is_dropped_too(self):
+        self.assertEqual(conv.strip_heading_marker('[WARNING] Important Disclaimers'),
+                         'Important Disclaimers')
+
+    def test_plain_heading_is_untouched(self):
+        self.assertEqual(conv.strip_heading_marker('Configure Multipath'),
+                         'Configure Multipath')
+
+    def test_a_heading_that_is_only_a_marker_becomes_empty(self):
+        self.assertEqual(conv.strip_heading_marker('⚠️'), '')
+
+
+class TestMenucascade(unittest.TestCase):
+    """GUI navigation chains become <menucascade>, not literal arrows."""
+
+    def test_chain_after_a_trigger_becomes_menucascade(self):
+        got = conv.link_menucascade('Go to: Datacenter -&gt; Storage.')
+        self.assertIn('<menucascade><uicontrol>Datacenter</uicontrol>'
+                      '<uicontrol>Storage</uicontrol></menucascade>', got)
+        self.assertNotIn('-&gt;', got)
+
+    def test_quoted_labels_lose_their_quotes(self):
+        got = conv.link_menucascade('Click "Add" -&gt; "LVM".')
+        self.assertIn('<uicontrol>Add</uicontrol><uicontrol>LVM</uicontrol>', got)
+
+    def test_trailing_prose_stays_outside_the_chain(self):
+        # 'Go to Pool -> Advanced tab': 'tab' is narrative, not a menu label.
+        got = conv.link_menucascade('Go to Pool -&gt; Advanced tab')
+        self.assertIn('<uicontrol>Pool</uicontrol><uicontrol>Advanced</uicontrol>', got)
+        self.assertTrue(got.endswith('tab'))
+
+    def test_arrow_without_a_trigger_verb_is_left_alone(self):
+        got = conv.link_menucascade('traffic flows host -&gt; array directly')
+        self.assertEqual(got, 'traffic flows host -&gt; array directly')
+
+    def test_single_label_is_not_a_cascade(self):
+        got = conv.link_menucascade('Go to Storage for details')
+        self.assertNotIn('<menucascade>', got)
 
 
 class TestSplitByH2(unittest.TestCase):
@@ -745,16 +942,55 @@ class TestTaskTopic(ConverterCase):
     def test_postreq_holds_next_steps_content(self):
         postreq = self.qs.split('<postreq>')[1].split('</postreq>')[0]
         self.assertIn('<p>MARKER_POSTREQ_PARAGRAPH.</p>', postreq)
-        self.assertIn('<p>- MARKER_POSTREQ_BULLET_ONE</p>', postreq)
+        self.assertIn('<li><p>MARKER_POSTREQ_BULLET_ONE</p></li>', postreq)
+        self.assertNotIn('<p>- MARKER_POSTREQ_BULLET_ONE</p>', postreq)
         self.assertIn('<note type="tip"><p>MARKER_POSTREQ_NOTE.</p></note>', postreq)
 
     def test_unicode_is_replaced_with_ascii_equivalents(self):
-        self.assertIn('host -&gt; array, an em-dash, "smart quotes", and a [WARNING] emoji',
+        # The emoji is dropped outright -- no '[WARNING]' token reaches the page.
+        self.assertIn('host -&gt; array, an em-dash, "smart quotes", and a emoji',
                       self.qs)
+        self.assertNotIn('[WARNING]', self.qs)
 
     def test_indented_fence_under_a_bullet_becomes_a_codeblock(self):
         self.assertIn('<codeblock>echo "MARKER_FENCE_AFTER_LIST"</codeblock>', self.qs)
         self.assertNotIn('<codeph>bash', self.qs)
+
+    def test_indented_fence_lands_inside_the_list_item(self):
+        # A <codeblock> must be a direct child of the <li> -- never wrapped in a
+        # <p>, which is where Heretto normalises the newlines away -- and the
+        # list must not be split in two by the block.
+        self.assertRegex(
+            self.qs,
+            r'<li><p>Bullet directly above an indented fence</p>\s*'
+            r'<codeblock>echo "MARKER_FENCE_AFTER_LIST"</codeblock>\s*</li>')
+        self.assertNotIn('<p><codeblock>echo "MARKER_FENCE_AFTER_LIST"', self.qs)
+        # The internal provenance marker must never reach the output.
+        self.assertNotIn('__inlist', self.qs)
+
+    def test_fence_inside_a_blockquote_becomes_a_codeblock(self):
+        # A fence authored inside a '>' quote used to survive as inline markup
+        # and publish as '``<codeph>bash' with the commands run together.
+        self.assertNotIn('``<codeph>', self.qs)
+        self.assertNotIn('codeph>bash', self.qs)
+        self.assertIn('<codeblock>first --command      # aligned comment\n'
+                      '  second --indented</codeblock>', self.qs)
+        # Direct child of the <note>, never wrapped in a <p>
+        self.assertRegex(
+            self.qs,
+            r'MARKER_QUOTED_FENCE_LEAD.*?</p><codeblock>first --command')
+        self.assertNotIn('<p><codeblock>first --command', self.qs)
+        # Prose on both sides of the fence survives as its own paragraph
+        self.assertRegex(
+            self.qs,
+            r'</codeblock><p>MARKER_QUOTED_FENCE_TAIL prose after the fence, '
+            r'with <codeph>codeph</codeph> still working\.</p></note>')
+
+    def test_no_codeblock_is_ever_wrapped_in_a_paragraph(self):
+        # A <codeblock> inside a <p> has its newlines normalised away by
+        # Heretto, which is how three commands became one unusable line.
+        self.assertNotIn('<p><codeblock', self.qs)
+        self.assertNotIn('<p>\n<codeblock', self.qs)
 
     def test_nested_emphasis_survives_end_to_end(self):
         self.assertIn('<b>MARKER_NESTED_EMPHASIS is bold with <i>italic</i> inside</b>',
@@ -947,12 +1183,15 @@ class TestConceptTopics(ConverterCase):
         self.assertEqual(text.count('<note type="note">'), 1)
         self.assertIn('<note type="warning"><p>MARKER_BP_WARNING.</p></note>', text)
 
-    def test_quick_reference_subsection_is_wrapped_in_a_tip_note(self):
+    def test_quick_reference_subsection_is_a_section_not_a_note(self):
+        # It used to be wrapped in <note type="tip">, which published as a bare
+        # 'Note:' label above the command table. A reference table is not an
+        # aside, so it is a section with a real title like any other.
         text = self.read(BP + 'performance_tuning.dita')
-        self.assertIn('<note type="tip">', text)
-        self.assertIn('<p><b>Quick Reference</b></p>', text)
+        self.assertIn('<section id="quick_reference">', text)
+        self.assertIn('<title>Quick Reference</title>', text)
         self.assertIn('MARKER_BP_INLINE_QUICKREF', text)
-        self.assertNotIn('<section id="quick_reference">', text)
+        self.assertNotIn('<p><b>Quick Reference</b></p>', text)
 
     def test_reference_topics_are_emitted_into_topics_common(self):
         text = self.read('topics/common/c_glossary.dita')

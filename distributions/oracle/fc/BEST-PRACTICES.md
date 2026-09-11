@@ -19,6 +19,7 @@ Comprehensive best practices for deploying Fibre Channel storage on Oracle Linux
 - [Fabric & Zoning Guidance](#fabric--zoning-guidance)
 - [SELinux Configuration](#selinux-configuration)
 - [FC Architecture](#fc-architecture)
+- [Target-Driven Rescan](#target-driven-rescan)
 - [Multipath Configuration](#multipath-configuration)
 - [Performance Tuning](#performance-tuning)
 - [High Availability](#high-availability)
@@ -179,6 +180,12 @@ FC Fabric
 ```
 
 Always target `/dev/mapper/` devices. ALUA identifies preferred (active/optimized) vs. available (active/non-optimized) paths.
+
+---
+
+## Target-Driven Rescan
+
+{% include bestpractices/target-driven-rescan.md %}
 
 ---
 

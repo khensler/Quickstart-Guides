@@ -19,6 +19,7 @@ Comprehensive best practices for deploying Fibre Channel storage on RHEL-based s
 - [Fabric & Zoning Guidance](#fabric--zoning-guidance)
 - [SELinux Configuration](#selinux-configuration)
 - [FC Architecture](#fc-architecture)
+- [Target-Driven Rescan](#target-driven-rescan)
 - [Multipath Configuration](#multipath-configuration)
 - [Performance Tuning](#performance-tuning)
 - [High Availability](#high-availability)
@@ -267,6 +268,12 @@ flowchart LR
     PG1 -->|preferred| LUN[(LUN on CT0)]
     PG2 -->|failover| LUN
 ```
+
+---
+
+## Target-Driven Rescan
+
+{% include bestpractices/target-driven-rescan.md %}
 
 ---
 
@@ -561,7 +568,7 @@ Fibre Channel security is implemented at the **fabric level**, not the host leve
 **Best practices:**
 - Use hard zoning on all production FC switches
 - Audit zone membership quarterly — remove stale host entries
-- Register each host with a specific OS type on the array for correct SCSI behavior
+- Register each host on the array with all of its HBA WWPNs; leave the host **Personality** as `None` — Purity has no Linux personality, and the array already tunes correctly for Linux by default
 - Use separate host groups per cluster; do not share host groups across unrelated workloads
 - Do not place HBA WWPNs in more zones than necessary
 

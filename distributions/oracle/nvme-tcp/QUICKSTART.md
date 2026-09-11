@@ -7,11 +7,13 @@ title: NVMe-TCP on Oracle Linux - Quick Start Guide
 
 This guide provides a streamlined path to configure NVMe-TCP storage on Oracle Linux.
 
-> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [NVMe-TCP Best Practices](./BEST-PRACTICES.md)
-
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-nvme.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [NVMe-TCP Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -22,11 +24,7 @@ This guide provides a streamlined path to configure NVMe-TCP storage on Oracle L
 - Dedicated storage network interfaces
 - Root or sudo access
 
-{% include quickstart/glossary-link-nvme.md %}
-
-{% include quickstart/arp-warning.md %}
-
-## Step 1: Install Packages
+## Step 1: Install NVMe Tools
 
 ```bash
 sudo dnf install -y nvme-cli
@@ -34,33 +32,37 @@ sudo modprobe nvme-tcp
 echo "nvme-tcp" | sudo tee /etc/modules-load.d/nvme-tcp.conf
 ```
 
-## Step 2: Configure Network Interfaces
+{% include quickstart/nvme-enable-multipath.md %}
+
+## Step 3: Configure Network Interfaces
 
 {% include quickstart/network-rhel.md %}
 
-## Step 3: Configure Firewall
+{% include quickstart/arp-warning.md %}
+
+## Step 4: Configure Firewall
 
 {% include quickstart/firewall-rhel.md %}
 
 > **Alternative:** For port filtering options, see [Best Practices - Firewall Configuration](./BEST-PRACTICES.md#firewall-configuration).
 
-## Step 4: Generate Host NQN
+## Step 5: Generate Host NQN
 
 {% include quickstart/nvme-generate-hostnqn.md %}
 
-## Step 5: Connect to NVMe Subsystems
+## Step 6: Connect to Storage
 
 {% include quickstart/nvme-connect-storage.md %}
 
-## Step 6: Configure IO Policy
+## Step 7: Configure IO Policy
 
 {% include quickstart/nvme-io-policy.md %}
 
-## Step 7: Configure Persistent Connections
+## Step 8: Configure Persistent Connections
 
 {% include quickstart/nvme-persistent-connections.md %}
 
-## Step 8: Create LVM Storage
+## Step 9: Create LVM Storage
 
 {% include quickstart/nvme-lvm-storage.md %}
 
@@ -74,7 +76,7 @@ sudo mount /dev/nvme-storage/data /mnt/nvme-storage
 echo '/dev/nvme-storage/data /mnt/nvme-storage xfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab
 ```
 
-## Step 9: Verify
+## Step 10: Verify
 
 {% include quickstart/nvme-verify.md %}
 

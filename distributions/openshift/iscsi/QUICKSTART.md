@@ -13,6 +13,8 @@ This guide translates the standard Linux iSCSI multipathing and NIC binding conf
 
 {% include quickstart/disclaimer.md %}
 
+{% include quickstart/glossary-link-iscsi.md %}
+
 ---
 
 ## Table of Contents

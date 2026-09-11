@@ -9,6 +9,8 @@ title: Azure Local Quick Start Guide - Hyperconverged FC
 
 {% include quickstart/disclaimer.md %}
 
+{% include quickstart/glossary-link-fc.md %}
+
 ---
 
 ## Overview
@@ -107,12 +109,12 @@ Remove-MSDSMSupportedHW -VendorId 'Vendor 8' -ProductId 'Product 16' -Confirm:$f
 Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy RR
 
 # MPIO path-recovery and timeout settings for Azure Local with FlashArray
-Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
-    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
-    -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
+Set-MPIOSetting -NewPathRecoveryInterval 20 -NewPathVerificationPeriod 30 -NewPDORemovePeriod 30
 ```
 
-> **Note:** The values above are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service treats the disk as gone. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
+> **Note:** These settings define the grace period for path failures. `NewPDORemovePeriod` determines how many seconds the Azure node OS waits for a failed path to recover. Holding the failover for 30 seconds lets MPIO complete a path-level failover without the Cluster Storage Service seeing the disk as "gone" and prematurely triggering a resource failover to a different node.
+
+> **Note:** These are the recommended values for FlashArray integration, established through internal lab testing. Environments with highly specific latency requirements or complex fabric topologies may need additional testing to determine optimal timeout values for their workload.
 
 > **Note:** Use `New-MSDSMSupportedHW` (rather than the MPIO GUI) — it enforces the required 8-char Vendor / 16-char Product string formatting automatically.
 > For hosts with **more than 10 paths** to a volume, Everpure recommends Least Queue Depth (`-Policy LQD`) instead of Round Robin.
@@ -275,7 +277,7 @@ To place VMs on the SAN volume, register each SAN CSV path in Azure. Only regist
 4. Enter the CSV path, for example `C:\ClusterStorage\Volume1`.
 5. Confirm and save. Repeat for each SAN CSV.
 
-## Step 11: Configure for VM workloads (optional)
+## Step 11: Configure for VM Workloads (Optional)
 
 In Windows Admin Center, the Azure portal, or via Hyper-V, create a new VM and place its VHDX on the registered SAN CSV path (or on an S2D volume, as appropriate for the workload). Start the VM and verify normal operation.
 

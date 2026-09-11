@@ -7,11 +7,13 @@ title: Fibre Channel on Proxmox VE - Quick Start Guide
 
 This guide provides a streamlined path to configure Fibre Channel storage on Proxmox VE.
 
-> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [FC Best Practices](./BEST-PRACTICES.md)
-
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-fc.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [Fibre Channel Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -22,7 +24,6 @@ This guide provides a streamlined path to configure Fibre Channel storage on Pro
 - Fabric zoning and volume presentation configured by your SAN administrator
 - Root access to all cluster nodes
 
-{% include quickstart/glossary-link-fc.md %}
 
 ## Step 1: Install Packages
 

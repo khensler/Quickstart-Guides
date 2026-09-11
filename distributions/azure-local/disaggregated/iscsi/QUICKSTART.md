@@ -5,17 +5,19 @@ title: Azure Local with Everpure FlashArray Quick Start Guide for Disaggregated 
 
 # Azure Local with Everpure FlashArray Quick Start Guide for Disaggregated Deployments (iSCSI)
 
----
-
-{% include quickstart/disclaimer.md %}
-
----
-
 This guide provides a high-level workflow for integrating the Everpure FlashArray as the **only** block storage for a **disaggregated** Azure Local (formerly Azure Stack HCI) deployment over **iSCSI**. In a disaggregated deployment there is no local Storage Spaces Direct (S2D) — compute runs on the Azure Local nodes while all cluster storage is served from the FlashArray over iSCSI (TCP/IP). This combines the cloud-integrated benefits of Azure Local with the high-performance, data-reduced storage of FlashArray, and lets compute and storage scale independently.
 
 > **This document is based heavliy on the official Microsoft documentation.**  [Deploy Azure Local using the Azure portal for disaggregated deployments](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated) · [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage)
 
 > **Looking for Fibre Channel instead?** See the [Disaggregated FC guide](../fc/QUICKSTART.md). **Looking for a hyperconverged (S2D + FlashArray) cluster?** See the [Hyperconverged iSCSI guide](../../hyperconverged/iscsi/QUICKSTART.md) or the [Hyperconverged FC guide](../../hyperconverged/fc/QUICKSTART.md).
+
+---
+
+{% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-iscsi.md %}
+
+---
 
 ## Prerequisites to Using the Quick Start Guide
 
@@ -153,13 +155,13 @@ Tuning MPIO timers prevents premature path failovers and lets the system recover
 
 ```powershell
 Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
-    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
+    -NewPDORemovePeriod 30 -NewDiskTimeout 60 `
     -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 ```
 
 `NewPDORemovePeriod` determines how long the OS waits for a failed path to recover before the device is removed.
 
-> **Note:** These are the Everpure FlashArray-specific overrides documented by Microsoft in [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage). Everpure's general Windows Server guidance uses `-NewPDORemovePeriod 30`, which holds a failed path slightly longer so MPIO can complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. If you observe premature node failovers on path loss, raise it to `30` — consistently on **every** node.
+> **Note:** Microsoft's [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage) documents `-NewPDORemovePeriod 20` for external block storage. Everpure's guidance for Azure Local is `30`, which is the value used above: holding a failed path 30 seconds lets MPIO complete a path-level failover before the Cluster Storage Service sees the disk as "gone" and prematurely triggers a node failover. Apply the same value consistently on **every** node, and use `30` unless you have a specific reason to follow the Microsoft value.
 
 > **Note:** Workloads with specific latency requirements or complex fabrics may require additional tuning.
 
@@ -524,7 +526,7 @@ Remove-MSDSMSupportedHW -VendorId 'Vendor 8' -ProductId 'Product 16' -Confirm:$f
 Enable-MSDSMAutomaticClaim -BusType iSCSI
 Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy RR        # RR <=10 paths, LQD >10 paths
 Set-MPIOSetting -NewPathRecoveryInterval 20 -CustomPathRecovery Enabled `
-    -NewPDORemovePeriod 20 -NewDiskTimeout 60 `
+    -NewPDORemovePeriod 30 -NewDiskTimeout 60 `
     -NewPathVerificationState Enabled -NewPathVerificationPeriod 30
 # Configure dedicated iSCSI NICs (static IPs, no gateway)
 New-NetIPAddress -InterfaceAlias "iSCSI-NIC-A" -IPAddress 10.30.30.11 -PrefixLength 24

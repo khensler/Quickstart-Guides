@@ -9,6 +9,8 @@ title: Installing ktls-utils on Red Hat CoreOS by Layering an RHCOS Image
 
 {% include quickstart/disclaimer.md %}
 
+{% include quickstart/glossary-link-nfs.md %}
+
 ---
 
 ## Overview

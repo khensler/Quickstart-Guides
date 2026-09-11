@@ -1,2 +1,1 @@
-> **⚠️ Same-Subnet Multipath:** If both interfaces are on the same subnet, configure ARP settings. See [ARP Configuration]({{ site.baseurl }}/common/network-concepts.html).
-
+> **⚠️ Same-Subnet Multipath:** If both interfaces are on the same subnet, configure `arp_ignore` and `arp_announce` — otherwise the host answers ARP on the wrong interface and your paths quietly collapse onto one NIC. See [ARP Configuration]({{ site.baseurl }}/common/network-concepts.html) for what the settings do, and the [Best Practices guide](./BEST-PRACTICES.md) for the values to set and how to make them persistent.

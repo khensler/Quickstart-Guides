@@ -7,11 +7,13 @@ title: iSCSI on Proxmox VE - Quick Start Guide
 
 This guide provides a streamlined path to configure iSCSI storage on Proxmox VE.
 
-> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
-
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-iscsi.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -21,10 +23,6 @@ This guide provides a streamlined path to configure iSCSI storage on Proxmox VE.
 - iSCSI storage array with portal IPs and target IQN
 - Dedicated storage network interfaces
 - Root access to all cluster nodes
-
-{% include quickstart/glossary-link-iscsi.md %}
-
-{% include quickstart/arp-warning.md %}
 
 ## Step 1: Install iSCSI and Multipath Tools
 
@@ -36,7 +34,13 @@ systemctl enable --now iscsid multipathd
 
 ## Step 2: Create iSCSI Interface Bindings
 
-In this step the iscsi interfaces will be created.  This is similar to portbinding on ESXI.  This will allow the multipath to use the specific interfaces for the iscsi traffic.  Replace `<INTERFACE_NAME_1>` and `<INTERFACE_NAME_2>` with your actual interface names (ens1f0np0, ens2f0np0, etc.).  Replace `<PORTAL_IP_1>` and `<PORTAL_IP_2>` with your actual portal IP addresses.  Replace `<PORT>` with your actual port (Default is 3260).  The example below assumes you have 2 portals.  If you have more or less, adjust accordingly.
+In this step the iscsi interfaces will be created. This is similar to port binding on ESXi. This will allow the multipath to use the specific interfaces for the iscsi traffic.
+
+- Replace `<INTERFACE_NAME_1>` and `<INTERFACE_NAME_2>` with your actual interface names (`ens1f0np0`, `ens2f0np0`, etc.).
+- Replace `<PORTAL_IP_1>` and `<PORTAL_IP_2>` with your actual portal IP addresses.
+- Replace `<PORT>` with your actual port (default is 3260).
+
+The example below assumes you have 2 portals. If you have more or less, adjust accordingly.
 
 ```bash
 # Create and bind first interface
@@ -51,6 +55,8 @@ iscsiadm -m iface -I iface-<INTERFACE_NAME_2> -o update -n iface.net_ifacename -
 iscsiadm -m iface
 ```
 
+{% include quickstart/arp-warning.md %}
+
 ## Step 3: Discover Targets
 
 ```bash
@@ -61,7 +67,7 @@ iscsiadm -m discovery -t sendtargets -p <PORTAL_IP_2>:<PORT>
 iscsiadm -m node
 ```
 
-## Step 3: Configure Authentication (Optional)
+## Step 4: Configure Authentication (Optional)
 
 If the target requires authentication, configure it as follows.  Replace `<TARGET_IQN>` with your actual target IQN.  Replace `<PORTAL_IP_X>` with your actual portal IP addresses.  Replace `<CHAP_USER>` and `<CHAP_PASS>` with your actual CHAP credentials.  The example below is for a single target and portal.  If you have more, repeate the process for each target and portal.
 
@@ -71,7 +77,7 @@ iscsiadm -m node -T <TARGET_IQN> -p <PORTAL_IP_X> -o update -n node.session.auth
 iscsiadm -m node -T <TARGET_IQN> -p <PORTAL_IP_X> -o update -n node.session.auth.password -v <CHAP_PASS>
 ```
 
-## Step 4: Set Startup Mode
+## Step 5: Set Startup Mode
 
 For session persistence across reboots.  Replace `<PORTAL_IP_X>` with your actual portal IP addresses.  Replace `<TARGET_IQN>` with your actual target IQN.  The example below is for a single target and portal.  If you have more, repeate the process for each target and portal.
 
@@ -79,7 +85,7 @@ For session persistence across reboots.  Replace `<PORTAL_IP_X>` with your actua
 iscsiadm -m node -T <TARGET_IQN> -p <PORTAL_IP_X> -o update -n node.startup -v automatic
 ```
 
-## Step 5: Login with Interface Binding
+## Step 6: Login with Interface Binding
 
 Replace `<PORTAL_IP_X>` with your actual portal IP addresses.  Replace `<TARGET_IQN>` with your actual target IQN.  Replace `<INTERFACE_NAME_X>` with your actual interface names.  The example below is for 2 portals and 2 interfaces.  If you have more or less, adjust accordingly. By loging in with the interface binding, specific interfaces will be used for the iscsi traffic.
 
@@ -94,13 +100,13 @@ iscsiadm -m node -T <TARGET_IQN> -p <PORTAL_IP_2>:<PORT> -I iface-<INTERFACE_NAM
 iscsiadm -m session
 ```
 
-## Step 6: Configure Multipath
+## Step 7: Configure Multipath
 
 {% include quickstart/iscsi-multipath-conf.md %}
 
 > **Note:** For comprehensive multipath concepts and configuration patterns, see [Multipath Concepts]({{ site.baseurl }}/common/multipath-concepts.html).
 
-## Step 7: Create LVM
+## Step 8: Create LVM
 
 ```bash
 # Find your multipath device
@@ -132,7 +138,7 @@ vgs
 pvs
 ```
 
-## Step 8: Add LVM Storage to Proxmox
+## Step 9: Add LVM Storage to Proxmox
 
 Now that the storage is configured and available as an LVM volume group, it can be added to Proxmox.  This can be done via the GUI or CLI.  The GUI is recommended for ease of use but since the rest of the guide is CLI based the CLI based approach may be quicker.
 
@@ -155,7 +161,12 @@ Go to: Datacenter -> Storage.  Click "Add" -> "LVM".
 
 ![Add LVM Storage](./img/disk-configuration-1.png)
 
-Name the storage in the ID field.  Select the volume group in the Volume Group drop down.  Check the "Shared" box.  Select the appropriate Content (Disk Image, Container).  Enable the volume on other nodes by either selecting them in the Nodes drop down or by clearing the Nodes field by clicking the "x" to the right of the field.  Click "Add".
+1. Name the storage in the **ID** field.
+2. Select the volume group in the **Volume Group** drop down.
+3. Check the **Shared** box.
+4. Select the appropriate **Content** (Disk Image, Container).
+5. Enable the volume on other nodes by either selecting them in the **Nodes** drop down, or by clearing the Nodes field by clicking the **x** to the right of the field.
+6. Click **Add**.
 
 ![Configure Storage](./img/disk-configuration-2.png)
 

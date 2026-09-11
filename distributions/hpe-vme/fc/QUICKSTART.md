@@ -11,6 +11,14 @@ This guide covers connecting a Everpure FlashArray Fibre Channel volume to an HP
 
 ---
 
+{% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-fc.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [Fibre Channel Best Practices](./BEST-PRACTICES.md)
+
+---
+
 ## Prerequisites
 
 Complete these on the FlashArray and FC fabric **before** starting — they are outside the scope of this guide:
@@ -18,7 +26,7 @@ Complete these on the FlashArray and FC fabric **before** starting — they are 
 | Requirement | Details |
 |-------------|---------|
 | HPE VME Cluster | Deployed and operational (3+ nodes for a shared clustered datastore) |
-| FlashArray host setup | A host entry per VME node (OS type `Linux`) with each node's WWPNs, all added to one **Host Group** |
+| FlashArray host setup | A host entry per VME node with each node's WWPNs, Personality left as `None`, all added to one **Host Group** |
 | Volume connected | Target volume connected to that Host Group |
 | Fabric zoning | Single-initiator zoning complete on both fabrics for every node's HBA WWPNs |
 | HBAs | Installed in each node and cabled to both fabrics |
@@ -26,7 +34,6 @@ Complete these on the FlashArray and FC fabric **before** starting — they are 
 
 > **Need your WWPNs to register on the array?** Run `cat /sys/class/fc_host/host*/port_name` on each host. See the [FC Best Practices]({{ site.baseurl }}/distributions/hpe-vme/fc/BEST-PRACTICES.html) for HBA verification and zoning guidance.
 
-{% include quickstart/glossary-link-fc.md %}
 
 ---
 

@@ -93,6 +93,16 @@ iscsiadm -m session -P 3
 > **MARKER_WRAPPED_BOLD spans two source lines and contains an *italic* run, and
 > must still close.** Trailing prose after the bold span.
 
+> **MARKER_QUOTED_FENCE_LEAD:** a fence authored inside a blockquote must become
+> a real codeblock, not inline code:
+>
+> ```bash
+> first --command      # aligned comment
+>   second --indented
+> ```
+>
+> MARKER_QUOTED_FENCE_TAIL prose after the fence, with `codeph` still working.
+
 ### Subheading Inside A Step
 
 MARKER_STEP2_H3_BODY — the H3 above becomes a bold paragraph, not a step.

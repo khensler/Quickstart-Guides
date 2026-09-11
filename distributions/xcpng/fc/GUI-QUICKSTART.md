@@ -8,11 +8,14 @@ title: Fibre Channel on XCP-ng - GUI Quick Start Guide (Xen Orchestra)
 This guide walks you through configuring Fibre Channel storage on XCP-ng using the **Xen Orchestra (XO)** web interface.
 
 > **📘 For CLI-based setup:** See [FC Quick Start (CLI)](./QUICKSTART.md)
-> **📘 For production best practices:** See [FC Best Practices](./BEST-PRACTICES.md)
 
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-fc.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [Fibre Channel Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -24,7 +27,6 @@ This guide walks you through configuring Fibre Channel storage on XCP-ng using t
   - All pool host WWPNs registered on the FlashArray and added to a host group
   - Volume connected to the host group
 
-{% include quickstart/glossary-link-fc.md %}
 
 ---
 

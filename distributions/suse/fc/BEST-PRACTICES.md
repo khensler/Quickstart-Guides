@@ -18,6 +18,7 @@ Comprehensive best practices for deploying Fibre Channel storage on SUSE-based s
 - [SUSE-Specific Considerations](#suse-specific-considerations)
 - [Fabric & Zoning Guidance](#fabric--zoning-guidance)
 - [FC Architecture](#fc-architecture)
+- [Target-Driven Rescan](#target-driven-rescan)
 - [Multipath Configuration](#multipath-configuration)
 - [Performance Tuning](#performance-tuning)
 - [High Availability](#high-availability)
@@ -176,6 +177,12 @@ FC Fabric
 ```
 
 Always target `/dev/mapper/` devices, never raw `sdX` paths. ALUA identifies preferred (active/optimized) vs. available (active/non-optimized) paths.
+
+---
+
+## Target-Driven Rescan
+
+{% include bestpractices/target-driven-rescan.md %}
 
 ---
 

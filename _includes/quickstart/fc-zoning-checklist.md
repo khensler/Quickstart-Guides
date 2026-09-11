@@ -2,7 +2,7 @@
 >
 > - [ ] **HBA WWPNs collected** from all hosts (Step 2 above)
 > - [ ] **Single-initiator zoning configured** on the FC switch — each host WWPN zoned individually with the target array ports (not all initiators in one zone)
-> - [ ] **Host entry created** on the FlashArray with the host's WWPN(s) and OS type set to `Linux`
+> - [ ] **Host entry created** on the FlashArray with the host's WWPN(s), Personality left as `None` (there is no Linux host personality — see [Host Personality in Purity](https://support.everpuredata.com/r/flasharray-connectivity/host-personality-in-purity))
 > - [ ] **Host Group created** (for clusters) and all host entries added
 > - [ ] **Volume connected** to the host or host group on the FlashArray
 >

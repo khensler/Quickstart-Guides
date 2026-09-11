@@ -7,7 +7,7 @@ title: Everpure FlashArray for AWS Outposts - Quick Start Guide
 
 This guide covers connecting EC2 instances on AWS Outposts to Everpure FlashArray for both data and boot volumes using NVMe-TCP or iSCSI protocols.
 
-> **For detailed explanations and troubleshooting:** See the [AWS Outposts external storage documentation](https://docs.aws.amazon.com/outposts/latest/userguide/external-storage.html)
+> **📘 Vendor documentation:** See the [AWS Outposts external storage documentation](https://docs.aws.amazon.com/outposts/latest/userguide/external-storage.html)
 
 ---
 
@@ -66,13 +66,17 @@ Configure the FlashArray to recognize the EC2 instance and provision storage. Yo
 2. Navigate to **Storage → Hosts**
 3. Create a new host with the EC2 instance identifier
 
+Leave **Personality** set to `None` for both protocols. Purity's host personalities are
+operating-system tunings (HP-UX, VMS, ESXi, Solaris, AIX, Hitachi-VSP, Oracle-VM-Server) —
+not protocol selectors, and there is no Linux personality. The protocol is determined by
+which initiator you register, not by a personality. See
+[Host Personality in Purity](https://support.everpuredata.com/r/flasharray-connectivity/host-personality-in-purity).
+
 **For NVMe-TCP:**
-- Set **Personality** to `NVMe`
 - Add the **Initiator NQN** (format: `nqn.2014-08.org.nvmexpress:uuid:<unique-id>`)
 - Note the **Target NQN** and **Target Portal IPs** (port 4420)
 
 **For iSCSI:**
-- Set **Personality** to `iSCSI`
 - Add the **Initiator IQN** (format: `iqn.YYYY-MM.com.amazon:<identifier>`)
 - Note the **Target IQN** and **Target Portal IPs** (port 3260)
 
@@ -89,14 +93,13 @@ Run these commands from any workstation with SSH access to the FlashArray manage
 # SSH to FlashArray
 ssh pureuser@<array-ip>
 
-# Create host with NVMe-TCP personality
-purehost create --personality nvme \
-  --nqnlist nqn.2014-08.org.nvmexpress:uuid:ec2-instance-01 \
+# Create an NVMe-TCP host. The protocol comes from the initiator list you supply;
+# do not set --personality (Purity has no Linux or protocol personality).
+purehost create --nqnlist nqn.2014-08.org.nvmexpress:uuid:ec2-instance-01 \
   ec2-instance-01
 
-# Or create host with iSCSI personality
-purehost create --personality iscsi \
-  --iqnlist iqn.2024-01.com.amazon:ec2-instance-01 \
+# Or create an iSCSI host
+purehost create --iqnlist iqn.2024-01.com.amazon:ec2-instance-01 \
   ec2-instance-01
 
 # Create a data volume (e.g., 100GB)
