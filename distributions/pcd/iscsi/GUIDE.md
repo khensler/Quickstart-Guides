@@ -13,6 +13,8 @@ This guide covers the complete process of integrating Pure Storage FlashArray wi
 
 {% include quickstart/disclaimer.md %}
 
+{% include quickstart/glossary-link-iscsi.md %}
+
 ---
 
 ## Prerequisites

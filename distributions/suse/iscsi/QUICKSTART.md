@@ -7,11 +7,13 @@ title: iSCSI on SUSE/openSUSE - Quick Start Guide
 
 This guide provides a streamlined path to configure iSCSI storage on SUSE/openSUSE systems.
 
-> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
-
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-iscsi.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -22,7 +24,6 @@ This guide provides a streamlined path to configure iSCSI storage on SUSE/openSU
 - Dedicated storage network interfaces
 - Root or sudo access
 
-{% include quickstart/glossary-link-iscsi.md %}
 
 ## Step 1: Install Packages
 

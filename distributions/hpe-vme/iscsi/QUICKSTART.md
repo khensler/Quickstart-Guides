@@ -11,6 +11,14 @@ This guide provides step-by-step instructions for configuring iSCSI multipath st
 
 ---
 
+{% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-iscsi.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
+
+---
+
 ## Disclaimer
 
 > **This guide assumes that the Pure Storage FlashArray is already configured and ready for iSCSI connectivity.** This includes:

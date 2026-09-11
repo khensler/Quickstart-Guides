@@ -7,7 +7,7 @@ title: Everpure FlashArray for AWS Outposts - Quick Start Guide
 
 This guide covers connecting EC2 instances on AWS Outposts to Everpure FlashArray for both data and boot volumes using NVMe-TCP or iSCSI protocols.
 
-> **For detailed explanations and troubleshooting:** See the [AWS Outposts external storage documentation](https://docs.aws.amazon.com/outposts/latest/userguide/external-storage.html)
+> **📘 Vendor documentation:** See the [AWS Outposts external storage documentation](https://docs.aws.amazon.com/outposts/latest/userguide/external-storage.html)
 
 ---
 

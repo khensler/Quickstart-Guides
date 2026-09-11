@@ -9,6 +9,8 @@ title: NFS for OpenShift with FlashBlade and FlashArray File Services
 
 {% include quickstart/disclaimer.md %}
 
+{% include quickstart/glossary-link-nfs.md %}
+
 ---
 
 ## Overview
@@ -633,7 +635,7 @@ covered in Step 3 — not leftover files.
 
 ---
 
-## Step 10: Optional — enable NFS over TLS
+## Step 10: Enable NFS over TLS (Optional)
 
 PX-CSI supports NFS over TLS by adding `xprtsec=tls` to the storage class `mountOptions`:
 

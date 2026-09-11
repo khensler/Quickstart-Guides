@@ -9,6 +9,8 @@ title: Azure Local Quick Start Guide - Hyperconverged iSCSI
 
 {% include quickstart/disclaimer.md %}
 
+{% include quickstart/glossary-link-iscsi.md %}
+
 ---
 
 ## Overview
@@ -360,7 +362,7 @@ To place VMs on the SAN volume, register each SAN CSV path in Azure. Only regist
 4. Enter the CSV path, for example `C:\ClusterStorage\Volume1`.
 5. Confirm and save. Repeat for each SAN CSV.
 
-## Step 13: Configure for VM workloads (optional)
+## Step 13: Configure for VM Workloads (Optional)
 
 In Windows Admin Center, the Azure portal, or via Hyper-V, create a new VM and place its VHDX on the registered SAN CSV path (or on an S2D volume, as appropriate for the workload). Start the VM and verify normal operation.
 

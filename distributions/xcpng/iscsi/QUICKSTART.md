@@ -7,11 +7,15 @@ title: iSCSI on XCP-ng - Quick Start Guide
 
 This guide provides a streamlined path to configure iSCSI storage on XCP-ng.
 
-> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [XCP-ng Storage Documentation](https://docs.xcp-ng.org/storage/)
+> **📘 Vendor documentation:** See the [XCP-ng Storage Documentation](https://docs.xcp-ng.org/storage/)
 
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-iscsi.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -21,10 +25,6 @@ This guide provides a streamlined path to configure iSCSI storage on XCP-ng.
 - iSCSI storage array with portal IPs and target IQN
 - Dedicated storage network interfaces (recommended: separate NICs/VLANs)
 - Root access to all pool hosts
-
-{% include quickstart/glossary-link-iscsi.md %}
-
-{% include quickstart/arp-warning.md %}
 
 ## Step 1: Configure Storage Network Interfaces
 
@@ -42,6 +42,8 @@ xe pif-list params=uuid,device,IP,netmask
 ```
 
 > **Tip:** Use `xe pif-list` to identify your storage interfaces. Dedicated NICs for iSCSI traffic provide better performance and isolation.
+
+{% include quickstart/arp-warning.md %}
 
 ## Step 2: Verify iSCSI and Multipath Tools
 

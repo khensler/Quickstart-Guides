@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 import html
 import time
+import unicodedata
 import zipfile
 from datetime import date
 
@@ -93,6 +94,23 @@ def sanitize_id(text: str) -> str:
     return result
 
 
+# A blockquote marker: the '>' plus at most one following space. Anything
+# deeper than that is the author's own indentation and has to survive.
+_QUOTE_MARKER_RE = re.compile(r'^>[ ]?')
+
+# A fenced code block delimiter, with or without a language tag.
+_FENCE_RE = re.compile(r'^```+\s*\w*\s*$')
+
+
+def dedent_lines(lines: List[str]) -> List[str]:
+    """Remove the common leading indentation shared by every non-blank line."""
+    widths = [len(l) - len(l.lstrip(' \t')) for l in lines if l.strip()]
+    if not widths:
+        return lines
+    common = min(widths)
+    return [dedent_line(l, common) if l.strip() else '' for l in lines]
+
+
 def dedent_line(line: str, width: int) -> str:
     """Strip up to ``width`` leading whitespace characters from a line."""
     if width <= 0:
@@ -131,47 +149,210 @@ def escape_xml_attr(text: str) -> str:
     return html.escape(text, quote=True)
 
 
-def remove_non_ascii(text: str) -> str:
-    """Remove non-ASCII characters, keeping common replacements."""
-    # Replace common unicode characters with ASCII equivalents
-    replacements = {
-        '–': '-',  # en-dash
-        '—': '-',  # em-dash
-        ''': "'",  # smart single quote
-        ''': "'",  # smart single quote
-        '"': '"',  # smart double quote
-        '"': '"',  # smart double quote
-        '…': '...',  # ellipsis
-        '•': '*',  # bullet
-        # NOTE: this runs on the already-escaped XML string, so replacements must
-        # not introduce raw <, >, or & (that would break well-formedness). Use
-        # XML entities for the arrows.
-        '→': '-&gt;',  # arrow
-        '←': '&lt;-',  # arrow
-        '⚠️': '[WARNING]',  # warning emoji
-        '📖': '[INFO]',  # book emoji
-        # 📘 is dropped rather than tokenised. It only ever decorates a bold note
-        # lead-in ('**📘 For detailed explanations:**'), where a '[INFO]' token
-        # would land inside the <b> run; _strip_note_prefix removes the bare
-        # emoji first, and this is the backstop for anywhere it does not reach.
-        '📘': '',  # blue book emoji
-        '✅': '[OK]',  # checkmark
-        '❌': '[X]',  # X mark
-        '📋': '[NOTE]',  # clipboard
-        '📁': '[FOLDER]',  # folder
-        '🔧': '[CONFIG]',  # wrench
-        '💡': '[TIP]',  # lightbulb
-        '🚀': '[START]',  # rocket
-        '⏱️': '[TIME]',  # timer
-        '🔒': '[SECURE]',  # lock
-    }
-    for old, new in replacements.items():
+def normalize_characters(text: str) -> str:
+    """Fold the output down to the character range the published docs allow.
+
+    Two rules, both enforced here:
+
+    * **Extended ASCII is allowed.** Latin-1 (U+00A0-U+00FF) passes through
+      untouched, so 'x', '+/-', 'deg' and accented letters publish as authored
+      -- 'Minimum 2x2 topology' stays 2x2 rather than collapsing to '22'.
+      Anything above U+00FF still has to be mapped, because only the Latin-1
+      range is known to survive the whole Heretto -> portal path.
+    * **No emoji.** They are tokenised or dropped, never published, and every
+      one found is reported so the source can be cleaned up.
+
+    Characters outside both sets are folded if there is a sensible ASCII
+    equivalent, and reported rather than silently deleted.
+    """
+    for old, new in _CHARACTER_REPLACEMENTS.items():
         text = text.replace(old, new)
-    # Remove any remaining non-ASCII characters
-    return text.encode('ascii', 'ignore').decode('ascii')
+    _warn_on_emoji(text)
+    text = _strip_emoji_from_runs(text)
+    # A letter is still a letter: fold anything above Latin-1 to its base
+    # letter rather than deleting it, so 'Zoe' survives instead of 'Zo'.
+    text = _fold_to_latin1(text)
+    # Whatever is left is about to be deleted. That is almost never what the
+    # author meant, so say so rather than corrupting the text in silence --
+    # add a mapping below instead of letting a character disappear.
+    _warn_unmapped(text)
+    return _strip_above_latin1(text)
 
 
-# A decorative emoji leading a heading. remove_non_ascii() runs over the finished
+# Kept as the old name so existing callers and docs keep working.
+remove_non_ascii = normalize_characters
+
+
+_CHARACTER_REPLACEMENTS = {
+    # --- Typography above Latin-1, folded to ASCII -----------------------
+    '–': '-',  # en-dash
+    '—': '-',  # em-dash
+    '‘': "'",  # smart single quote
+    '’': "'",  # smart single quote
+    '“': '"',  # smart double quote
+    '”': '"',  # smart double quote
+    '…': '...',  # ellipsis
+    '•': '*',  # bullet
+    '‑': '-',  # non-breaking hyphen
+    # NOTE: this runs on the already-escaped XML string, so replacements must
+    # not introduce raw <, >, or & (that would break well-formedness). Use
+    # XML entities for the arrows.
+    '→': '-&gt;',  # arrow
+    '←': '&lt;-',  # arrow
+
+    # NOTE: emoji are deliberately absent from this table -- they are handled
+    # by _strip_emoji_from_runs(), which drops them instead of substituting a
+    # bracket token. See the no-emoji rule in the docstring above.
+
+    # --- Operators above Latin-1 -----------------------------------------
+    # These carry meaning, so dropping them corrupts the sentence: '(>= 250 GB)'
+    # published as '( 250 GB)'. As above, '>' and '<' have to go in as entities.
+    # Note that 'x' (U+00D7) and '+/-' (U+00B1) are Latin-1 and pass straight
+    # through -- they are deliberately absent from this table.
+    '≥': '&gt;=',  # greater-than-or-equal
+    '≤': '&lt;=',  # less-than-or-equal
+    '≠': '!=',  # not equal
+    '≈': '~',  # approximately
+    '∞': 'infinity',
+
+    # --- Box drawing, used by the ASCII-art topology diagrams ------------
+    # Mapped to ASCII equivalents so the diagrams still line up; deleting
+    # them left every label dangling at an odd indent.
+    '─': '-', '━': '-', '═': '=',
+    '│': '|', '┃': '|', '║': '|',
+    '┌': '+', '┬': '+', '┐': '+',
+    '├': '+', '┼': '+', '┤': '+',
+    '└': '+', '┴': '+', '┘': '+',
+    '►': '&gt;', '▶': '&gt;',   # (-> is mapped with the arrows above)
+    '◄': '&lt;', '◀': '&lt;',
+    '▼': 'v', '▲': '^',
+
+    # --- Invisible characters that behave like traps ---------------------
+    ' ': ' ',   # non-breaking space (inside Latin-1, but still a trap)
+    ' ': ' ',   # narrow no-break space
+    ' ': ' ',   # thin space
+    '﻿': '',    # byte-order mark
+    '​': '',    # zero-width space
+    '­': '',    # soft hyphen
+}
+
+
+# Emoji and their modifiers. Deliberately does not cover the whole of Unicode's
+# emoji definition -- just the blocks the guides actually reach for, plus the
+# variation selector and skin-tone modifiers that trail them.
+_EMOJI_RE = re.compile(
+    '['
+    '\U0001F000-\U0001FAFF'   # pictographs, symbols, transport, faces
+    '☀-➿'           # misc symbols and dingbats
+    '⬀-⯿'           # arrows and geometric extras
+    '️⃣'            # variation selector-16, combining keycap
+    '\U0001F3FB-\U0001F3FF'   # skin-tone modifiers
+    ']+')
+
+
+def _warn_on_emoji(text: str) -> None:
+    """Report emoji found in the output; guides are not supposed to carry any."""
+    for match in set(_EMOJI_RE.findall(text)):
+        for ch in match:
+            _warn_once(ch, 'emoji are not allowed in published guides; '
+                           'remove it from the source')
+
+
+# The word an emoji is worth when it is the *only* thing in its run. A lone
+# tick in a table cell is the cell's whole meaning, so dropping it empties the
+# column; next to text ('[OK] Yes') the token was only ever noise.
+_EMOJI_ALONE_WORD = {
+    '✅': 'Yes', '✓': 'Yes', '✔': 'Yes', '☑': 'Yes',
+    '❌': 'No', '✗': 'No', '✘': 'No', '☒': 'No',
+}
+
+# A run of text between two tags. Attribute values cannot match: '>' and '<'
+# are escaped as entities by the time this runs.
+_TEXT_RUN_RE = re.compile(r'>([^<>]*)<')
+
+
+def _strip_emoji_from_runs(text: str) -> str:
+    """Drop emoji, keeping meaning where the emoji was the whole run.
+
+    Emoji never reach the published page. Where one merely decorated text
+    ('**[WARNING] Important Disclaimers**', '[OK] Yes') the token was noise on
+    top of markup that already says it -- a note's @type carries 'warning', and
+    'Yes' already says yes. Where the emoji stood alone, though, it *was* the
+    content, so it becomes a word rather than an empty cell.
+    """
+    def _clean(match: re.Match) -> str:
+        run = match.group(1)
+        if not _EMOJI_RE.search(run):
+            return match.group(0)
+        stripped = _EMOJI_RE.sub('', run)
+        if stripped.strip(' \t*_`') == '':
+            # The emoji carried the run on its own; keep its meaning as a word.
+            first = _EMOJI_RE.findall(run)[0][0]
+            return '>' + _EMOJI_ALONE_WORD.get(first, '') + '<'
+        if '\n' in run:
+            # Preformatted (a <codeblock>): drop the glyph but never touch the
+            # surrounding whitespace, or the code loses its indentation.
+            return '>' + stripped + '<'
+        # Decoration: drop it and close the gap it leaves behind.
+        return '>' + re.sub(r'  +', ' ', stripped).strip() + '<'
+
+    text = _TEXT_RUN_RE.sub(_clean, text)
+    # Backstop for anything not sitting between two tags (this function is also
+    # called on bare strings). Takes the trailing space with it so dropping a
+    # leading '[WARNING] ' does not leave the line indented by one.
+    return re.sub(_EMOJI_RE.pattern + r' *', '', text)
+
+
+def _fold_to_latin1(text: str) -> str:
+    """Fold characters above Latin-1 to a Latin-1 base where one exists."""
+    if _is_latin1(text):
+        return text
+    out = []
+    for ch in text:
+        if ord(ch) <= 0xFF:
+            out.append(ch)
+            continue
+        # Decompose and keep the base characters, dropping combining marks.
+        base = ''.join(c for c in unicodedata.normalize('NFKD', ch)
+                       if not unicodedata.combining(c))
+        out.append(base if base and _is_latin1(base) else ch)
+    return ''.join(out)
+
+
+def _is_latin1(text: str) -> bool:
+    return all(ord(c) <= 0xFF for c in text)
+
+
+def _strip_above_latin1(text: str) -> str:
+    return ''.join(c for c in text if ord(c) <= 0xFF)
+
+
+def _warn_unmapped(text: str) -> None:
+    """Warn once per distinct character normalize_characters() will delete."""
+    for ch in set(text):
+        if ord(ch) > 0xFF:
+            _warn_once(ch, 'add it to _CHARACTER_REPLACEMENTS')
+
+
+# Characters already reported, so a glyph used in sixty guides warns once.
+_reported_characters: set[str] = set()
+
+
+def _warn_once(ch: str, advice: str) -> None:
+    if ch in _reported_characters:
+        return
+    _reported_characters.add(ch)
+    try:
+        name = unicodedata.name(ch)
+    except ValueError:
+        name = 'unnamed'
+    # Deliberately does not print the glyph itself: stdout is often cp1252 on
+    # Windows, and echoing the character back crashes the write. The code point
+    # and Unicode name are ASCII and identify it unambiguously.
+    print(f"    Warning: dropping U+{ord(ch):04X} ({name}); {advice}")
+
+
+# A decorative emoji leading a heading. normalize_characters() runs over the finished
 # DITA string, long after headings are emitted, so at emission time the raw emoji
 # is still there -- '## ⚠️ Important Disclaimers' would reach it and publish as
 # '[WARNING] Important Disclaimers'. In a note the type attribute already carries
@@ -302,6 +483,56 @@ def deployment_of(path: str) -> str:
     if '/hyperconverged/' in pl:
         return 'hyperconverged'
     return ''
+
+
+# Internal marker for "this fence was authored under a list item". It rides on
+# the <codeblock> start tag through generation and is consumed (and removed) by
+# _adopt_indented_codeblocks_into_list_items, so it never reaches the output.
+_IN_LIST_ATTR = ' __inlist="1"'
+
+
+def _in_list_marker(elem: 'MarkdownElement') -> str:
+    return _IN_LIST_ATTR if getattr(elem, 'fence_indent', 0) else ''
+
+
+def _adopt_indented_codeblocks_into_list_items(dita: str) -> str:
+    """Move a list-indented <codeblock> inside the <li> it was authored under.
+
+    The parser flattens the element stream, so a fence indented under a list
+    item lands as a sibling of the list and splits it -- seven authored steps
+    become seven one-item <ol>s, each restarting at 1. Heretto's editors fix
+    that by hand, and they do it by putting the block inside the <li> *wrapped
+    in a <p>*; a <codeblock> inside a <p> gets its newlines normalised away, so
+    three commands publish as one unusable line with a Copy button next to it.
+
+    Emitting the shape they want, with the <codeblock> as a direct child of the
+    <li>, removes the reason to touch it and keeps the newlines. Fences authored
+    at column zero are untouched and stay siblings of the list.
+    """
+    # Pull each marked codeblock back inside the preceding list's last <li>.
+    adopt = re.compile(
+        r'[ \t]*</li>\n([ \t]*)</(ol|ul)>\n'
+        r'([ \t]*)<codeblock' + re.escape(_IN_LIST_ATTR) + r'(.*?)</codeblock>\n',
+        re.DOTALL)
+
+    def _adopt(m):
+        list_indent, tag, _, body = m.group(1), m.group(2), m.group(3), m.group(4)
+        inner = list_indent + '    '
+        # The matched '</li>' took its newline with it, so re-open the line.
+        return (f'\n{inner}<codeblock{body}</codeblock>\n'
+                f'{list_indent}    </li>\n{list_indent}</{tag}>\n')
+
+    previous = None
+    while previous != dita:
+        previous = dita
+        dita = adopt.sub(_adopt, dita)
+
+    # The codeblock had split one authored list into several; stitch them back
+    # together so the numbering runs 1..n instead of restarting at every step.
+    dita = re.sub(r'[ \t]*</(ol|ul)>\n[ \t]*<\1>\n', '', dita)
+
+    # Any marker left (a block with no list before it) is just a normal sibling.
+    return dita.replace(_IN_LIST_ATTR, '')
 
 
 def collapse_consecutive_notes(lines: List[str]) -> List[str]:
@@ -466,6 +697,10 @@ class MarkdownElement:
     # itself. An include's own sectioning is local to it: a heading it carries
     # must not end the parent's <context> region. See _splice_inlined_includes.
     from_include: bool = False
+    # For code blocks: the indentation the fence was authored at. Non-zero means
+    # the fence sat under a list item, and the <codeblock> belongs inside that
+    # <li>. See _adopt_indented_codeblocks_into_list_items.
+    fence_indent: int = 0
 
 
 class MarkdownParser:
@@ -569,7 +804,8 @@ class MarkdownParser:
                 elements.append(MarkdownElement(
                     type='code_block',
                     content='\n'.join(code_lines),
-                    language=lang
+                    language=lang,
+                    fence_indent=fence_indent
                 ))
                 i += 1  # Skip closing ```
                 continue
@@ -583,7 +819,11 @@ class MarkdownParser:
             if line.startswith('>'):
                 quote_lines = []
                 while i < len(lines) and lines[i].startswith('>'):
-                    quote_lines.append(lines[i][1:].strip())
+                    # Strip the '>' marker and at most one following space, and
+                    # keep the rest verbatim. Stripping all leading whitespace
+                    # here flattened the indentation of code fences authored
+                    # inside the quote -- see _note_body.
+                    quote_lines.append(_QUOTE_MARKER_RE.sub('', lines[i]).rstrip())
                     i += 1
                 elements.append(MarkdownElement(
                     type='note',
@@ -1047,7 +1287,7 @@ class DITAGenerator:
                     image_elem = self._handle_mermaid_diagram(elem.content, from_warehouse=False)
                     output.append(f'{indent}{image_elem}')
                 else:
-                    output.append(f'{indent}<codeblock>{escape_xml(elem.content)}</codeblock>')
+                    output.append(f'{indent}<codeblock{_in_list_marker(elem)}>{escape_xml(elem.content)}</codeblock>')
             elif elem.type == 'note':
                 note_type = self._detect_note_type(elem.content)
                 cleaned_content = self._strip_note_prefix(elem.content, note_type)
@@ -1157,7 +1397,7 @@ class DITAGenerator:
                     image_elem = self._handle_mermaid_diagram(elem.content, from_warehouse=True)
                     output.append(f'            {image_elem}')
                 else:
-                    output.append(f'            <codeblock>{escape_xml(elem.content)}</codeblock>')
+                    output.append(f'            <codeblock{_in_list_marker(elem)}>{escape_xml(elem.content)}</codeblock>')
             elif elem.type == 'note':
                 note_type = self._detect_note_type(elem.content)
                 cleaned_content = self._strip_note_prefix(elem.content, note_type)
@@ -1323,7 +1563,7 @@ class DITAGenerator:
                 image_elem = self._handle_mermaid_diagram(elem.content, from_warehouse=False)
                 buf.append(f'        {image_elem}')
             else:
-                buf.append(f'        <codeblock>{escape_xml(elem.content)}</codeblock>')
+                buf.append(f'        <codeblock{_in_list_marker(elem)}>{escape_xml(elem.content)}</codeblock>')
         elif t == 'note':
             note_type = self._detect_note_type(elem.content)
             cleaned_content = self._strip_note_prefix(elem.content, note_type)
@@ -1553,7 +1793,7 @@ class DITAGenerator:
                 image_elem = self._handle_mermaid_diagram(elem.content, from_warehouse=False)
                 return f'                    {image_elem}'
             else:
-                return f'                    <codeblock>{escape_xml(elem.content)}</codeblock>'
+                return f'                    <codeblock{_in_list_marker(elem)}>{escape_xml(elem.content)}</codeblock>'
         elif elem.type == 'unordered_list':
             return self._generate_ul(elem.items, indent='                    ')
         elif elem.type == 'ordered_list':
@@ -1732,9 +1972,26 @@ class DITAGenerator:
         with no bullets keep their existing single-<p> shape (newlines and all),
         both to hold the diff down and because collapse_consecutive_notes()
         matches notes on one line.
+
+        A fenced code block authored inside the quote becomes a real
+        <codeblock>, emitted as a direct child of the <note> -- never inside a
+        <p>, because a <codeblock> in a <p> has its newlines normalised away.
+        Without this the fence survived as inline markup and published as
+        '``<codeph>bash' followed by the commands run together on one line.
         """
         blocks: List[Tuple[str, object]] = []
+        fence_lines: Optional[List[str]] = None
         for raw in content.split('\n'):
+            if _FENCE_RE.match(raw.strip()):
+                if fence_lines is None:
+                    fence_lines = []           # opening fence
+                else:
+                    blocks.append(('code', fence_lines))
+                    fence_lines = None         # closing fence
+                continue
+            if fence_lines is not None:
+                fence_lines.append(raw)        # verbatim, indentation included
+                continue
             line = raw.strip()
             if not line:
                 continue
@@ -1748,14 +2005,20 @@ class DITAGenerator:
                 blocks[-1] = ('p', f'{blocks[-1][1]} {line}')
             else:
                 blocks.append(('p', line))
+        if fence_lines:                        # unterminated fence
+            blocks.append(('code', fence_lines))
 
-        if not any(kind == 'ul' for kind, _ in blocks):
+        if not any(kind in ('ul', 'code') for kind, _ in blocks):
+            # Unchanged single-<p> shape, which collapse_consecutive_notes matches on.
             return f'<p>{self.parser.convert_inline(escape_xml(content))}</p>'
 
         parts = []
         for kind, payload in blocks:
             if kind == 'p':
                 parts.append(f'<p>{self.parser.convert_inline(escape_xml(payload))}</p>')
+            elif kind == 'code':
+                code = '\n'.join(dedent_lines(payload))
+                parts.append(f'<codeblock>{escape_xml(code)}</codeblock>')
             else:
                 items = ''.join(
                     f'<li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>'
@@ -2166,6 +2429,15 @@ class MarkdownToDITAConverter:
                         copied += 1
             print(f"  Copied {copied} images to {output_images}")
 
+        # The bulk copy above only covers a sibling images/ directory, which is the
+        # shape PDF-extracted guides have. An authored guide references its
+        # screenshots by relative path (e.g. ../img/foo.png), so also copy exactly
+        # what the markdown points at -- topics reference images by basename.
+        referenced = self._copy_local_images(md_file, content)
+        if referenced:
+            print(f"  Copied {referenced} referenced images to "
+                  f"{self.config.output_dir / self.config.images_dir}")
+
         # Remove TOC section (between "## Table of Contents" and "---")
         content = re.sub(r'## Table of Contents\n.*?---\n', '', content, flags=re.DOTALL)
 
@@ -2181,7 +2453,8 @@ class MarkdownToDITAConverter:
             topic_id = f"t_{base_id}"
             self.dita_gen.set_source_context(md_file.stem)
             dita_content = self.dita_gen.generate_task_topic(doc_title, content, topic_id)
-            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
+            dita_content = tidy_emphasis(normalize_characters(
+                _adopt_indented_codeblocks_into_list_items(dita_content)))
             output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
             output_file.write_text(dita_content, encoding='utf-8')
             print(f"  Created: {topic_id}.dita ({doc_title})")
@@ -2212,7 +2485,8 @@ class MarkdownToDITAConverter:
             topic_id = f"c_{base_id}"
             self.dita_gen.set_source_context(md_file.stem)
             dita_content = self.dita_gen.generate_concept_topic(doc_title, content, topic_id)
-            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
+            dita_content = tidy_emphasis(normalize_characters(
+                _adopt_indented_codeblocks_into_list_items(dita_content)))
             output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
             output_file.write_text(dita_content, encoding='utf-8')
             self.converted_topics.append({
@@ -2238,7 +2512,8 @@ class MarkdownToDITAConverter:
                 dita_content = self.dita_gen.generate_concept_topic(
                     chapter_title, chapter_content, topic_id
                 )
-                dita_content = tidy_emphasis(remove_non_ascii(dita_content))
+                dita_content = tidy_emphasis(normalize_characters(
+                _adopt_indented_codeblocks_into_list_items(dita_content)))
 
                 output_file = topics_dir / f"{topic_id}.dita"
                 output_file.write_text(dita_content, encoding='utf-8')
@@ -2627,7 +2902,8 @@ class MarkdownToDITAConverter:
             dita_content = self.dita_gen.generate_task_topic(title, content, topic_id)
 
             # Clean non-ASCII characters from output
-            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
+            dita_content = tidy_emphasis(normalize_characters(
+                _adopt_indented_codeblocks_into_list_items(dita_content)))
 
             # Write output file
             output_file = output_dir / f"{topic_id}.dita"
@@ -2738,7 +3014,8 @@ class MarkdownToDITAConverter:
             )
 
             # Clean non-ASCII characters from output
-            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
+            dita_content = tidy_emphasis(normalize_characters(
+                _adopt_indented_codeblocks_into_list_items(dita_content)))
 
             # Write output file
             output_file = output_dir / f"{section_id}.dita"
@@ -2802,7 +3079,8 @@ class MarkdownToDITAConverter:
             dita_content = self.dita_gen.generate_concept_topic(title, content, topic_id)
 
             # Clean non-ASCII characters from output
-            dita_content = tidy_emphasis(remove_non_ascii(dita_content))
+            dita_content = tidy_emphasis(normalize_characters(
+                _adopt_indented_codeblocks_into_list_items(dita_content)))
 
             # Write output file
             output_file = common_dir / f"{topic_id}.dita"

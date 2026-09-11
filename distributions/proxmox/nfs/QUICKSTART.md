@@ -7,11 +7,13 @@ title: NFS on Proxmox VE - Quick Start Guide
 
 This guide provides a streamlined path to configure NFS storage on Proxmox VE.
 
-> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [NFS Best Practices](./BEST-PRACTICES.md)
-
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-nfs.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [NFS Best Practices](./BEST-PRACTICES.md)
 
 ---
 

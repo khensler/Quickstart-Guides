@@ -8,11 +8,14 @@ title: iSCSI on XCP-ng - GUI Quick Start Guide (Xen Orchestra)
 This guide walks you through configuring iSCSI storage on XCP-ng using **Xen Orchestra (XO)** web interface with multipathing enabled.
 
 > **📘 For CLI-based setup:** See [iSCSI Quick Start (CLI)](./QUICKSTART.md)
-> **📘 For production best practices:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
 
 ---
 
 {% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-iscsi.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [iSCSI Best Practices](./BEST-PRACTICES.md)
 
 ---
 
@@ -25,10 +28,6 @@ This guide walks you through configuring iSCSI storage on XCP-ng using **Xen Orc
   - LUN/Volume created and mapped to XCP-ng hosts
 - Dedicated storage network interfaces configured
 - CHAP credentials (if required by your storage array)
-
-{% include quickstart/glossary-link-iscsi.md %}
-
-{% include quickstart/arp-warning.md %}
 
 ---
 
@@ -53,7 +52,7 @@ Before adding iSCSI storage, ensure your storage network interfaces are configur
 2. Select a host → **Networking** tab
 3. Configure storage interfaces with static IPs
 
-
+{% include quickstart/arp-warning.md %}
 
 
 ---
@@ -201,7 +200,6 @@ systemctl restart multipathd
    - **Shared:** Yes (available on all hosts)
 
 
-
 ---
 
 ## Step 6: Verify Multipathing
@@ -272,7 +270,6 @@ multipath -ll
 3. **View logs in XO:**
    - Navigate to **Home → Logs**
    - Filter for storage-related events
-
 
 
 ### Paths Showing Failed

@@ -149,15 +149,75 @@ class TestUtilityFunctions(unittest.TestCase):
                          'code-and-bold-and-italic')
         self.assertEqual(conv.github_slug('Step 1: Connect'), 'step-1-connect')
 
-    def test_remove_non_ascii_uses_xml_safe_replacements(self):
+    def test_normalize_characters_uses_xml_safe_replacements(self):
         # Runs on already-escaped XML, so arrows must become entities, never raw < >
-        self.assertEqual(conv.remove_non_ascii('host → array'), 'host -&gt; array')
-        self.assertEqual(conv.remove_non_ascii('array ← host'), 'array &lt;- host')
-        self.assertEqual(conv.remove_non_ascii('em—dash and en–dash'), 'em-dash and en-dash')
-        self.assertEqual(conv.remove_non_ascii('⚠️ careful'), '[WARNING] careful')
-        self.assertEqual(conv.remove_non_ascii('✅ ok ❌ no 💡 tip'), '[OK] ok [X] no [TIP] tip')
-        # Anything left over is dropped rather than shipped as non-ASCII
-        self.assertEqual(conv.remove_non_ascii('naive é test'), 'naive  test')
+        self.assertEqual(conv.normalize_characters('host → array'), 'host -&gt; array')
+        self.assertEqual(conv.normalize_characters('array ← host'), 'array &lt;- host')
+        self.assertEqual(conv.normalize_characters('em—dash and en–dash'),
+                         'em-dash and en-dash')
+        self.assertEqual(conv.normalize_characters('volume (≥ 250 GB)'),
+                         'volume (&gt;= 250 GB)')
+        self.assertEqual(conv.normalize_characters('at most ≤ 4'), 'at most &lt;= 4')
+
+    def test_normalize_characters_keeps_extended_ascii(self):
+        # Latin-1 passes through: dropping U+00D7 turned '2x2' into '22'.
+        for kept in ('Minimum 2×2 topology', '2 NICs × 2 portals = 4 paths',
+                     'no_path_retry × polling_interval',
+                     '± 5%', '90° C', 'a · b', 'naive é test'):
+            self.assertEqual(conv.normalize_characters(kept), kept)
+
+    def test_normalize_characters_folds_above_latin1(self):
+        self.assertEqual(conv.normalize_characters('≈ 20.4 s'), '~ 20.4 s')
+        self.assertEqual(conv.normalize_characters('a ≠ b'), 'a != b')
+        # Letters above Latin-1 fold to a base letter rather than vanishing
+        self.assertEqual(conv.normalize_characters('ĀĒĪ'), 'AEI')
+        # Invisible traps are normalised away
+        self.assertEqual(conv.normalize_characters('a b'), 'a b')
+        self.assertEqual(conv.normalize_characters('a​b'), 'ab')
+
+    def test_normalize_characters_folds_box_drawing(self):
+        # The ASCII-art topology diagrams have to keep their alignment.
+        self.assertEqual(conv.normalize_characters('├── Node 1'), '+-- Node 1')
+        self.assertEqual(conv.normalize_characters('└── /dev/mapper/mpatha'),
+                         '+-- /dev/mapper/mpatha')
+        self.assertEqual(conv.normalize_characters('│  x'), '|  x')
+        self.assertEqual(conv.normalize_characters('──► FlashArray'),
+                         '--&gt; FlashArray')
+
+    def test_normalize_characters_publishes_no_emoji(self):
+        # Decoration: the emoji goes, the text stays. No bracket tokens -- a
+        # note's @type already says 'warning', so '[WARNING]' was pure noise.
+        self.assertEqual(conv.normalize_characters('⚠️ careful'), 'careful')
+        self.assertEqual(conv.normalize_characters('✅ ok ❌ no 💡 tip'), 'ok no tip')
+        self.assertEqual(conv.normalize_characters('🚨 critical'), 'critical')
+        self.assertEqual(conv.normalize_characters('done 🎉 now'), 'done now')
+        self.assertEqual(conv.normalize_characters('team 👍🏽 ok'), 'team ok')
+        self.assertEqual(conv.normalize_characters('<p><b>📘 See also:</b></p>'),
+                         '<p><b>See also:</b></p>')
+
+    def test_normalize_characters_keeps_meaning_of_a_lone_emoji(self):
+        # A tick alone in a table cell *is* the cell's meaning; dropping it
+        # would empty the column, so it becomes a word instead.
+        self.assertEqual(conv.normalize_characters('<entry>✓</entry>'),
+                         '<entry>Yes</entry>')
+        self.assertEqual(conv.normalize_characters('<entry>❌</entry>'),
+                         '<entry>No</entry>')
+        self.assertEqual(conv.normalize_characters('<entry><b>✅</b></entry>'),
+                         '<entry><b>Yes</b></entry>')
+        # Next to text it is redundant and just goes
+        self.assertEqual(conv.normalize_characters('<entry>✓ Yes</entry>'),
+                         '<entry>Yes</entry>')
+        self.assertEqual(conv.normalize_characters('<entry>✓ Supported</entry>'),
+                         '<entry>Supported</entry>')
+
+    def test_normalize_characters_leaves_codeblock_whitespace_alone(self):
+        # Dropping a glyph must not reindent preformatted content.
+        src = '<codeblock>line one 💡\n    indented two\n\n    after blank</codeblock>'
+        self.assertEqual(conv.normalize_characters(src),
+                         '<codeblock>line one \n    indented two\n\n    after blank</codeblock>')
+
+    def test_remove_non_ascii_alias_still_works(self):
+        self.assertIs(conv.remove_non_ascii, conv.normalize_characters)
 
     def test_remove_step_prefix(self):
         self.assertEqual(conv.remove_step_prefix('Step 1: Verify the initiator'),
@@ -887,12 +947,50 @@ class TestTaskTopic(ConverterCase):
         self.assertIn('<note type="tip"><p>MARKER_POSTREQ_NOTE.</p></note>', postreq)
 
     def test_unicode_is_replaced_with_ascii_equivalents(self):
-        self.assertIn('host -&gt; array, an em-dash, "smart quotes", and a [WARNING] emoji',
+        # The emoji is dropped outright -- no '[WARNING]' token reaches the page.
+        self.assertIn('host -&gt; array, an em-dash, "smart quotes", and a emoji',
                       self.qs)
+        self.assertNotIn('[WARNING]', self.qs)
 
     def test_indented_fence_under_a_bullet_becomes_a_codeblock(self):
         self.assertIn('<codeblock>echo "MARKER_FENCE_AFTER_LIST"</codeblock>', self.qs)
         self.assertNotIn('<codeph>bash', self.qs)
+
+    def test_indented_fence_lands_inside_the_list_item(self):
+        # A <codeblock> must be a direct child of the <li> -- never wrapped in a
+        # <p>, which is where Heretto normalises the newlines away -- and the
+        # list must not be split in two by the block.
+        self.assertRegex(
+            self.qs,
+            r'<li><p>Bullet directly above an indented fence</p>\s*'
+            r'<codeblock>echo "MARKER_FENCE_AFTER_LIST"</codeblock>\s*</li>')
+        self.assertNotIn('<p><codeblock>echo "MARKER_FENCE_AFTER_LIST"', self.qs)
+        # The internal provenance marker must never reach the output.
+        self.assertNotIn('__inlist', self.qs)
+
+    def test_fence_inside_a_blockquote_becomes_a_codeblock(self):
+        # A fence authored inside a '>' quote used to survive as inline markup
+        # and publish as '``<codeph>bash' with the commands run together.
+        self.assertNotIn('``<codeph>', self.qs)
+        self.assertNotIn('codeph>bash', self.qs)
+        self.assertIn('<codeblock>first --command      # aligned comment\n'
+                      '  second --indented</codeblock>', self.qs)
+        # Direct child of the <note>, never wrapped in a <p>
+        self.assertRegex(
+            self.qs,
+            r'MARKER_QUOTED_FENCE_LEAD.*?</p><codeblock>first --command')
+        self.assertNotIn('<p><codeblock>first --command', self.qs)
+        # Prose on both sides of the fence survives as its own paragraph
+        self.assertRegex(
+            self.qs,
+            r'</codeblock><p>MARKER_QUOTED_FENCE_TAIL prose after the fence, '
+            r'with <codeph>codeph</codeph> still working\.</p></note>')
+
+    def test_no_codeblock_is_ever_wrapped_in_a_paragraph(self):
+        # A <codeblock> inside a <p> has its newlines normalised away by
+        # Heretto, which is how three commands became one unusable line.
+        self.assertNotIn('<p><codeblock', self.qs)
+        self.assertNotIn('<p>\n<codeblock', self.qs)
 
     def test_nested_emphasis_survives_end_to_end(self):
         self.assertIn('<b>MARKER_NESTED_EMPHASIS is bold with <i>italic</i> inside</b>',

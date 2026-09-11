@@ -14,6 +14,14 @@ This guide provides step-by-step instructions for configuring NFS storage from a
 
 ---
 
+{% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-nfs.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [NFS Best Practices](./BEST-PRACTICES.md)
+
+---
+
 ## Disclaimer
 
 > **This guide assumes that the Pure Storage FlashArray is already configured and ready for NFS connectivity.** This includes:

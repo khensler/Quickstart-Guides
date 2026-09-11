@@ -13,6 +13,8 @@ This guide covers the complete process of integrating Pure Storage FlashArray wi
 
 {% include quickstart/disclaimer.md %}
 
+{% include quickstart/glossary-link-fc.md %}
+
 ---
 
 ## Prerequisites
@@ -26,7 +28,6 @@ This guide covers the complete process of integrating Pure Storage FlashArray wi
 - FC fabric zoning configured — all hypervisor node WWPNs zoned to the array's FC target ports
 - SSH access to each hypervisor node
 
-{% include quickstart/glossary-link-fc.md %}
 
 ---
 

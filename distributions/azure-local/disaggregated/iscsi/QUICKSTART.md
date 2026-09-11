@@ -5,17 +5,19 @@ title: Azure Local with Everpure FlashArray Quick Start Guide for Disaggregated 
 
 # Azure Local with Everpure FlashArray Quick Start Guide for Disaggregated Deployments (iSCSI)
 
----
-
-{% include quickstart/disclaimer.md %}
-
----
-
 This guide provides a high-level workflow for integrating the Everpure FlashArray as the **only** block storage for a **disaggregated** Azure Local (formerly Azure Stack HCI) deployment over **iSCSI**. In a disaggregated deployment there is no local Storage Spaces Direct (S2D) — compute runs on the Azure Local nodes while all cluster storage is served from the FlashArray over iSCSI (TCP/IP). This combines the cloud-integrated benefits of Azure Local with the high-performance, data-reduced storage of FlashArray, and lets compute and storage scale independently.
 
 > **This document is based heavliy on the official Microsoft documentation.**  [Deploy Azure Local using the Azure portal for disaggregated deployments](https://learn.microsoft.com/en-us/azure/azure-local/deploy/deploy-via-portal-disaggregated) · [Enable External Storage on Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/deploy/enable-external-storage)
 
 > **Looking for Fibre Channel instead?** See the [Disaggregated FC guide](../fc/QUICKSTART.md). **Looking for a hyperconverged (S2D + FlashArray) cluster?** See the [Hyperconverged iSCSI guide](../../hyperconverged/iscsi/QUICKSTART.md) or the [Hyperconverged FC guide](../../hyperconverged/fc/QUICKSTART.md).
+
+---
+
+{% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-iscsi.md %}
+
+---
 
 ## Prerequisites to Using the Quick Start Guide
 

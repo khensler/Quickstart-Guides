@@ -205,6 +205,26 @@ sudo reboot
 
 > **⚠️ Note:** The `intel_iommu` and `numa_balancing` parameters are general CPU and NUMA optimizations that improve overall system performance for I/O-intensive workloads. They do not directly affect NVMe-TCP protocol behavior. Measure baseline performance before and after changes to validate impact in your environment. Only `nvme_core.multipath=Y` directly affects NVMe multipath behavior.
 
+> **Two ways to set `nvme_core.multipath=Y` — pick one.** The Quick Start uses a
+> module option, which is the method the Debian, RHEL and SUSE guides use too:
+>
+> ```bash
+> echo 'options nvme_core multipath=Y' | sudo tee /etc/modprobe.d/nvme-tcp.conf
+> sudo reboot
+> ```
+>
+> The GRUB form above (`nvme_core.multipath=Y` on `GRUB_CMDLINE_LINUX`) does the
+> same thing and is the one to use if `nvme_core` is built into the kernel rather
+> than loaded as a module, since a `modprobe.d` option is only read when the
+> module loads. On a stock UEK kernel `nvme_core` is a module, so either works.
+> Setting it in both places is harmless but means two places to keep in step.
+>
+> Whichever you choose, confirm the result rather than the config file:
+>
+> ```bash
+> cat /sys/module/nvme_core/parameters/multipath   # must print Y
+> ```
+
 ---
 
 ## Network Configuration

@@ -59,7 +59,7 @@ kernel's own counters rather than inferred:
 | --- | --- | --- |
 | Connection failure detection | 10.07 – 10.11 s | `noop_out_interval` 5 + `noop_out_timeout` 5 |
 | Session recovery window | 10.24 s | `recovery_tmo` 10 (forced from `fast_io_fail_tmo`) |
-| **Total to first `EIO`** | **≈ 20.4 s** | |
+| **Total to first `EIO`** | **~20.4 s** | |
 
 Every one of the 18 runs recovered to 8/8 paths with no manual intervention.
 

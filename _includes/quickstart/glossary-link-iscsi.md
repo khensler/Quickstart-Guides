@@ -1,2 +1,1 @@
-> **📖 New to iSCSI?** See the [Storage Terminology Glossary]({{ site.baseurl }}/common/glossary.html)
-
+> **📖 New to iSCSI?** See the [Storage Terminology Glossary — iSCSI Terms]({{ site.baseurl }}/common/glossary.html#iscsi-specific-terms)

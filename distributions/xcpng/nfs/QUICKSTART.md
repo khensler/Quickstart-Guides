@@ -13,6 +13,8 @@ This guide walks you through configuring NFS storage on XCP-ng using **Xen Orche
 
 {% include quickstart/disclaimer.md %}
 
+{% include quickstart/glossary-link-nfs.md %}
+
 ---
 
 ## Prerequisites

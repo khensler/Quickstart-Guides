@@ -11,6 +11,14 @@ This guide covers connecting a Everpure FlashArray Fibre Channel volume to an HP
 
 ---
 
+{% include quickstart/disclaimer.md %}
+
+{% include quickstart/glossary-link-fc.md %}
+
+> **📘 For detailed explanations, alternative configurations, and troubleshooting:** See [Fibre Channel Best Practices](./BEST-PRACTICES.md)
+
+---
+
 ## Prerequisites
 
 Complete these on the FlashArray and FC fabric **before** starting — they are outside the scope of this guide:
@@ -26,7 +34,6 @@ Complete these on the FlashArray and FC fabric **before** starting — they are 
 
 > **Need your WWPNs to register on the array?** Run `cat /sys/class/fc_host/host*/port_name` on each host. See the [FC Best Practices]({{ site.baseurl }}/distributions/hpe-vme/fc/BEST-PRACTICES.html) for HBA verification and zoning guidance.
 
-{% include quickstart/glossary-link-fc.md %}
 
 ---
 

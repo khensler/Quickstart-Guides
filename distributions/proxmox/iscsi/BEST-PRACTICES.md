@@ -290,48 +290,11 @@ iSCSI uses device-mapper multipath (dm-multipath) for path management, unlike NV
 - Configurable failover and load balancing policies
 - Well-established and mature technology
 
-### Multipath Configuration
+Use the `/etc/multipath.conf` shown above — it is the authoritative block for
+Proxmox VE as well, and nothing in Proxmox requires a different one.
 
-**Create `/etc/multipath.conf`:**
-```bash
-cat > /etc/multipath.conf << 'EOF'
-defaults {
-    user_friendly_names yes
-    find_multipaths no
-    enable_foreign "^$"
-    polling_interval 5
-}
-
-# Blacklist local devices and NVMe (NVMe uses native multipath)
-blacklist {
-    devnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st|nvme)[0-9]*"
-    devnode "^hd[a-z]"
-    devnode "^cciss.*"
-}
-
-# Add device-specific settings for your storage array
-# Consult your storage vendor documentation for recommended values
-#devices {
-#    device {
-#        vendor "VENDOR"
-#        product "PRODUCT"
-#        path_selector "service-time 0"
-#        path_grouping_policy "group_by_prio"
-#        prio "alua"
-#        failback "immediate"
-#        path_checker "tur"
-#        fast_io_fail_tmo 10
-#        dev_loss_tmo 60
-#        no_path_retry 0
-#        hardware_handler "1 alua"
-#        rr_min_io_rq 1
-#    }
-#}
-EOF
-```
-
-> **Parameter reference:** The device-level settings shown commented above
-> (`path_selector`, `path_grouping_policy`, `prio`, `failback`,
+> **Parameter reference:** The device-level settings shown commented in that
+> configuration (`path_selector`, `path_grouping_policy`, `prio`, `failback`,
 > `fast_io_fail_tmo`, `dev_loss_tmo`, `no_path_retry`) are explained in
 > [How long an outage the host survives](#how-long-an-outage-the-host-survives)
 > below. `no_path_retry 0` is recommended so that a genuine all-paths-down
@@ -339,11 +302,11 @@ EOF
 > that it still absorbs roughly the first 20 seconds of an outage, so it is not
 > an "instant failure" setting.
 
-> **Note on `polling_interval`:** the `defaults {}` block above sets
-> `polling_interval 5`, which is the multipath built-in value. The rest of the
-> Everpure Linux guidance uses `polling_interval 10`. This directly scales how
-> long the host tolerates an outage — see the table below — so pick one value and
-> keep it consistent with whatever `no_path_retry` you publish alongside it.
+> **Note on `polling_interval`:** the Everpure Linux guidance uses
+> `polling_interval 10`, while the multipath built-in default is `5`. This
+> directly scales how long the host tolerates an outage — see the table below —
+> so whichever you set, keep it consistent with the `no_path_retry` you publish
+> alongside it, and restate both together.
 
 {% include quickstart/iscsi-apd-tolerance.md %}
 
@@ -404,7 +367,10 @@ systemctl enable open-iscsi
 systemctl restart open-iscsi
 ```
 
-### iSCSI Interface Binding
+### Interface Binding on Proxmox VE
+
+This is the concrete Proxmox form of the generic interface binding described
+above, using the `ens1f0` / `ens1f1` names a typical node reports.
 
 **Bind iSCSI to specific interfaces for multipath:**
 ```bash
