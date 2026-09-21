@@ -125,13 +125,18 @@ path_selector "round-robin 0"
 **Recommended setting:** `no_path_retry 0`
 
 **Why:**
-- **`no_path_retry 0`** - Fail immediately when all paths are down (recommended)
+- **`no_path_retry 0`** - Fails I/O in bounded time once all paths are down (recommended)
+  - Not an instant failure: the transport has to declare the paths dead first,
+    which absorbs roughly the first 20 seconds of an outage at the timers in
+    these guides. A normal controller failover completes well inside that window.
   - Applications receive errors and can handle them appropriately
   - Prevents hung I/O and system hangs
   - Most predictable behavior for applications
 
-- **`no_path_retry 5-30`** - For environments with brief, transient failures
-  - Provides some tolerance for momentary path loss
+- **`no_path_retry 5-30`** - For environments that need to ride out a longer outage
+  - Each retry is one `polling_interval`, so tolerance is roughly
+    20 s + (`no_path_retry` × `polling_interval`) - about 70 s at `5` with
+    `polling_interval 10`
   - Still prevents indefinite hangs
 
 **Important:** The `no_path_retry` parameter **overrides** the `features "1 queue_if_no_path"` option

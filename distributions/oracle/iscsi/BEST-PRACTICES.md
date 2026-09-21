@@ -509,6 +509,7 @@ defaults {
     user_friendly_names yes
     find_multipaths no
     enable_foreign "^$"
+    polling_interval 10
 }
 
 # Blacklist local devices and NVMe (NVMe uses native multipath)

@@ -68,8 +68,11 @@ templating; inline bold/italic/`codeph`/xref with code-span protection; images
 (local, external, URI-encoded names, per-depth `../` hops, copied files);
 Jekyll includes (inline, nested, conref); cross-reference resolution through the
 link registry (anchors, slug forms, `.html` spellings, basename fallback,
-unresolvable fallback); every map variant and href resolution; ASCII-only output;
-and XML well-formedness across all output.
+unresolvable fallback); every map variant and href resolution; PEAK variable
+substitution (conkeyrefs in prose and titles, code and attributes left alone,
+longest-match and word-boundary rules, the warehouse mapref, and
+`--no-peak-variables`); ASCII-only output; and XML well-formedness across all
+output.
 
 ## Regression tests for fixed bugs
 
@@ -87,6 +90,8 @@ these tests now assert the correct behaviour and fail if it regresses.
 | `test_sanitize_id_never_starts_with_a_digit` | `.strip('_')` undid the NCName guard, so `### 1.1 …` produced an illegal id |
 | `test_standalone_map_root_declares_xml_lang` | the standalone `<map>` root omitted `xml:lang="en-US"` |
 | `test_disclaimers_are_important_even_when_emoji_decorated` | disclaimer notes were typed `note`/`warning` instead of `important` |
+| `test_matching_is_case_sensitive_and_word_bounded` | a PEAK variable matched inside an identifier — `PEAK` in `MARKER_BP_PEAK_BODY`, `NFS` in `NFS_MOUNT_OPTS` |
+| `test_code_is_never_substituted` | a conkeyref replaced `FlashArray` inside a `multipath.conf` device stanza, where it is a literal device string |
 
 If you ever need to keep a behaviour that is wrong-but-deliberate, name the test
 `..._known_limitation` / `..._known_gap` and say why in a comment, so a later fix is

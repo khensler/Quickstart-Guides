@@ -103,3 +103,17 @@ MARKER_BP_TROUBLESHOOTING_BODY — this whole section must not be emitted.
 - [Quickstart in this directory](QUICKSTART.md)
 - [Glossary](../../../_includes/glossary.md)
 - [External reference](https://support.everpuredata.com/bundle/bp)
+
+## PEAK Variables
+
+MARKER_BP_PEAK_BODY — this FlashArray runs Purity and connects over NVMe-TCP.
+A FlashArray//XL is still a FlashArray, and `FlashArray` in a codeph is a
+literal device string. Version and plural suffixes stay outside the variable:
+NFSv3, NFSv4.1, two FlashArrays and a FlashBlade//S500. Identifiers do not
+count -- NFS_SERVER_IP, AWS_ACCESS_KEY_ID and a PSSession are not product
+names.
+
+```bash
+# FlashArray must stay literal here
+multipath -ll | grep FlashArray
+```

@@ -48,6 +48,7 @@ exclude:
   - vendor
   - node_modules
   - CLAUDE.md
+  - PEAK-VARIABLES.md
   - tests
 
 # Default front matter

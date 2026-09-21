@@ -16,6 +16,7 @@ defaults {
     user_friendly_names yes
     find_multipaths no
     enable_foreign "^$"
+    polling_interval 10
 }
 
 # Blacklist local devices and NVMe (NVMe uses native multipath)
@@ -125,7 +126,7 @@ devices {
         vendor "VENDOR"
         product "PRODUCT"
         # ... other settings ...
-        no_path_retry 0        # Fail immediately when all paths are down
+        no_path_retry 0        # Fail in bounded time once all paths are down
         # OR
         no_path_retry 5        # Retry 5 times before failing
         # OR
@@ -136,13 +137,15 @@ devices {
 
 **Recommended values:**
 - `no_path_retry 0` - **Recommended for most environments**
-  - Fails immediately when all paths are down
+  - Fails I/O in bounded time once all paths are down - about 20 seconds at the
+    timers in this guide, not instantly, because the transport has to declare
+    the paths dead first
   - Prevents hung I/O and system hangs
   - Applications receive I/O errors and can handle them appropriately
 
-- `no_path_retry 5` - For environments with brief, transient failures
-  - Retries 5 times before failing
-  - Provides some tolerance for momentary path loss
+- `no_path_retry 5` - For environments that need to ride out a longer outage
+  - Retries 5 times, one `polling_interval` apart, before failing - about
+    70 seconds in total with `polling_interval 10`
   - Still prevents indefinite hangs
 
 - `no_path_retry queue` - **Not recommended**
