@@ -286,6 +286,61 @@ So a re-import from `convert_to_dita.py` will *regress* that work. Before
 republishing an existing topic, diff the generated DITA against what Heretto
 holds and decide deliberately which side wins; don't assume our output is newer.
 
+## PEAK variables (conkeyrefs)
+
+Product and company names are authored as literal text, but the published docs
+take them from PEAK's variable warehouse
+(`production/_global_library/_peak_variables/` in Heretto). The converter emits
+the references, so the PEAK team no longer replaces them by hand on import:
+
+```xml
+<ph conkeyref="varsProductNames/product.block.primary.name.plain"/>
+```
+
+The element is **empty** — the text comes from the warehouse at build time.
+
+- The table is `scripts/peak_variables.json` (302 variables, four keydefs:
+  `varsProductNames`, `varsCompanyBrand`, `varsFeaturesTech`,
+  `varsTechnologyIntegrations`). `PEAK-VARIABLES.md` documents the source and
+  lists every variable; both files are **generated**. `exclude` in the JSON
+  drops individual terms without touching the converter.
+- **Refreshing the warehouse** is a scripted job: `articles/peak_variables/`
+  holds the tooling (pull the four topics with the Heretto MCP tools into
+  `warehouse_snapshot/`, then `extract_variables.py` → the JSON,
+  `build_reference.py` → `PEAK-VARIABLES.md`, `scan_missed_terms.py` for new
+  collisions, `verify_output.py` to validate a run against a
+  `--no-peak-variables` baseline). Its `README.md` is the procedure, UUIDs
+  included. Like everything under `articles/`, that folder is **gitignored** —
+  a fresh clone will not have it, and it has to be rebuilt from the README.
+- **On by default.** `--no-peak-variables` turns it off; nothing else changes.
+- `apply_peak_variables()` is the **last** post-pass in `finalize_topic()`, after
+  `normalize_characters()` and `tidy_emphasis()`. It has to be: both of those
+  work on the text runs between elements, so inserting a `<ph/>` first makes the
+  emoji strip eat the space in front of it and leaves an emphasis span unclosed.
+- Text inside `<codeblock>` and `<codeph>` is never substituted (a device string
+  or a command is not prose — `PURE`/`FlashArray` in a `multipath.conf` stanza
+  has to stay literal), and neither is anything inside a tag, which is what
+  keeps hrefs, ids and **navtitles** literal. A map's `<title>` is an element,
+  so it does take a conkeyref, exactly as PEAK's own publication maps do.
+- Matching is case-sensitive and longest-first (`FlashArray//XL` beats
+  `FlashArray`). What may follow a variable and still be the variable:
+  nothing alphanumeric; a hyphen (`<ph .../>-TCP`, which is how PEAK writes it);
+  a **version suffix** (`NFSv3`, `NFSv4.1`); a **plural `s`**
+  (`FlashArrays`); and, for `//` SKUs only, a **model number**
+  (`FlashBlade//S500` → the `FlashBlade//S` variable plus a literal 500).
+  Everything else keeps the name literal: an underscore joins identifiers
+  (`NFS_SERVER_IP`, `AWS_ACCESS_KEY_ID`, `PEAK` inside `MARKER_BP_PEAK_BODY`)
+  and a bare letter run is a different word (`PSSession`, `LinuxONE`, `MODES`).
+- Every generated map gets one resource-only `<mapref>` to
+  `m_peak_variable_warehouse.ditamap` ahead of its topicrefs; that is how the
+  keys resolve, and it mirrors `m_configuration_guides.ditamap` in Heretto. The
+  href depends on where the maps land, so it is configurable
+  (`--peak-warehouse-href`, default `../../_global_library/...`).
+- A run prints how many substitutions it made, per term. Generic words that
+  happen to be variables (`Performance`, `Linux`, `Community`) are substituted
+  too — harmless, since the warehouse value is the same word, but that is why
+  the count is worth a glance.
+
 ## Running the conversion
 
 Canonical flag set (also in `STYLEGUIDE.md`):

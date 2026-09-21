@@ -357,8 +357,13 @@ node.session.err_timeo.tgt_reset_timeout = 30
 # Startup behavior
 node.startup = automatic
 
-# Queue depth
-node.session.queue_depth = 128
+# Queue depth. cmds_max is the per-session ceiling shared by every LUN on the
+# session; queue_depth is per-LUN. With multipath each path is its own session
+# carrying a full cmds_max, so 32 per LUN over 2-4 paths is 64-128 outstanding
+# commands per volume. See "Queue Depth and Session Command Slots" below for
+# how to size these for your LUN and path count.
+node.session.cmds_max = 128
+node.session.queue_depth = 32
 EOF
 
 # Restart iSCSI services

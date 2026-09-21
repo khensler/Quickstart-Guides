@@ -19,6 +19,7 @@ Usage:
     python convert_to_dita.py --inline-includes --use-existing-images  # Keep existing images
 """
 
+import json
 import os
 import posixpath
 import re
@@ -490,6 +491,19 @@ def deployment_of(path: str) -> str:
 # _adopt_indented_codeblocks_into_list_items, so it never reaches the output.
 _IN_LIST_ATTR = ' __inlist="1"'
 
+# Separates the paragraphs of a multi-paragraph list item while the item is
+# still a single string. _generate_ul/_generate_ol split on it to emit one <p>
+# per paragraph inside the <li>; it never reaches the output.
+_ITEM_PARA_BREAK = '\x00para\x00'
+
+
+def _item_paragraphs(item: str, converter) -> str:
+    """Render one list item's text as one or more <p> elements."""
+    return ''.join(
+        f'<p>{converter.parser.convert_inline(escape_xml(part))}</p>'
+        for part in item.split(_ITEM_PARA_BREAK) if part.strip()
+    ) or '<p/>'
+
 
 def _in_list_marker(elem: 'MarkdownElement') -> str:
     return _IN_LIST_ATTR if getattr(elem, 'fence_indent', 0) else ''
@@ -533,6 +547,297 @@ def _adopt_indented_codeblocks_into_list_items(dita: str) -> str:
 
     # Any marker left (a block with no list before it) is just a normal sibling.
     return dita.replace(_IN_LIST_ATTR, '')
+
+
+# ============================================================================
+# PEAK variables (Heretto conkeyrefs)
+# ============================================================================
+#
+# Product and company names are authored as literal text in the Markdown, but
+# the published docs take them from PEAK's variable warehouse
+# (production/_global_library/_peak_variables/). Until this converter emitted
+# them, the PEAK team replaced every one by hand on import.
+#
+# A reference looks like this, and the element is EMPTY -- the text comes from
+# the warehouse at build time:
+#
+#     <ph conkeyref="varsProductNames/product.block.primary.name.plain"/>
+#
+# The table lives in scripts/peak_variables.json (302 variables, pulled from
+# Heretto master). PEAK-VARIABLES.md documents where it came from and how to
+# refresh it.
+
+_PEAK_DATA_FILE = Path(__file__).with_name('peak_variables.json')
+
+# Regions the substitution must not touch: commands are commands, and an
+# attribute value cannot hold an element. Tags are skipped wholesale, which
+# also keeps hrefs, ids and navtitles literal.
+_PEAK_SKIP_RE = re.compile(
+    r'<codeblock\b[^>]*>.*?</codeblock>|<codeph\b[^>]*>.*?</codeph>|<[^>]*>',
+    re.DOTALL)
+
+_peak_variables: Dict[str, str] = {}
+_peak_pattern: Optional[re.Pattern] = None
+_peak_warehouse_href = ''
+peak_substitutions: Dict[str, int] = {}
+
+# Terms that are also ordinary English (or a well-known something else), so a
+# match is not proof the product was meant. Substituting them is still the
+# default -- usually they are the product -- but each occurrence is reported
+# with its file, line and surrounding text so a human can check the sense.
+#
+# 'Elastic sizing' is the case that prompted this: an authored guide used the
+# adjective and the run published a reference to Elastic the vendor. Purity,
+# Portworx and the rest are deliberately absent -- they are only ever the
+# product, and warning about them would bury the ones that matter.
+#
+# Override per-repo with an "ambiguous" array in peak_variables.json.
+_AMBIGUOUS_DEFAULT = frozenset({
+    'Blog', 'Community', 'Compression', 'Deduplication', 'Elastic',
+    'Evergreen', 'Multi-Protocol', 'Performance',
+    # Acronyms whose everyday meaning is not the Everpure one.
+    'ASP', 'CSS', 'CX', 'MOD', 'PSS', 'SAM', 'TAM',
+})
+
+_peak_ambiguous: frozenset = _AMBIGUOUS_DEFAULT
+# (topic label, term, line number, excerpt) for every ambiguous substitution.
+peak_ambiguous_hits: List[Tuple[str, str, int, str]] = []
+
+
+def load_peak_variables(path: Path = _PEAK_DATA_FILE) -> int:
+    """Load the warehouse table and compile the matcher. Returns the count."""
+    global _peak_variables, _peak_pattern, _peak_warehouse_href, _peak_ambiguous
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        print(f"  Warning: {path.name} not found; PEAK variables not emitted")
+        return 0
+    except (OSError, ValueError) as exc:
+        print(f"  Warning: cannot read {path.name} ({exc}); "
+              f"PEAK variables not emitted")
+        return 0
+
+    excluded = set(data.get('exclude') or ())
+    _peak_warehouse_href = data.get('warehouse_map', '')
+    # An explicit list wins, including an empty one -- that is how a repo turns
+    # the ambiguity warnings off.
+    _peak_ambiguous = (frozenset(data['ambiguous'])
+                       if isinstance(data.get('ambiguous'), list)
+                       else _AMBIGUOUS_DEFAULT)
+    _peak_variables = {
+        v['text']: v['conkeyref'] for v in data.get('variables', ())
+        if v.get('text') and v.get('conkeyref')
+        and v['conkeyref'] not in excluded and v['text'] not in excluded
+    }
+    if not _peak_variables:
+        _peak_pattern = None
+        return 0
+
+    # Longest first, so 'FlashArray//XL' wins over 'FlashArray' and the
+    # trademarked spelling wins over the plain one.
+    values = sorted(_peak_variables, key=len, reverse=True)
+    alt = '|'.join(re.escape(v) for v in values)
+    # A SKU keeps its model number outside the variable: 'FlashBlade//S500' is
+    # the 'FlashBlade//S' variable followed by a literal 500. Only values with a
+    # '//' in them get this, so a digit cannot glue itself onto a plain word.
+    skus = [v for v in values if '//' in v]
+    sku_alt = '|'.join(re.escape(v) for v in skus)
+
+    # What may follow a variable and still be the variable:
+    #   * nothing alphanumeric   -- the ordinary case
+    #   * a version suffix       -- 'NFSv3', 'NFSv4.1', 'SMBv3'
+    #   * a plural 's'           -- 'FlashArrays', 'File Shares'
+    # A trailing hyphen is allowed too (the class below simply does not list
+    # it): PEAK's own published topics write '<ph .../>-TCP'. An underscore is
+    # NOT -- it joins identifiers, and 'PEAK' in 'MARKER_BP_PEAK_BODY', 'NFS' in
+    # 'NFS_SERVER_IP' or 'AWS' in 'AWS_ACCESS_KEY_ID' is not the product name.
+    # Nor is a bare letter run: 'PSSession', 'LinuxONE' and 'MODES' must survive.
+    tail = r'(?:(?![A-Za-z0-9_])|(?=v\d)|(?=s(?![A-Za-z0-9_])))'
+    branches = [f'(?:{alt}){tail}']
+    if sku_alt:
+        branches.insert(0, f'(?:{sku_alt})(?=\\d)')
+    _peak_pattern = re.compile(r'(?<![A-Za-z0-9_])(?:' + '|'.join(branches) + r')')
+    return len(_peak_variables)
+
+
+def peak_warehouse_href() -> str:
+    return _peak_warehouse_href
+
+
+def set_peak_warehouse_href(href: str) -> None:
+    global _peak_warehouse_href
+    _peak_warehouse_href = href
+
+
+def _excerpt(text: str, start: int, end: int, width: int = 60) -> str:
+    """The substituted term with a little prose either side, on one line."""
+    left = text.rfind('\n', 0, start) + 1
+    right = text.find('\n', end)
+    line = text[left:right if right != -1 else len(text)]
+    at = start - left
+    lo, hi = max(0, at - width), min(len(line), at + (end - start) + width)
+    snippet = ' '.join(line[lo:hi].split())
+    return ('...' if lo else '') + snippet + ('...' if hi < len(line) else '')
+
+
+def apply_peak_variables(dita: str, label: str = '') -> str:
+    """Replace warehouse terms in a generated topic with empty conkeyref phs.
+
+    Runs on the assembled XML, so it has to step around markup: text inside
+    <codeblock> and <codeph> is left alone (a command is not prose), and so is
+    anything inside a tag. Everything else -- titles, prose, list items, table
+    cells, note bodies, step commands -- is fair game, which matches what the
+    PEAK team does by hand today.
+
+    Order matters: this runs LAST, after normalize_characters() and
+    tidy_emphasis(). Both of those work on text runs between elements, so
+    inserting a <ph/> ahead of them changes what they see -- an authored
+    '| OK Newer NVMe drivers |' lost the space in front of the variable because
+    the emoji strip then trimmed a run that used to continue past it, and an
+    emphasis span containing a variable would no longer close.
+    """
+    if not _peak_pattern:
+        return dita
+
+    # Offsets are taken against the input, which is safe for line numbers: a
+    # <ph/> carries no newline, so a substitution never moves a later line.
+    base = 0
+
+    def _sub(match):
+        # group(0) is the value itself: every suffix rule is a lookahead, so
+        # nothing beyond the variable is ever consumed.
+        text = match.group(0)
+        peak_substitutions[text] = peak_substitutions.get(text, 0) + 1
+        if text in _peak_ambiguous:
+            start = base + match.start()
+            peak_ambiguous_hits.append((
+                label or '(unnamed topic)',
+                text,
+                dita.count('\n', 0, start) + 1,
+                _excerpt(dita, start, base + match.end()),
+            ))
+        return f'<ph conkeyref="{_peak_variables[text]}"/>'
+
+    out, last = [], 0
+    for skip in _PEAK_SKIP_RE.finditer(dita):
+        base = last
+        out.append(_peak_pattern.sub(_sub, dita[last:skip.start()]))
+        out.append(skip.group(0))
+        last = skip.end()
+    base = last
+    out.append(_peak_pattern.sub(_sub, dita[last:]))
+    return ''.join(out)
+
+
+def report_ambiguous_substitutions() -> None:
+    """Print every ambiguous substitution with the file and line to check."""
+    if not peak_ambiguous_hits:
+        return
+    terms = sorted({t for _, t, _, _ in peak_ambiguous_hits})
+    print(f"\nWarning: {len(peak_ambiguous_hits)} substitution(s) of "
+          f"{len(terms)} term(s) that are also ordinary words "
+          f"({', '.join(terms)}).")
+    print("Check the sense of each; the variable is wrong where the word is "
+          "not the product.")
+    for topic, term, line, excerpt in peak_ambiguous_hits:
+        print(f"  {topic}:{line}: '{term}' -> {excerpt}")
+    print("To keep one literal everywhere, add it to \"exclude\" in "
+          f"{_PEAK_DATA_FILE.name}; to stop warning about it, add an "
+          "\"ambiguous\" list there.")
+
+
+def finalize_topic(dita: str, label: str = '') -> str:
+    """The post-passes every generated topic goes through, in the one order
+    that works: adopt indented code fences, fold the characters, tidy the
+    emphasis markers, and only then swap in the PEAK variables -- see
+    apply_peak_variables() for why it has to be last.
+
+    ``label`` names the topic being written, so an ambiguous substitution can
+    be reported with somewhere to look.
+    """
+    return apply_peak_variables(tidy_emphasis(normalize_characters(
+        _adopt_indented_codeblocks_into_list_items(dita))), label)
+
+
+def peak_warehouse_mapref(indent: str = '    ') -> str:
+    """The resource-only mapref that makes the conkeyrefs resolve.
+
+    PEAK's own publication maps carry exactly this, once, ahead of the
+    topicrefs; the child maps inherit the keys from it. The href is relative to
+    where the map lands in Heretto, so it is configurable (--peak-warehouse-href)
+    and defaults to the depth the existing publication maps use.
+    """
+    if not _peak_pattern or not _peak_warehouse_href:
+        return ''
+    return (f'{indent}<mapref href="{escape_xml_attr(_peak_warehouse_href)}" '
+            f'processing-role="resource-only"/>\n')
+
+
+# A standalone document's chapter can declare which DITA type it converts to,
+# with a marker on its own line under the H1:
+#     <!-- dita: task -->
+# Without one the chapter stays a concept, which is the long-standing default.
+_TOPIC_TYPE_RE = re.compile(r'^[ \t]*<!--[ \t]*dita:[ \t]*(\w+)[ \t]*-->[ \t]*$\n?',
+                            re.MULTILINE | re.IGNORECASE)
+_TOPIC_TYPES = ('concept', 'task', 'reference')
+
+
+def _read_topic_type(chapter: str) -> Tuple[str, str]:
+    """Pull a '<!-- dita: task -->' marker off a chapter, returning (type, rest).
+
+    The marker is removed whether or not it names a known type, so a typo
+    cannot leak an HTML comment into the published topic; an unknown type
+    warns and falls back to concept.
+    """
+    found = 'concept'
+    match = _TOPIC_TYPE_RE.search(chapter)
+    if match:
+        declared = match.group(1).lower()
+        if declared in _TOPIC_TYPES:
+            found = declared
+        else:
+            print(f"  Warning: unknown DITA topic type '{match.group(1)}'; "
+                  f"using concept. Expected one of {', '.join(_TOPIC_TYPES)}.")
+        chapter = _TOPIC_TYPE_RE.sub('', chapter, count=1)
+    return found, chapter.strip()
+
+
+def _wrap_loose_refbody_content(body: str) -> str:
+    """Wrap content preceding the first <section> so <refbody> validates.
+
+    A <table> is already legal as a direct child of <refbody> and is left
+    alone; anything else before the first section is collected into one
+    unnamed <section>.
+    """
+    lines = body.split('\n')
+    first_section = next((i for i, l in enumerate(lines)
+                          if l.lstrip().startswith('<section')), len(lines))
+    head, tail = lines[:first_section], lines[first_section:]
+    if not any(l.strip() for l in head):
+        return body
+
+    wrapped, loose = [], []
+
+    def flush():
+        if any(l.strip() for l in loose):
+            wrapped.append('        <section>')
+            wrapped.extend(loose)
+            wrapped.append('        </section>')
+        loose.clear()
+
+    depth = 0
+    for line in head:
+        stripped = line.strip()
+        if depth == 0 and stripped.startswith('<table'):
+            flush()
+            depth += 1
+        if depth:
+            wrapped.append(line)
+            depth += stripped.count('<table') - stripped.count('</table>')
+            continue
+        loose.append(line)
+    flush()
+    return '\n'.join(wrapped + tail)
 
 
 def collapse_consecutive_notes(lines: List[str]) -> List[str]:
@@ -731,6 +1036,28 @@ class MarkdownParser:
         # unset, inline image markup is left untouched.
         self.inline_image_hook = None
 
+    def _continuation_after_blank(self, lines: List[str], i: int) -> Optional[int]:
+        """Index of an indented paragraph that continues the list item above.
+
+        Returns None unless ``lines[i]`` starts a run of blank lines followed by
+        an indented line that continues the item (not a new list item, not a
+        fence). Used to keep a second paragraph inside its <li>.
+
+        A blockquote is deliberately refused. An item can have a whole indented
+        run beneath it -- a note, then prose, then a fence -- and folding the
+        note into the item text would strip it of its <note> markup and pull
+        the rest of the run along with it. Those stay siblings of the list, as
+        they were before multi-paragraph items were supported.
+        """
+        if lines[i].strip():
+            return None
+        j = i
+        while j < len(lines) and not lines[j].strip():
+            j += 1
+        if j >= len(lines) or lines[j].lstrip().startswith('>'):
+            return None
+        return j if self._is_continuation(lines[j]) else None
+
     def _is_continuation(self, line: str) -> bool:
         """True if `line` is wrapped text belonging to the list item above it.
 
@@ -847,6 +1174,15 @@ class MarkdownParser:
                         items[-1] += ' ' + lines[i].strip()
                         i += 1
                         continue
+                    # A blank line followed by an indented paragraph is a second
+                    # paragraph of the same item. Ending the list here instead
+                    # drops that paragraph outside the <ul> and splits the list
+                    # in two -- the same damage an indented fence used to do.
+                    nxt = self._continuation_after_blank(lines, i)
+                    if nxt is not None and items:
+                        items[-1] += _ITEM_PARA_BREAK + lines[nxt].strip()
+                        i = nxt + 1
+                        continue
                     break
                 elements.append(MarkdownElement(
                     type='unordered_list',
@@ -911,6 +1247,17 @@ class MarkdownParser:
                                 else:
                                     item_text += ' ' + nested_line.strip()
                                 i += 1
+                            elif (saw_blank and not nested_items
+                                  and self._is_continuation(nested_line)
+                                  and not nested_line.lstrip().startswith('>')):
+                                # A blank line then indented prose is a second
+                                # paragraph of this item, kept inside the <li>
+                                # as its own <p>. Only for an item with no
+                                # sublist, and never for a blockquote -- see
+                                # _continuation_after_blank.
+                                item_text += _ITEM_PARA_BREAK + nested_line.strip()
+                                i += 1
+                                saw_blank = False
                             else:
                                 # Not a nested item, break out
                                 break
@@ -1148,8 +1495,8 @@ class MarkdownParser:
         elif link_href.endswith('.html') or ('.html#' in link_href):
             # Jekyll-rendered internal links, e.g.
             # '{{ site.baseurl }}/common/glossary.html'. The reference topics these
-            # point at are emitted into topics/common/ with a 'c_' prefix, so try
-            # the registry before falling back.
+            # point at are emitted into topics/common/, so try the registry before
+            # falling back.
             anchor = link_href.rsplit('#', 1)[1] if '#' in link_href else ''
             resolved = self._resolve_link(link_href, anchor)
             if resolved:
@@ -1452,6 +1799,30 @@ class DITAGenerator:
 {body_content}
     </conbody>
 </concept>
+'''
+
+    def generate_reference_topic(self, title: str, content: str, topic_id: str) -> str:
+        """Generate a DITA reference topic (lookup tables, quick-reference lists).
+
+        <refbody> does not accept <p> and friends as direct children the way
+        <conbody> does -- only section-level containers -- so any content that
+        lands before the first heading is wrapped in a section of its own
+        instead of being emitted bare, which would not validate.
+        """
+        elements = self.parser.parse(content)
+        body_content = self._elements_to_dita(elements, topic_id)
+        body_content = _wrap_loose_refbody_content(body_content)
+        prolog = self._generate_prolog(topic_id, 'reference')
+
+        return f'''<?xml version="1.0" encoding="UTF-8"?>
+{self.config.reference_doctype}
+<reference id="{topic_id}" xml:lang="en-US">
+    <title>{escape_xml(title)}</title>
+{prolog}
+    <refbody>
+{body_content}
+    </refbody>
+</reference>
 '''
 
     def _elements_to_dita(self, elements: List[MarkdownElement], topic_id: str) -> str:
@@ -2028,7 +2399,7 @@ class DITAGenerator:
 
     def _generate_ul(self, items: List[str], indent: str = '        ') -> str:
         """Generate a DITA unordered list with proper <p> wrapping."""
-        li_items = '\n'.join([f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>' for item in items])
+        li_items = '\n'.join([f'{indent}    <li>{_item_paragraphs(item, self)}</li>' for item in items])
         return f'{indent}<ul>\n{li_items}\n{indent}</ul>'
 
     def _sublist_tree(self, nested: List[NestedListItem], start: int, depth: int):
@@ -2096,13 +2467,13 @@ class DITAGenerator:
 
             if nested:
                 # Item with a sublist
-                li_content = f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p>\n'
+                li_content = f'{indent}    <li>{_item_paragraphs(item, self)}\n'
                 nodes, _ = self._sublist_tree(nested, 0, min(n.depth for n in nested))
                 li_content += self._render_sublist(nodes, f'{indent}        ') + '\n'
                 li_content += f'{indent}    </li>'
             else:
                 # Simple item without nested list
-                li_content = f'{indent}    <li><p>{self.parser.convert_inline(escape_xml(item))}</p></li>'
+                li_content = f'{indent}    <li>{_item_paragraphs(item, self)}</li>'
 
             li_elements.append(li_content)
 
@@ -2264,8 +2635,8 @@ class DITAMapGenerator:
         return f'''<?xml version="1.0" encoding="UTF-8"?>
 {self.config.map_doctype}
 <map xml:lang="en-US">
-    <title>{escape_xml(title)}</title>
-{topicrefs_str}
+    <title>{apply_peak_variables(escape_xml(title))}</title>
+{peak_warehouse_mapref()}{topicrefs_str}
 </map>
 '''
 
@@ -2297,8 +2668,8 @@ class DITAMapGenerator:
         return f'''<?xml version="1.0" encoding="UTF-8"?>
 {self.config.map_doctype}
 <map xml:lang="en-US">
-    <title>{escape_xml(map_title)}</title>
-{topicrefs_str}
+    <title>{apply_peak_variables(escape_xml(map_title))}</title>
+{peak_warehouse_mapref()}{topicrefs_str}
 </map>
 '''
 
@@ -2350,8 +2721,8 @@ class DITAMapGenerator:
         return f'''<?xml version="1.0" encoding="UTF-8"?>
 {self.config.map_doctype}
 <map xml:lang="en-US">
-    <title>{escape_xml(map_title)}</title>
-{topicrefs_str}
+    <title>{apply_peak_variables(escape_xml(map_title))}</title>
+{peak_warehouse_mapref()}{topicrefs_str}
 </map>
 '''
 
@@ -2449,12 +2820,13 @@ class MarkdownToDITAConverter:
 
         # Single task topic mode: emit one task topic from the entire file
         if self.config.single_task:
-            base_id = sanitize_id(md_file.stem)
-            topic_id = f"t_{base_id}"
+            topic_id = sanitize_id(md_file.stem)
             self.dita_gen.set_source_context(md_file.stem)
-            dita_content = self.dita_gen.generate_task_topic(doc_title, content, topic_id)
-            dita_content = tidy_emphasis(normalize_characters(
-                _adopt_indented_codeblocks_into_list_items(dita_content)))
+            # The flag already fixes the type, so any per-chapter markers are
+            # only stripped -- left in, they publish as literal HTML comments.
+            dita_content = self.dita_gen.generate_task_topic(
+                doc_title, _TOPIC_TYPE_RE.sub('', content), topic_id)
+            dita_content = finalize_topic(dita_content, f'{topic_id}.dita')
             output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
             output_file.write_text(dita_content, encoding='utf-8')
             print(f"  Created: {topic_id}.dita ({doc_title})")
@@ -2481,17 +2853,21 @@ class MarkdownToDITAConverter:
 
         if not h1_matches:
             # No H1 headings — treat entire document as one topic
-            base_id = sanitize_id(md_file.stem)
-            topic_id = f"c_{base_id}"
+            topic_id = sanitize_id(md_file.stem)
             self.dita_gen.set_source_context(md_file.stem)
-            dita_content = self.dita_gen.generate_concept_topic(doc_title, content, topic_id)
-            dita_content = tidy_emphasis(normalize_characters(
-                _adopt_indented_codeblocks_into_list_items(dita_content)))
+            topic_type, body = _read_topic_type(content)
+            generate = {
+                'task': self.dita_gen.generate_task_topic,
+                'reference': self.dita_gen.generate_reference_topic,
+                'concept': self.dita_gen.generate_concept_topic,
+            }[topic_type]
+            dita_content = generate(doc_title, body, topic_id)
+            dita_content = finalize_topic(dita_content, f'{topic_id}.dita')
             output_file = self.config.output_dir / self.config.topics_dir / f"{topic_id}.dita"
             output_file.write_text(dita_content, encoding='utf-8')
             self.converted_topics.append({
                 'id': topic_id, 'title': doc_title,
-                'relative_path': md_file.name, 'type': 'concept', 'subdir': ''
+                'relative_path': md_file.name, 'type': topic_type, 'subdir': ''
             })
         else:
             # Split into chapters at H1 boundaries
@@ -2505,23 +2881,27 @@ class MarkdownToDITAConverter:
                 chapter_content = content[start:end].strip()
 
                 # Generate topic
-                base_id = sanitize_id(chapter_title)
-                topic_id = f"c_{base_id}"
-                self.dita_gen.set_source_context(base_id)
+                topic_id = sanitize_id(chapter_title)
+                self.dita_gen.set_source_context(topic_id)
 
-                dita_content = self.dita_gen.generate_concept_topic(
-                    chapter_title, chapter_content, topic_id
-                )
-                dita_content = tidy_emphasis(normalize_characters(
-                _adopt_indented_codeblocks_into_list_items(dita_content)))
+                # A chapter may declare its own DITA type; concept otherwise.
+                topic_type, chapter_content = _read_topic_type(chapter_content)
+                generate = {
+                    'task': self.dita_gen.generate_task_topic,
+                    'reference': self.dita_gen.generate_reference_topic,
+                    'concept': self.dita_gen.generate_concept_topic,
+                }[topic_type]
+
+                dita_content = generate(chapter_title, chapter_content, topic_id)
+                dita_content = finalize_topic(dita_content, f'{topic_id}.dita')
 
                 output_file = topics_dir / f"{topic_id}.dita"
                 output_file.write_text(dita_content, encoding='utf-8')
-                print(f"  Created: {topic_id}.dita ({chapter_title})")
+                print(f"  Created: {topic_id}.dita [{topic_type}] ({chapter_title})")
 
                 self.converted_topics.append({
                     'id': topic_id, 'title': chapter_title,
-                    'relative_path': md_file.name, 'type': 'concept', 'subdir': ''
+                    'relative_path': md_file.name, 'type': topic_type, 'subdir': ''
                 })
 
         # Generate DITA map
@@ -2546,8 +2926,8 @@ class MarkdownToDITAConverter:
         return f'''<?xml version="1.0" encoding="UTF-8"?>
 {self.config.map_doctype}
 <map xml:lang="en-US">
-    <title>{escape_xml(title)}</title>
-{topicrefs_str}
+    <title>{apply_peak_variables(escape_xml(title))}</title>
+{peak_warehouse_mapref()}{topicrefs_str}
 </map>
 '''
 
@@ -2606,6 +2986,10 @@ class MarkdownToDITAConverter:
 
             content = md_file.read_text(encoding='utf-8')
             dita_content = self.dita_gen.generate_warehouse_topic(include_path, content)
+            # Warehouse topics publish as conrefs, so they need the same
+            # variables. The rest of finalize_topic() is deliberately not
+            # applied here -- these topics never went through it.
+            dita_content = apply_peak_variables(dita_content)
 
             # Generate output filename
             warehouse_id = 'warehouse_' + sanitize_id(include_path.replace('/', '_').replace('.md', ''))
@@ -2690,8 +3074,8 @@ class MarkdownToDITAConverter:
 
         Registry shape -- anchors map a GitHub-style slug to (topic file, DITA id):
             'distributions/rhel/nfs/BEST-PRACTICES.md': {
-                'path':    'topics/rhel/nfs/c_rhel_nfs_best-practices_architecture_overview.dita',
-                'anchors': {'nconnect-tuning': ('topics/rhel/nfs/c_..._performance_tuning.dita',
+                'path':    'topics/rhel/nfs/rhel_nfs_best-practices_architecture_overview.dita',
+                'anchors': {'nconnect-tuning': ('topics/rhel/nfs/..._performance_tuning.dita',
                                                 'nconnect_tuning')},
             }
 
@@ -2762,7 +3146,7 @@ class MarkdownToDITAConverter:
                     # anchor into a QUICKSTART can only reach the topic; mapping each
                     # heading to a bare file reference keeps the link working instead
                     # of emitting an id that is not there.
-                    target = f'{prefix}/t_{base_id_short}.dita'
+                    target = f'{prefix}/{base_id_short}.dita'
                     anchors = {github_slug(t): (target, '')
                                for _lvl, t in headings(expand(raw))}
                     registry[rel_str] = {'path': target, 'anchors': anchors}
@@ -2779,7 +3163,7 @@ class MarkdownToDITAConverter:
                 for section_title, body in self._split_by_h2(raw):
                     if 'troubleshoot' in section_title.lower():
                         continue
-                    section_id = f'c_{base_id_short}_{sanitize_id(section_title)}'
+                    section_id = f'{base_id_short}_{sanitize_id(section_title)}'
                     target = f'{prefix}/{section_id}.dita'
                     # The H2 itself, then every sub-heading it contains -- all of
                     # which live in this section's topic.
@@ -2798,12 +3182,12 @@ class MarkdownToDITAConverter:
                         first = target
                 registry[rel_str] = {'path': first, 'anchors': anchors}
 
-        # Reference topics from _includes, which land in topics/common/ with a 'c_'
-        # prefix. Authored links reach these as Jekyll .html paths under common/,
-        # so register both the .md and .html spellings.
+        # Reference topics from _includes, which land in topics/common/. Authored
+        # links reach these as Jekyll .html paths under common/, so register both
+        # the .md and .html spellings.
         for include_path, _title in self.REFERENCE_TOPICS:
             stem = include_path.rsplit('/', 1)[-1].replace('.md', '')
-            target = f'topics/common/c_{sanitize_id(stem)}.dita'
+            target = f'topics/common/{sanitize_id(stem)}.dita'
             for spelling in (f'common/{stem}.md', f'common/{stem}.html',
                              include_path):
                 registry[spelling] = {'path': target, 'anchors': {}}
@@ -2897,13 +3281,12 @@ class MarkdownToDITAConverter:
 
         # Determine topic type and generate DITA
         if 'QUICKSTART' in md_file.name:
-            # Task topics use 't_' prefix
-            topic_id = f"t_{base_id_short}"
+            # Topic ids and filenames carry no type prefix
+            topic_id = base_id_short
             dita_content = self.dita_gen.generate_task_topic(title, content, topic_id)
 
             # Clean non-ASCII characters from output
-            dita_content = tidy_emphasis(normalize_characters(
-                _adopt_indented_codeblocks_into_list_items(dita_content)))
+            dita_content = finalize_topic(dita_content, f'{topic_id}.dita')
 
             # Write output file
             output_file = output_dir / f"{topic_id}.dita"
@@ -2918,7 +3301,7 @@ class MarkdownToDITAConverter:
                 'subdir': topic_subdir
             })
         else:
-            # BEST-PRACTICES: Split by H2 sections into separate topics (concept with 'c_' prefix)
+            # BEST-PRACTICES: Split by H2 sections into separate concept topics
             self._convert_best_practices_sections(md_file, content, title, base_id_short, rel_path_str, topic_subdir)
 
     def _split_by_h2(self, content: str) -> List[Tuple[str, str]]:
@@ -2995,8 +3378,8 @@ class MarkdownToDITAConverter:
             if 'troubleshoot' in section_title.lower():
                 continue
 
-            # Generate section topic ID with 'c_' prefix for concept
-            section_id = f"c_{base_topic_id}_{sanitize_id(section_title)}"
+            # Generate section topic ID (no type prefix)
+            section_id = f"{base_topic_id}_{sanitize_id(section_title)}"
 
             # For the first topic (Architecture Overview), use just the main title
             # For other topics, use "Main Title - Section Title"
@@ -3014,8 +3397,7 @@ class MarkdownToDITAConverter:
             )
 
             # Clean non-ASCII characters from output
-            dita_content = tidy_emphasis(normalize_characters(
-                _adopt_indented_codeblocks_into_list_items(dita_content)))
+            dita_content = finalize_topic(dita_content, f'{section_id}.dita')
 
             # Write output file
             output_file = output_dir / f"{section_id}.dita"
@@ -3030,8 +3412,7 @@ class MarkdownToDITAConverter:
             })
 
         # Track as a parent topic with children for map generation
-        # Parent ID also uses 'c_' prefix
-        parent_id = f"c_{base_topic_id}"
+        parent_id = base_topic_id
         self.converted_topics.append({
             'id': parent_id,
             'title': main_title,
@@ -3071,16 +3452,15 @@ class MarkdownToDITAConverter:
             self._copy_local_images(md_file, content)
             title = self._extract_title(content, default_title)
 
-            # Generate topic ID with 'c_' prefix (these are concept/reference topics)
+            # Generate topic ID (no type prefix)
             filename = Path(rel_path).stem
-            topic_id = f"c_{sanitize_id(filename)}"
+            topic_id = sanitize_id(filename)
 
             # Generate concept topic
             dita_content = self.dita_gen.generate_concept_topic(title, content, topic_id)
 
             # Clean non-ASCII characters from output
-            dita_content = tidy_emphasis(normalize_characters(
-                _adopt_indented_codeblocks_into_list_items(dita_content)))
+            dita_content = finalize_topic(dita_content, f'{topic_id}.dita')
 
             # Write output file
             output_file = common_dir / f"{topic_id}.dita"
@@ -3333,12 +3713,36 @@ Available protocols: iscsi, nvme-tcp, nfs, fc
     )
 
     parser.add_argument(
+        '--no-peak-variables',
+        action='store_true',
+        help="Leave product and company names as literal text instead of emitting "
+             "PEAK conkeyrefs (scripts/peak_variables.json)"
+    )
+
+    parser.add_argument(
+        '--peak-warehouse-href',
+        default='',
+        help="Href for the resource-only <mapref> to m_peak_variable_warehouse.ditamap, "
+             "relative to where the generated maps land in Heretto "
+             "(default: the value in peak_variables.json)"
+    )
+
+    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Enable verbose output'
     )
 
     args = parser.parse_args()
+
+    # PEAK variables are on by default: the published docs take these names from
+    # the warehouse, and emitting them here saves the PEAK team the hand edit.
+    if not args.no_peak_variables:
+        count = load_peak_variables()
+        if count:
+            if args.peak_warehouse_href:
+                set_peak_warehouse_href(args.peak_warehouse_href)
+            print(f"PEAK variables: {count} loaded from {_PEAK_DATA_FILE.name}")
 
     # Validate inputs
     if args.file:
@@ -3376,6 +3780,16 @@ Available protocols: iscsi, nvme-tcp, nfs, fc
     print(f"   |-- {config.topics_dir}/       # Main documentation topics")
     print(f"   |-- {config.images_dir}/       # Downloaded diagram images (PNG)")
     print(f"   `-- {config.maps_dir}/         # DITA navigation maps")
+
+    if peak_substitutions:
+        total = sum(peak_substitutions.values())
+        print(f"\nPEAK variables substituted: {total} across "
+              f"{len(peak_substitutions)} terms")
+        for term, n in sorted(peak_substitutions.items(),
+                              key=lambda kv: (-kv[1], kv[0])):
+            flag = '  <-- check context' if term in _peak_ambiguous else ''
+            print(f"   {n:6d}  {term}{flag}")
+        report_ambiguous_substitutions()
 
     print(f"\nImport Instructions for Heretto:")
     print(f"   1. Create a new content collection in Heretto")

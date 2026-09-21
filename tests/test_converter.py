@@ -21,6 +21,7 @@ currently none: every limitation this suite originally documented has been fixed
 """
 
 import importlib.util
+import json
 import re
 import shutil
 import subprocess
@@ -42,8 +43,8 @@ SCRIPT = REPO / 'scripts' / 'convert_to_dita.py'
 CANONICAL = ('--inline-includes', '--section-maps', '--organize-sections')
 
 ISCSI_DIR = 'topics/testdist/iscsi'
-QS = f'{ISCSI_DIR}/t_testdist_iscsi_quickstart.dita'
-BP = f'{ISCSI_DIR}/c_testdist_iscsi_best-practices_'
+QS = f'{ISCSI_DIR}/testdist_iscsi_quickstart.dita'
+BP = f'{ISCSI_DIR}/testdist_iscsi_best-practices_'
 
 
 # --------------------------------------------------------------------------
@@ -128,7 +129,7 @@ class TestUtilityFunctions(unittest.TestCase):
     def test_sanitize_id(self):
         self.assertEqual(conv.sanitize_id('Architecture Overview'), 'architecture_overview')
         self.assertEqual(conv.sanitize_id('nconnect Tuning'), 'nconnect_tuning')
-        # Hyphens survive (topic filenames such as c_iscsi-multipath-config rely on it)
+        # Hyphens survive (topic filenames such as iscsi-multipath-config rely on it)
         self.assertEqual(conv.sanitize_id('iscsi-multipath-config'), 'iscsi-multipath-config')
         self.assertEqual(conv.sanitize_id('Understanding APD (All Paths Down)'),
                          'understanding_apd_all_paths_down')
@@ -789,7 +790,7 @@ class TestTaskTopic(ConverterCase):
 
     def test_task_topic_skeleton(self):
         self.assertIn('<!DOCTYPE task PUBLIC', self.qs)
-        self.assertIn('<task id="t_testdist_iscsi_quickstart" xml:lang="en-US">', self.qs)
+        self.assertIn('<task id="testdist_iscsi_quickstart" xml:lang="en-US">', self.qs)
         self.assertIn('<title>Testdist iSCSI Converter Fixture</title>', self.qs)
         self.assertIn('<prolog>', self.qs)
         self.assertIn('<metadata/>', self.qs)
@@ -1016,39 +1017,39 @@ class TestCrossReferences(ConverterCase):
         self.qs = self.read(QS)
 
     def test_sibling_protocol_link(self):
-        self.assertIn('<xref href="../nvme-tcp/t_testdist_nvme-tcp_quickstart.dita" '
+        self.assertIn('<xref href="../nvme-tcp/testdist_nvme-tcp_quickstart.dita" '
                       'format="dita" scope="local">sibling protocol guide</xref>', self.qs)
 
     def test_anchor_into_split_best_practices_selects_the_right_topic(self):
-        self.assertIn('<xref href="c_testdist_iscsi_best-practices_performance_tuning.dita" '
+        self.assertIn('<xref href="testdist_iscsi_best-practices_performance_tuning.dita" '
                       'format="dita" scope="local">Best Practices anchor</xref>', self.qs)
 
     def test_h3_anchor_carries_the_sanitized_dita_id(self):
-        self.assertIn('href="c_testdist_iscsi_best-practices_performance_tuning.dita'
+        self.assertIn('href="testdist_iscsi_best-practices_performance_tuning.dita'
                       '#nconnect_tuning"', self.qs)
 
     def test_mixed_case_anchor_is_slugified_before_lookup(self):
-        self.assertIn('<xref href="c_testdist_iscsi_best-practices_performance_tuning.dita'
+        self.assertIn('<xref href="testdist_iscsi_best-practices_performance_tuning.dita'
                       '#queue_depth" format="dita" scope="local">'
                       'Best Practices mixed-case anchor</xref>', self.qs)
 
     def test_anchor_to_a_punctuated_heading_resolves(self):
-        self.assertIn('<xref href="c_testdist_iscsi_best-practices_performance_tuning.dita'
+        self.assertIn('<xref href="testdist_iscsi_best-practices_performance_tuning.dita'
                       '#understanding_apd_all_paths_down" format="dita" scope="local">'
                       'Best Practices punctuated anchor</xref>', self.qs)
 
     def test_link_without_anchor_lands_on_the_first_section_topic(self):
-        self.assertIn('<xref href="c_testdist_iscsi_best-practices_architecture_overview.dita" '
+        self.assertIn('<xref href="testdist_iscsi_best-practices_architecture_overview.dita" '
                       'format="dita" scope="local">Best Practices, no anchor</xref>', self.qs)
 
     def test_anchor_into_a_quickstart_drops_the_unusable_id(self):
         # A QUICKSTART is one topic with no per-heading ids, so the anchor is dropped
-        self.assertIn('<xref href="../nvme-tcp/t_testdist_nvme-tcp_quickstart.dita" '
+        self.assertIn('<xref href="../nvme-tcp/testdist_nvme-tcp_quickstart.dita" '
                       'format="dita" scope="local">Sibling quickstart anchor</xref>', self.qs)
         self.assertNotIn('#step-1-connect', self.qs)
 
     def test_jekyll_html_link_resolves_to_the_reference_topic(self):
-        self.assertIn('<xref href="../../common/c_glossary.dita" format="dita" '
+        self.assertIn('<xref href="../../common/glossary.dita" format="dita" '
                       'scope="local">Glossary via Jekyll html</xref>', self.qs)
         self.assertNotIn('site.baseurl', self.qs)
 
@@ -1062,7 +1063,7 @@ class TestCrossReferences(ConverterCase):
     def test_bare_include_relative_link_resolves_by_basename(self):
         # 'iscsi-multipath-config.md' authored inside an include is correct relative
         # to _includes/, and must still resolve after inlining.
-        self.assertIn('<xref href="../../common/c_iscsi-multipath-config.dita"', self.qs)
+        self.assertIn('<xref href="../../common/iscsi-multipath-config.dita"', self.qs)
 
     def test_every_local_dita_xref_resolves_on_disk(self):
         known_dangling = {'../../../README.dita'}  # source is not a converted guide
@@ -1098,20 +1099,22 @@ class TestCrossReferences(ConverterCase):
 class TestConceptTopics(ConverterCase):
 
     def test_one_topic_per_h2_section(self):
-        names = {p.name for p in (self.out() / ISCSI_DIR).glob('c_*.dita')}
+        names = {p.name for p in (self.out() / ISCSI_DIR).glob(
+            'testdist_iscsi_best-practices_*.dita')}
         self.assertEqual(names, {
-            'c_testdist_iscsi_best-practices_architecture_overview.dita',
-            'c_testdist_iscsi_best-practices_performance_tuning.dita',
-            'c_testdist_iscsi_best-practices_deep_heading_levels.dita',
-            'c_testdist_iscsi_best-practices_notes_handling.dita',
-            'c_testdist_iscsi_best-practices_quick_reference.dita',
-            'c_testdist_iscsi_best-practices_additional_resources.dita',
+            'testdist_iscsi_best-practices_architecture_overview.dita',
+            'testdist_iscsi_best-practices_performance_tuning.dita',
+            'testdist_iscsi_best-practices_deep_heading_levels.dita',
+            'testdist_iscsi_best-practices_notes_handling.dita',
+            'testdist_iscsi_best-practices_quick_reference.dita',
+            'testdist_iscsi_best-practices_additional_resources.dita',
+            'testdist_iscsi_best-practices_peak_variables.dita',
         })
 
     def test_concept_skeleton(self):
         text = self.read(BP + 'architecture_overview.dita')
         self.assertIn('<!DOCTYPE concept PUBLIC', text)
-        self.assertIn('<concept id="c_testdist_iscsi_best-practices_architecture_overview" '
+        self.assertIn('<concept id="testdist_iscsi_best-practices_architecture_overview" '
                       'xml:lang="en-US">', text)
         self.assertIn('<conbody>', text)
 
@@ -1120,7 +1123,11 @@ class TestConceptTopics(ConverterCase):
                       self.read(BP + 'architecture_overview.dita'))
 
     def test_other_sections_are_titled_document_dash_section(self):
-        self.assertIn('<title>Testdist iSCSI Best Practices Fixture - Performance Tuning</title>',
+        # 'Performance' is itself a PEAK variable, so it leaves as a conkeyref
+        # (the warehouse value is the same word, so the page reads the same).
+        self.assertIn('<title>Testdist iSCSI Best Practices Fixture - '
+                      '<ph conkeyref="varsFeaturesTech/feature.data.performance.name.plain"/>'
+                      ' Tuning</title>',
                       self.read(BP + 'performance_tuning.dita'))
 
     def test_troubleshooting_section_is_excluded_entirely(self):
@@ -1194,10 +1201,10 @@ class TestConceptTopics(ConverterCase):
         self.assertNotIn('<p><b>Quick Reference</b></p>', text)
 
     def test_reference_topics_are_emitted_into_topics_common(self):
-        text = self.read('topics/common/c_glossary.dita')
+        text = self.read('topics/common/glossary.dita')
         self.assertIn('<title>Storage Terminology Glossary</title>', text)
         self.assertIn('MARKER_GLOSSARY_IQN', text)
-        self.assertTrue((self.out() / 'topics/common/c_iscsi-multipath-config.dita').is_file())
+        self.assertTrue((self.out() / 'topics/common/iscsi-multipath-config.dita').is_file())
 
 
 # ==========================================================================
@@ -1221,6 +1228,8 @@ class TestMaps(ConverterCase):
         unresolved = []
         for m in self.all_maps():
             for href in re.findall(r'href="([^"]+)"', m.read_text(encoding='utf-8')):
+                if href.endswith('m_peak_variable_warehouse.ditamap'):
+                    continue  # lives outside the collection; see TestPeakVariables
                 self.assertTrue(href.startswith('topics/'),
                                 f'{m.name}: href not collection-root relative: {href}')
                 if not (self.out() / href).is_file():
@@ -1232,7 +1241,7 @@ class TestMaps(ConverterCase):
         self.assertIn('<map xml:lang="en-US">', text)
         self.assertOrdered(text, '<topichead navtitle="Testdist">',
                            '<topichead navtitle="iSCSI">',
-                           'topics/testdist/iscsi/t_testdist_iscsi_quickstart.dita')
+                           'topics/testdist/iscsi/testdist_iscsi_quickstart.dita')
         self.assertIn('<topichead navtitle="NVMe-TCP">', text)
         self.assertIn('<topichead navtitle="Common Resources">', text)
 
@@ -1246,13 +1255,17 @@ class TestMaps(ConverterCase):
     def test_best_practices_children_are_nested_under_a_topichead(self):
         text = self.read('maps/linux-storage-guides.ditamap')
         self.assertOrdered(text, '<topichead navtitle="Best Practices">',
-                           'c_testdist_iscsi_best-practices_architecture_overview.dita',
+                           'testdist_iscsi_best-practices_architecture_overview.dita',
                            '</topichead>')
 
     def test_section_map_titles_use_display_labels(self):
         self.assertIn('<title>Testdist iSCSI Storage Guide</title>',
                       self.read('maps/testdist-iscsi.ditamap'))
-        self.assertIn('<title>Testdist NVMe-TCP Storage Guide</title>',
+        # NVMe is a PEAK variable; a map <title> is an element, so it takes the
+        # conkeyref just like PEAK's own publication maps do. navtitles, being
+        # attributes, stay literal.
+        self.assertIn('<title>Testdist <ph conkeyref="varsFeaturesTech/'
+                      'feature.protocol.nvme.acronym"/>-TCP Storage Guide</title>',
                       self.read('maps/testdist-nvme-tcp.ditamap'))
         self.assertIn('<title>Testlocal Disaggregated FC Storage Guide</title>',
                       self.read('maps/testlocal-disaggregated-fc.ditamap'))
@@ -1261,21 +1274,207 @@ class TestMaps(ConverterCase):
         text = self.read('maps/testdist-iscsi-best-practices.ditamap')
         self.assertOrdered(
             text,
-            'c_testdist_iscsi_best-practices_architecture_overview.dita" '
+            'testdist_iscsi_best-practices_architecture_overview.dita" '
             'navtitle="Architecture Overview">',
-            'c_testdist_iscsi_best-practices_performance_tuning.dita',
+            'testdist_iscsi_best-practices_performance_tuning.dita',
             '</topicref>')
 
     def test_gui_quickstart_is_converted_as_a_task_and_mapped(self):
-        self.assertIn('<task id="t_testdist_iscsi_gui-quickstart"',
-                      self.read(f'{ISCSI_DIR}/t_testdist_iscsi_gui-quickstart.dita'))
-        self.assertIn('t_testdist_iscsi_gui-quickstart.dita',
+        self.assertIn('<task id="testdist_iscsi_gui-quickstart"',
+                      self.read(f'{ISCSI_DIR}/testdist_iscsi_gui-quickstart.dita'))
+        self.assertIn('testdist_iscsi_gui-quickstart.dita',
                       self.read('maps/testdist-iscsi.ditamap'))
 
 
 # ==========================================================================
 # Integration: images on disk
 # ==========================================================================
+
+class TestPeakVariables(ConverterCase):
+    """Product and company names must leave as PEAK conkeyrefs.
+
+    The published docs pull these names from PEAK's variable warehouse; before
+    the converter emitted them, the PEAK team replaced every one by hand on
+    import. scripts/peak_variables.json holds the table.
+    """
+
+    PEAK = 'testdist_iscsi_best-practices_peak_variables.dita'
+
+    def peak_topic(self):
+        return self.read(f'{ISCSI_DIR}/{self.PEAK}')
+
+    def test_a_product_name_in_prose_becomes_an_empty_conkeyref_ph(self):
+        self.assertIn(
+            '<ph conkeyref="varsProductNames/product.block.primary.name.plain"/>',
+            self.peak_topic())
+
+    def test_the_longest_matching_variable_wins(self):
+        # 'FlashArray//XL' must not be substituted as 'FlashArray' + '//XL'
+        text = self.peak_topic()
+        self.assertIn(
+            '<ph conkeyref="varsProductNames/product.block.primary.sku.xl.name.plain"/>',
+            text)
+        self.assertNotIn('//XL', text)
+
+    def test_a_trailing_hyphen_still_matches(self):
+        # PEAK's own published topics write '<ph .../>-TCP'
+        self.assertIn(
+            '<ph conkeyref="varsFeaturesTech/feature.protocol.nvme.acronym"/>-TCP',
+            self.peak_topic())
+
+    def test_a_version_suffix_still_matches(self):
+        # 'NFSv3' / 'NFSv4.1' are the NFS variable plus a literal version
+        nfs = '<ph conkeyref="varsFeaturesTech/feature.protocol.nfs.acronym"/>'
+        text = self.peak_topic()
+        self.assertIn(nfs + 'v3', text)
+        self.assertIn(nfs + 'v4.1', text)
+
+    def test_a_plural_s_still_matches(self):
+        self.assertIn(
+            '<ph conkeyref="varsProductNames/product.block.primary.name.plain"/>s',
+            self.peak_topic())
+
+    def test_a_sku_keeps_its_model_number_outside_the_variable(self):
+        self.assertIn(
+            '<ph conkeyref="varsProductNames/product.file.primary.sku.s.name.plain"/>500',
+            self.peak_topic())
+
+    def test_identifiers_are_left_alone(self):
+        text = self.peak_topic()
+        for ident in ('NFS_SERVER_IP', 'AWS_ACCESS_KEY_ID', 'PSSession'):
+            self.assertIn(ident, text)
+
+    def test_code_is_never_substituted(self):
+        text = self.peak_topic()
+        for block in re.findall(r'<codeblock[^>]*>.*?</codeblock>'
+                                r'|<codeph[^>]*>.*?</codeph>', text, re.DOTALL):
+            self.assertNotIn('conkeyref', block)
+        self.assertIn('<codeph>FlashArray</codeph>', text)
+        self.assertIn('grep FlashArray', text)
+
+    def test_no_literal_product_name_survives_outside_code(self):
+        outside = re.sub(r'<codeblock[^>]*>.*?</codeblock>'
+                         r'|<codeph[^>]*>.*?</codeph>', '', self.peak_topic(),
+                         flags=re.DOTALL)
+        self.assertNotIn('FlashArray', outside)
+        self.assertNotIn('Purity', outside)
+
+    def test_conkeyrefs_never_land_inside_an_attribute(self):
+        for topic in self.all_topics() + self.all_maps():
+            text = topic.read_text(encoding='utf-8')
+            self.assertNotRegex(text, r'(navtitle|href|id)="[^"]*<',
+                                f'{topic.name}: markup inside an attribute')
+
+    def test_maps_pull_in_the_variable_warehouse(self):
+        # One resource-only mapref per map, ahead of the topicrefs, exactly as
+        # PEAK's own publication maps carry it.
+        for m in self.all_maps():
+            text = m.read_text(encoding='utf-8')
+            self.assertIn('<mapref href="../../_global_library/_peak_variables/'
+                          'm_peak_variable_warehouse.ditamap" '
+                          'processing-role="resource-only"/>', text)
+            self.assertLess(text.index('<mapref'), text.index('<topic'),
+                            f'{m.name}: mapref must precede the topicrefs')
+
+    def test_output_still_parses(self):
+        for topic in self.all_topics() + self.all_maps():
+            ET.parse(topic)
+
+
+class TestPeakVariablesDisabled(ConverterCase):
+
+    FLAGS = CANONICAL + ('--no-peak-variables',)
+
+    def test_names_stay_literal_and_maps_carry_no_mapref(self):
+        text = self.read(f'{ISCSI_DIR}/'
+                         'testdist_iscsi_best-practices_peak_variables.dita')
+        self.assertIn('MARKER_BP_PEAK_BODY', text)
+        self.assertNotIn('conkeyref', text)
+        self.assertIn('FlashArray//XL', text)
+        for m in self.all_maps():
+            self.assertNotIn('m_peak_variable_warehouse',
+                             m.read_text(encoding='utf-8'))
+
+
+class TestPeakVariableTable(unittest.TestCase):
+    """Unit-level checks on the warehouse table and the matcher."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.count = conv.load_peak_variables()
+
+    def test_the_table_loads(self):
+        self.assertGreater(self.count, 200)
+
+    def test_substitution_skips_code_and_tags(self):
+        src = ('<p>A FlashArray here</p><codeph>FlashArray</codeph>'
+               '<xref href="flasharray-FlashArray.dita">FlashArray</xref>')
+        out = conv.apply_peak_variables(src)
+        self.assertEqual(out.count('conkeyref='), 2)  # prose + xref text
+        self.assertIn('<codeph>FlashArray</codeph>', out)
+        self.assertIn('href="flasharray-FlashArray.dita"', out)
+
+    def test_matching_is_case_sensitive_and_word_bounded(self):
+        # 'nvme' in a command name and 'FlashArrays' as a plural are not the
+        # variable; a possessive is.
+        out = conv.apply_peak_variables(
+            '<p>nvme connect, PurityFA, LinuxONE, MODES, NFS_MOUNT_OPTS</p>')
+        self.assertNotIn('conkeyref', out)
+
+
+class TestAmbiguousSubstitutionWarning(unittest.TestCase):
+    """A term that is also an ordinary word is reported with somewhere to look."""
+
+    def setUp(self):
+        conv.load_peak_variables()
+        conv.peak_ambiguous_hits.clear()
+
+    tearDown = setUp
+
+    def test_an_ordinary_word_is_substituted_but_reported(self):
+        src = '<concept>\n<p>Intro.</p>\n<p><b>Elastic sizing.</b> Resized.</p>\n</concept>'
+        out = conv.apply_peak_variables(src, 'design_considerations.dita')
+        # Still substituted -- the warning informs, it does not change output.
+        self.assertIn('conkeyref=', out)
+        self.assertEqual(len(conv.peak_ambiguous_hits), 1)
+        topic, term, line, excerpt = conv.peak_ambiguous_hits[0]
+        self.assertEqual((topic, term, line),
+                         ('design_considerations.dita', 'Elastic', 3))
+        self.assertIn('Elastic sizing', excerpt)
+
+    def test_an_unambiguous_product_name_is_not_reported(self):
+        conv.apply_peak_variables('<p>A FlashArray running Purity.</p>', 't.dita')
+        self.assertEqual(conv.peak_ambiguous_hits, [])
+
+    def test_the_reported_line_number_is_where_the_term_is(self):
+        src = '\n'.join(['<concept>'] + ['<p>filler</p>'] * 9
+                        + ['<p>Performance tuning.</p>', '</concept>'])
+        conv.apply_peak_variables(src, 't.dita')
+        self.assertEqual([h[2] for h in conv.peak_ambiguous_hits], [11])
+
+    def test_a_hit_after_a_skipped_code_region_still_reports_its_own_line(self):
+        # Offsets are tracked across the skipped <codeblock>, so the line
+        # number is not the one before it.
+        src = ('<p>one</p>\n<codeblock>Performance\nPerformance</codeblock>\n'
+               '<p>Performance tuning.</p>')
+        conv.apply_peak_variables(src, 't.dita')
+        self.assertEqual([h[2] for h in conv.peak_ambiguous_hits], [4])
+
+    def test_an_explicit_empty_ambiguous_list_silences_the_warning(self):
+        data = json.loads(conv._PEAK_DATA_FILE.read_text(encoding='utf-8'))
+        data['ambiguous'] = []
+        with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False,
+                                         encoding='utf-8') as fh:
+            json.dump(data, fh)
+            path = Path(fh.name)
+        try:
+            conv.load_peak_variables(path)
+            conv.apply_peak_variables('<p>Elastic sizing.</p>', 't.dita')
+            self.assertEqual(conv.peak_ambiguous_hits, [])
+        finally:
+            path.unlink()
+            conv.load_peak_variables()
+
 
 class TestImages(ConverterCase):
 
@@ -1296,7 +1495,7 @@ class TestImages(ConverterCase):
 
     def test_deeply_nested_topic_gets_an_extra_hop(self):
         text = self.read('topics/testlocal/disaggregated/fc/'
-                         't_testlocal_disaggregated_fc_quickstart.dita')
+                         'testlocal_disaggregated_fc_quickstart.dita')
         self.assertIn('<image href="../../../../images/diagram.png" scope="local">', text)
 
 
@@ -1429,17 +1628,17 @@ class TestFlatOutput(ConverterCase):
     FLAGS = ('--inline-includes',)
 
     def test_topics_are_flat(self):
-        self.assertTrue((self.out() / 'topics/t_testdist_iscsi_quickstart.dita').is_file())
+        self.assertTrue((self.out() / 'topics/testdist_iscsi_quickstart.dita').is_file())
         self.assertFalse((self.out() / ISCSI_DIR).exists())
 
     def test_image_prefix_has_a_single_hop(self):
-        text = self.read('topics/t_testdist_iscsi_quickstart.dita')
+        text = self.read('topics/testdist_iscsi_quickstart.dita')
         self.assertIn('<image href="../images/diagram.png" scope="local">', text)
 
     def test_cross_references_are_relative_to_the_flat_topics_dir(self):
-        text = self.read('topics/t_testdist_iscsi_quickstart.dita')
-        self.assertIn('<xref href="t_testdist_nvme-tcp_quickstart.dita"', text)
-        self.assertIn('<xref href="common/c_glossary.dita"', text)
+        text = self.read('topics/testdist_iscsi_quickstart.dita')
+        self.assertIn('<xref href="testdist_nvme-tcp_quickstart.dita"', text)
+        self.assertIn('<xref href="common/glossary.dita"', text)
 
     def test_all_hrefs_still_resolve(self):
         for topic in self.all_topics():
@@ -1473,7 +1672,7 @@ class TestConrefMode(ConverterCase):
         self.assertIn('MARKER_OUTER_INCLUDE', text)
 
     def test_include_becomes_a_conref_and_the_target_resolves(self):
-        topic = self.out() / 'topics/t_testdist_iscsi_quickstart.dita'
+        topic = self.out() / 'topics/testdist_iscsi_quickstart.dita'
         text = topic.read_text(encoding='utf-8')
         conrefs = re.findall(r'<div conref="([^"]+)"/>', text)
         self.assertTrue(conrefs)
@@ -1487,12 +1686,12 @@ class TestConrefMode(ConverterCase):
             self.assertIn(f'<div id="{div_id}">', target_text)
 
     def test_include_content_is_not_inlined(self):
-        text = self.read('topics/t_testdist_iscsi_quickstart.dita')
+        text = self.read('topics/testdist_iscsi_quickstart.dita')
         self.assertNotIn('MARKER_OUTER_INCLUDE_CODE', text)
 
     def test_conref_paths_track_topic_nesting_under_organize_sections(self):
         out = run_converter('--organize-sections')
-        topic = out / ISCSI_DIR / 't_testdist_iscsi_quickstart.dita'
+        topic = out / ISCSI_DIR / 'testdist_iscsi_quickstart.dita'
         conrefs = re.findall(r'<div conref="([^"]+)"/>',
                              topic.read_text(encoding='utf-8'))
         self.assertTrue(conrefs)
@@ -1509,15 +1708,15 @@ class TestScopedRun(ConverterCase):
 
     def test_only_the_scoped_guides_are_converted(self):
         names = {p.name for p in self.all_topics()}
-        self.assertIn('t_testdist_iscsi_quickstart.dita', names)
-        self.assertNotIn('t_testdist_nvme-tcp_quickstart.dita', names)
-        self.assertNotIn('t_testlocal_disaggregated_fc_quickstart.dita', names)
+        self.assertIn('testdist_iscsi_quickstart.dita', names)
+        self.assertNotIn('testdist_nvme-tcp_quickstart.dita', names)
+        self.assertNotIn('testlocal_disaggregated_fc_quickstart.dita', names)
 
     def test_hrefs_to_unconverted_targets_are_still_correct(self):
         # The href is a function of the source path, so a scoped run keeps links
         # that a full import will resolve.
         text = self.read(QS)
-        self.assertIn('<xref href="../nvme-tcp/t_testdist_nvme-tcp_quickstart.dita"', text)
+        self.assertIn('<xref href="../nvme-tcp/testdist_nvme-tcp_quickstart.dita"', text)
 
     def test_scoped_map_title_names_the_filters(self):
         self.assertIn('<title>Testdist iSCSI Storage Guide</title>',
@@ -1531,8 +1730,8 @@ class TestDeploymentScopedRun(ConverterCase):
 
     def test_alias_resolves_and_filters(self):
         names = {p.name for p in self.all_topics()}
-        self.assertIn('t_testlocal_disaggregated_fc_quickstart.dita', names)
-        self.assertNotIn('t_testdist_iscsi_quickstart.dita', names)
+        self.assertIn('testlocal_disaggregated_fc_quickstart.dita', names)
+        self.assertNotIn('testdist_iscsi_quickstart.dita', names)
 
     def test_map_title_includes_the_deployment(self):
         self.assertIn('<title>Testlocal Disaggregated Storage Guide</title>',
@@ -1548,31 +1747,105 @@ class TestStandaloneChapters(ConverterCase):
     FLAGS = ()
     SOURCE = STANDALONE
 
-    def test_one_concept_topic_per_h1(self):
+    def test_one_topic_per_h1(self):
         names = {p.name for p in self.all_topics()}
-        self.assertEqual(names, {'c_chapter_one.dita', 'c_chapter_two.dita'})
+        self.assertEqual(names, {'chapter_one.dita', 'chapter_two.dita',
+                                 'chapter_three.dita', 'chapter_four.dita',
+                                 'chapter_five.dita'})
 
     def test_table_of_contents_is_removed(self):
         blob = ''.join(p.read_text(encoding='utf-8') for p in self.all_topics())
         self.assertNotIn('MARKER_STANDALONE_TOC_ITEM', blob)
 
     def test_h2_sections_become_dita_sections(self):
-        text = self.read('topics/c_chapter_one.dita')
+        text = self.read('topics/chapter_one.dita')
         self.assertIn('<section id="chapter_one_second_section">', text)
         self.assertIn('MARKER_STANDALONE_CODE', text)
 
     def test_sibling_images_directory_is_copied(self):
         self.assertTrue((self.out() / 'images/standalone-shot.png').is_file())
         self.assertIn('<image href="../images/standalone-shot.png" scope="local">',
-                      self.read('topics/c_chapter_one.dita'))
+                      self.read('topics/chapter_one.dita'))
 
     def test_standalone_map_hrefs_are_relative_to_the_maps_directory(self):
         text = self.read('maps/standalone.ditamap')
         for href in re.findall(r'href="([^"]+)"', text):
+            if href.endswith('m_peak_variable_warehouse.ditamap'):
+                continue  # lives outside the collection; see TestPeakVariables
             self.assertTrue((self.out() / 'maps' / href).resolve().is_file(), href)
 
     def test_standalone_map_root_declares_xml_lang(self):
         self.assertIn('<map xml:lang="en-US">', self.read('maps/standalone.ditamap'))
+
+    def test_chapter_without_a_marker_stays_a_concept(self):
+        self.assertIn('<concept id="chapter_one"', self.read('topics/chapter_one.dita'))
+
+    def test_dita_marker_selects_the_task_type(self):
+        text = self.read('topics/chapter_three.dita')
+        self.assertIn('<!DOCTYPE task ', text)
+        self.assertIn('<task id="chapter_three"', text)
+        self.assertIn('<cmd>Chapter Three First Step</cmd>', text)
+
+    def test_dita_marker_selects_the_reference_type(self):
+        text = self.read('topics/chapter_four.dita')
+        self.assertIn('<!DOCTYPE reference ', text)
+        self.assertIn('<reference id="chapter_four"', text)
+        self.assertIn('MARKER_STANDALONE_CH4_CELL', text)
+
+    def test_refbody_takes_only_section_level_children(self):
+        body = self.tree('topics/chapter_four.dita').find('refbody')
+        legal = {'section', 'refsyn', 'properties', 'table', 'simpletable', 'example'}
+        self.assertTrue(legal.issuperset(c.tag for c in body),
+                        [c.tag for c in body])
+
+    def test_loose_content_before_a_heading_is_wrapped_for_refbody(self):
+        # The paragraph authored before the first H2 cannot sit bare in
+        # <refbody>, so it is wrapped in a section of its own.
+        text = self.read('topics/chapter_four.dita')
+        self.assertRegex(text, r'<section>\s*<p>MARKER_STANDALONE_CH4_LOOSE')
+
+    def test_unknown_marker_falls_back_to_concept_and_is_not_published(self):
+        text = self.read('topics/chapter_five.dita')
+        self.assertIn('<concept id="chapter_five"', text)
+        self.assertNotIn('dita:', text)
+        self.assertNotIn('<!--', text)
+
+    def test_no_topic_leaks_a_dita_marker(self):
+        blob = ''.join(p.read_text(encoding='utf-8') for p in self.all_topics())
+        self.assertNotIn('dita: task', blob)
+        self.assertNotIn('dita: reference', blob)
+
+    def test_second_paragraph_stays_inside_its_list_item(self):
+        # Authored as an indented continuation after a blank line. Emitting it
+        # as a sibling of the list instead splits the list in two.
+        text = self.read('topics/chapter_two.dita')
+        self.assertIn('<li><p>MARKER_STANDALONE_UL_FIRST para.</p>'
+                      '<p>MARKER_STANDALONE_UL_SECOND para of the same bullet.</p></li>',
+                      text)
+        self.assertIn('<li><p>MARKER_STANDALONE_OL_FIRST para.</p>'
+                      '<p>MARKER_STANDALONE_OL_SECOND para of the same item.</p></li>',
+                      text)
+
+    def test_multi_paragraph_item_does_not_split_its_list(self):
+        text = self.read('topics/chapter_two.dita')
+        self.assertEqual(text.count('<ul>'), text.count('</ul>'))
+        section = text[text.index('chapter_two_multi_paragraph_items'):]
+        section = section[:section.index('</section>')]
+        self.assertEqual(section.count('<ul>'), 1, 'the bullet list was split')
+        self.assertEqual(section.count('<ol>'), 1, 'the ordered list was split')
+
+    def test_an_indented_blockquote_is_not_absorbed_into_the_list_item(self):
+        # A blockquote indented under an item stays outside the <li>. Folding
+        # it in would strip it of its markup and drag the rest of the indented
+        # run along with it, so _continuation_after_blank refuses blockquotes.
+        text = self.read('topics/chapter_two.dita')
+        self.assertIn('<li><p>MARKER_STANDALONE_QUOTED_ITEM bullet.</p></li>', text)
+        self.assertNotIn('MARKER_STANDALONE_QUOTED_NOTE</p></li>', text)
+        # Known gap, asserted so a future fix is a deliberate change: an
+        # *indented* blockquote is not recognised as a note at all -- it
+        # publishes as a paragraph with a literal '>'. A blockquote at column
+        # zero converts correctly (see test_table_and_note_survive_inside_steps).
+        self.assertIn('<p>&gt; <b>Warning:</b> MARKER_STANDALONE_QUOTED_NOTE.</p>', text)
 
 
 class TestStandaloneSingleTask(ConverterCase):
@@ -1582,22 +1855,22 @@ class TestStandaloneSingleTask(ConverterCase):
 
     def test_a_single_task_topic_is_emitted(self):
         names = {p.name for p in self.all_topics()}
-        self.assertEqual(names, {'t_standalone.dita'})
+        self.assertEqual(names, {'standalone.dita'})
 
     def test_h2s_become_steps_and_pre_h2_content_becomes_context(self):
-        text = self.read('topics/t_standalone.dita')
+        text = self.read('topics/standalone.dita')
         self.assertOrdered(text, '<context>', 'MARKER_STANDALONE_CH1_PARAGRAPH',
                            '</context>', '<steps>',
                            '<cmd>Chapter One Second Section</cmd>',
                            '<cmd>Chapter Two First Section</cmd>')
 
     def test_table_and_note_survive_inside_steps(self):
-        text = self.read('topics/t_standalone.dita')
+        text = self.read('topics/standalone.dita')
         self.assertIn('<entry>MARKER_STANDALONE_TABLE_CELL</entry>', text)
         self.assertIn('<note type="important"><p>MARKER_STANDALONE_NOTE.</p></note>', text)
 
     def test_output_parses_and_taskbody_order_is_legal(self):
-        root = self.tree('topics/t_standalone.dita')
+        root = self.tree('topics/standalone.dita')
         children = [c.tag for c in root.find('taskbody')]
         self.assertEqual(children, sorted(children, key=['prereq', 'context', 'steps',
                                                          'postreq'].index))

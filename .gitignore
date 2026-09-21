@@ -27,3 +27,4 @@ env.md
 .claude/
 *.zip
 .mcp.json
+*peak*

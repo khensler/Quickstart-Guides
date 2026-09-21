@@ -73,24 +73,80 @@ ethtool -C ens1f0 rx-usecs 100 tx-usecs 100
 
 ### iSCSI Session Tuning
 
-#### Queue Depth
+#### Queue Depth and Session Command Slots
 
-**Increase queue depth for better performance:**
+These are two caps at different layers. Whichever is tighter is the one that binds.
+
+- **`node.session.cmds_max`** — in-flight commands for the whole *session*, shared by
+  every LUN on it. Open-iscsi preallocates this many task slots at login and uses the
+  value as the SCSI host's `can_queue`. Must be a power of 2.
+- **`node.session.queue_depth`** — the per-LUN cap (`cmd_per_lun`), applied to each `sd`
+  device the session discovers. This is what `/sys/block/<dev>/device/queue_depth` reports.
+
+With **L** LUNs on a session:
+
+- `L × queue_depth < cmds_max` — the per-LUN cap binds, and raising `cmds_max` changes nothing.
+- `L × queue_depth > cmds_max` — the session cap binds. That is a legitimate choice, but
+  per-LUN depth is no longer a fairness guarantee: one busy volume can take most of the
+  session's slots and the rest queue behind it.
+
+**Multipath multiplies both.** With software iSCSI each session is its own SCSI host, so
+every path carries a full `cmds_max`, and each LUN appears once per session with its own
+`queue_depth`. Four paths at `queue_depth = 32` is **128 outstanding commands per volume**,
+not 32 — which is why the per-path number looks smaller than you might expect.
+
+**Sizing:**
+
+1. Count LUNs per session and paths per LUN.
+2. Take the per-volume concurrency the workload needs, divide by path count → `queue_depth`.
+3. Set `cmds_max` at or above `L × queue_depth` — above it to let bursty LUNs borrow
+   slots, at it for isolation between them.
+
+| Topology | `queue_depth` | `cmds_max` |
+|---|---|---|
+| Multipathed flash (2-4 paths) | 32 | 128 |
+| Single path, or few LUNs per session | 128 | 128-256 |
+
+Don't simply maximise both. `cmds_max` preallocates memory per session, and queue depth
+buys throughput only up to saturation — past that it converts directly into latency, and
+overrunning what the array port accepts earns TASK SET FULL responses instead of I/O.
+
+**Configuration:**
 ```bash
-# Check current queue depth
-cat /sys/block/sda/device/queue_depth
+# /etc/iscsi/iscsid.conf
+node.session.cmds_max = 128
+node.session.queue_depth = 32
 
-# Increase queue depth (per device)
-echo 128 > /sys/block/sda/device/queue_depth
+# Per-device at runtime
+echo 32 > /sys/block/sda/device/queue_depth
 
 # Make persistent via udev rule (adjust vendor to match your storage)
 # /etc/udev/rules.d/99-iscsi-queue-depth.rules
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{device/queue_depth}="128"
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{device/vendor}=="VENDOR*", ATTR{device/queue_depth}="32"
 ```
 
-**Recommended values:**
-- **SSD/Flash storage**: 128-256
-- **HDD storage**: 32-64
+**Verify what is actually in force** — not what the config file says:
+```bash
+# Session parameters as negotiated
+iscsiadm -m session -P 2
+
+# Per-device depth the SCSI layer applied
+cat /sys/block/sda/device/queue_depth
+```
+
+> **⚠️ `iscsid.conf` applies to new node records only.** Existing records under
+> `/var/lib/iscsi/nodes/` keep the values baked in at discovery, so editing the file and
+> restarting `iscsid` changes nothing for targets you have already discovered. Update a
+> live target in place instead, then log out and back in:
+>
+> ```bash
+> iscsiadm -m node -T <target_iqn> -p <portal_ip> \
+>     -o update -n node.session.queue_depth -v 32
+> ```
+
+> **Note:** Offload HBAs (`be2iscsi`, `qla4xxx`, `bnx2i`) share a single SCSI host across
+> sessions, with `can_queue` fixed by the adapter. `cmds_max` does not carve up per session
+> on those, so the per-session arithmetic above does not apply.
 
 #### Session Parameters
 

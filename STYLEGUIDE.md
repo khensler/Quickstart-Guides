@@ -8,10 +8,13 @@ This guide describes the Markdown formatting conventions used in this project an
 
 This project uses two primary document types, each with a distinct purpose and structure:
 
-| Document | Purpose | DITA Type | Prefix |
-|----------|---------|-----------|--------|
-| `QUICKSTART.md` | Step-by-step procedural instructions | Task | `t_` |
-| `BEST-PRACTICES.md` | Conceptual/reference information | Concept | `c_` |
+| Document | Purpose | DITA Type |
+|----------|---------|-----------|
+| `QUICKSTART.md` | Step-by-step procedural instructions | Task |
+| `BEST-PRACTICES.md` | Conceptual/reference information | Concept |
+
+Topic ids and filenames carry **no type prefix** — the id is the sanitized source
+path (`rhel_iscsi_quickstart`, `rhel_iscsi_best-practices_firewall`).
 
 ---
 
@@ -19,7 +22,7 @@ This project uses two primary document types, each with a distinct purpose and s
 
 **Purpose**: Provide step-by-step instructions for completing a specific task (e.g., configuring iSCSI on RHEL).
 
-**DITA Output**: Single task topic (e.g., `t_rhel_iscsi_quickstart.dita`)
+**DITA Output**: Single task topic (e.g., `rhel_iscsi_quickstart.dita`)
 
 ### Required Structure
 
@@ -72,7 +75,7 @@ Instructions for the third step.
 ### QUICKSTART DITA Output Structure
 
 ```xml
-<task id="t_rhel_iscsi_quickstart" xml:lang="en-US">
+<task id="rhel_iscsi_quickstart" xml:lang="en-US">
     <title>RHEL iSCSI Quickstart</title>
     <prolog><metadata/></prolog>
     <taskbody>
@@ -110,7 +113,7 @@ Instructions for the third step.
 
 **Purpose**: Provide conceptual information, architectural guidance, and reference material organized by topic.
 
-**DITA Output**: Multiple concept topics, one per H2 section (e.g., `c_rhel_iscsi_best-practices_architecture_overview.dita`)
+**DITA Output**: Multiple concept topics, one per H2 section (e.g., `rhel_iscsi_best-practices_architecture_overview.dita`)
 
 ### Required Structure
 
@@ -151,7 +154,7 @@ Links and references...
 ### BEST-PRACTICES DITA Output Structure
 
 ```xml
-<concept id="c_rhel_iscsi_best-practices_architecture_overview" xml:lang="en-US">
+<concept id="rhel_iscsi_best-practices_architecture_overview" xml:lang="en-US">
     <title>Architecture Overview</title>
     <prolog><metadata/></prolog>
     <conbody>
@@ -182,7 +185,7 @@ section's topic, which is also where a link to the file with no anchor lands.
 |--------|------------|----------------|
 | **Purpose** | How to do something | Why and what to consider |
 | **DITA Type** | Task (`<task>`) | Concept (`<concept>`) |
-| **File Prefix** | `t_` | `c_` |
+| **File Prefix** | none | none |
 | **Output Files** | 1 per document | 1 per H2 section |
 | **Body Element** | `<taskbody>` | `<conbody>` |
 | **Special Elements** | `<prereq>`, `<steps>`, `<postreq>` | `<section>` |
@@ -438,7 +441,7 @@ Standard Markdown images are converted to DITA image elements.
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
-<task id="t_rhel_iscsi_quickstart" xml:lang="en-US">
+<task id="rhel_iscsi_quickstart" xml:lang="en-US">
     <title>RHEL iSCSI Quickstart</title>
     <prolog>
         <metadata/>
@@ -465,7 +468,7 @@ Standard Markdown images are converted to DITA image elements.
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
-<concept id="c_rhel_iscsi_best-practices_architecture" xml:lang="en-US">
+<concept id="rhel_iscsi_best-practices_architecture" xml:lang="en-US">
     <title>Architecture Overview</title>
     <prolog>
         <metadata/>
@@ -495,11 +498,36 @@ The following content is **not** converted to DITA:
 
 ## File Naming Conventions
 
-| Type | Prefix | Example |
-|------|--------|---------|
-| Task topics | `t_` | `t_rhel_iscsi_quickstart.dita` |
-| Concept topics | `c_` | `c_rhel_iscsi_best-practices_firewall.dita` |
-| Reference topics | `c_` | `c_glossary.dita`, `c_network-concepts.dita` |
+Topic filenames and ids carry no type prefix.
+
+| Type | Example |
+|------|---------|
+| Task topics | `rhel_iscsi_quickstart.dita` |
+| Concept topics | `rhel_iscsi_best-practices_firewall.dita` |
+| Reference topics | `glossary.dita`, `network-concepts.dita` |
+
+---
+
+## PEAK Variables
+
+Write product and company names as plain text in the Markdown — **FlashArray**,
+**Everpure**, **Purity**, **NFS**. The converter turns each one into the PEAK
+variable reference the published docs use:
+
+```xml
+<ph conkeyref="varsProductNames/product.block.primary.name.plain"/>
+```
+
+Version and plural suffixes are handled — `NFSv3`, `NFSv4.1`, `FlashArrays` and
+`FlashBlade//S500` all resolve to the right variable with the suffix left as
+literal text. Nothing is required of the author. Two things to know:
+
+- Text inside backticks is never substituted, so a literal device string
+  (`` `PURE`/`FlashArray` `` in a multipath stanza) stays exactly as authored.
+  If a name must publish literally, put it in code.
+- The table lives in `scripts/peak_variables.json`; `PEAK-VARIABLES.md` lists
+  all 302 variables and where they come from. `--no-peak-variables` disables the
+  substitution for a run.
 
 ---
 
