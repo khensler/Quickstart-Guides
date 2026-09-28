@@ -5,7 +5,7 @@ title: OpenShift — iSCSI on Everpure FlashArray with Portworx
 
 # OpenShift — iSCSI on Everpure FlashArray with Portworx
 
-This guide is an end-to-end quick start for connecting an OpenShift 4.x cluster to Everpure FlashArray over iSCSI. It covers pre-flight validation, storage-network configuration, the worker-node iSCSI and multipath configuration delivered as **MachineConfig**, Portworx operator and StorageCluster deployment, and final validation with a StorageClass, PVC, test pod, and optionally a virtual machine.
+This guide is an end-to-end quick start for connecting an OpenShift 4.x cluster to Everpure FlashArray over iSCSI. It covers pre-flight validation, storage-network configuration, the worker-node iSCSI and multipath configuration delivered as **MachineConfig**, a node disruption policy so those MachineConfigs apply without rebooting the workers, Portworx operator and StorageCluster deployment, and final validation with a StorageClass, PVC, test pod, and optionally a virtual machine.
 
 The node-level configuration is identical to a bare-metal RHEL host — MachineConfig simply delivers those files and systemd units declaratively to Red Hat CoreOS (RHCOS) worker nodes, which are immutable and cannot be configured by hand.
 
@@ -27,18 +27,19 @@ The procedure has four distinct phases. Read this section before starting so you
 |---|---|---|
 | Validate | 1 | Confirm cluster health, connectivity, and collect each node's iSCSI IQN |
 | Network | 2 | Give each worker node its storage IPs and MTU |
-| Node config | 3–9 | Deliver `iscsid.conf`, `multipath.conf`, iface bindings, udev rules, and ARP sysctls via MachineConfig, then reboot the pool |
-| Storage stack | 10–14 | Install Portworx, connect it to FlashArray, and provision a volume |
+| Node config | 3–10 | Deliver `iscsid.conf`, `multipath.conf`, iface bindings, udev rules, and ARP sysctls via MachineConfig, under a node disruption policy so the rollout restarts services instead of rebooting nodes |
+| Storage stack | 11–15 | Install Portworx, connect it to FlashArray, and provision a volume |
 
-**Who logs in to the array.** Steps 3–9 prepare the node. The actual iSCSI discovery and session login is performed by **Portworx** when it attaches a volume — you do not run `iscsiadm --login` as part of normal operation. The manual discovery commands in Step 1 exist only to prove connectivity before Portworx is installed.
+**Who logs in to the array.** Steps 3–10 prepare the node. The actual iSCSI discovery and session login is performed by **Portworx** when it attaches a volume — you do not run `iscsiadm --login` as part of normal operation. The manual discovery commands in Step 1 exist only to prove connectivity before Portworx is installed.
 
-**Every MachineConfig change triggers a rolling node reboot.** Group related configuration into as few MachineConfig objects as practical. The Machine Config Operator (MCO) merges all MachineConfigs targeting a pool into a single rendered config before applying, so applying Steps 4–8 together costs one reboot per node rather than five. A combined single-object example is in [Additional Notes](#additional-notes).
+**By default, every MachineConfig change triggers a rolling node reboot.** Nothing in this guide actually needs one — every change is a configuration file or a service that can be reloaded in place — so Step 9 creates a **node disruption policy** that tells the Machine Config Operator (MCO) to reload or restart the affected service instead of rebooting. Still group related configuration into as few MachineConfig objects as practical: the MCO merges all MachineConfigs targeting a pool into a single rendered config before applying, so applying Steps 4–8 together costs one rollout (one drain) per node rather than five. A combined single-object example is in [Additional Notes](#additional-notes). On clusters older than OpenShift 4.17 the policy is not available and each rollout reboots the pool as before.
 
 ---
 
 ## Prerequisites
 
 - OpenShift 4.9+ (Ignition spec 3.4.0; 3.2.0 also accepted on older releases)
+- OpenShift 4.17+ to apply the node configuration without a reboot (node disruption policies are GA in 4.17). The MachineConfigs work on older releases too, but every rollout reboots the pool.
 - Worker nodes healthy and schedulable, with dedicated storage NICs
 - Everpure FlashArray configured and reachable on both the management and data paths
 - IP reachability between worker nodes and the FlashArray iSCSI ports (TCP 3260)
@@ -52,10 +53,11 @@ The procedure has four distinct phases. Read this section before starting so you
 
 ## Background
 
-`MachineConfig` is an OpenShift API object that declaratively manages node-level OS configuration. The MCO watches for changes and rolls them out to node pools one at a time, draining and rebooting each node.
+`MachineConfig` is an OpenShift API object that declaratively manages node-level OS configuration. The MCO watches for changes and rolls them out to node pools one at a time. By default that means draining and rebooting each node; a **node disruption policy** replaces the reboot with a service reload or restart for the files and units it names.
 
 ```
-MachineConfig ──► MachineConfigPool ──► RHCOS nodes (rolling reboot)
+MachineConfig ──► MachineConfigPool ──► RHCOS nodes (rolling update: reboot by default,
+                                         or reload/restart a service under a node disruption policy)
 ```
 
 **Key properties:**
@@ -68,6 +70,24 @@ MachineConfig ──► MachineConfigPool ──► RHCOS nodes (rolling reboot)
 | `spec.config.systemd.units[]` | Systemd units to enable/create/override |
 
 > **Why not just SSH in and edit the files?** RHCOS is an immutable operating system. Manual edits to `/etc/multipath.conf`, `/etc/iscsi/iscsid.conf` or anything else under `/etc` are wiped on the next node reprovision, and `mpathconf --enable` will not survive either. MachineConfig is the only durable mechanism.
+
+### Node Disruption Policies
+
+Since OpenShift 4.17 the MCO consults a cluster-wide `MachineConfiguration` object (`operator.openshift.io/v1`, always named `cluster`) before deciding how to apply a rendered config. Its `spec.nodeDisruptionPolicy` maps file paths and systemd unit names to the actions the MCO takes when those items change:
+
+| Action | What the MCO does |
+|---|---|
+| `None` | Writes the change and nothing else |
+| `Reload` / `Restart` | `systemctl reload` / `systemctl restart` the named service |
+| `DaemonReload` | `systemctl daemon-reload`, needed before systemd can start a unit whose file was just written |
+| `Drain` | Cordons and drains the node first, but does not reboot it |
+| `Reboot` | The default for anything the policy does not mention |
+
+Three rules matter for this guide:
+
+- **Anything not covered reboots.** The MCO diffs the old and new rendered configs; if even one changed file or unit has no policy entry, the whole update falls back to a reboot. Adding a new file counts as a change.
+- **Paths match exactly or by directory.** A policy for `/var/lib/iscsi/ifaces` covers every file under it, which is how this guide handles per-NIC iface files without naming them.
+- **Actions run in the order written, and the MCO does not check that they are sufficient.** Restarting the wrong service still counts as a successful rebootless update, so the verification in Step 10 is not optional.
 
 ---
 
@@ -138,7 +158,7 @@ Each worker node needs two storage interfaces with static IPs and jumbo frames. 
 | | Option A: NMState (NNCP) | Option B: MachineConfig (NetworkManager) |
 |---|---|---|
 | Mechanism | `NodeNetworkConfigurationPolicy` | `.nmconnection` files in a MachineConfig |
-| Reboot required | No | Yes (rolling) |
+| Reboot required | No | Yes (rolling; not covered by the Step 9 node disruption policy) |
 | Per-node specs | One NNCP per node (unique IPs) | One MachineConfig per pool, or per node |
 | Requires | NMState Operator | Nothing extra |
 
@@ -146,7 +166,7 @@ Option A is recommended on clusters that already run the NMState Operator, mainl
 
 ### Option A: NMState NodeNetworkConfigurationPolicy
 
-Each worker node ends up with two standalone VLAN subinterfaces, each with its own IP on the storage subnet, at MTU 9000. **No OS-level bond is needed** — Portworx manages both paths itself (see Step 12).
+Each worker node ends up with two standalone VLAN subinterfaces, each with its own IP on the storage subnet, at MTU 9000. **No OS-level bond is needed** — Portworx manages both paths itself (see Step 13).
 
 Plan the addresses first; you need two per worker:
 
@@ -433,9 +453,11 @@ spec:
             WantedBy=multi-user.target
 ```
 
+> **How this applies without a reboot.** `iscsid` reads the initiator name only at start-up. The node disruption policy in Step 9 therefore runs `iscsi-initiator-name.service` and then restarts `iscsid.service`, in that order, for every change that can touch the IQN.
+
 > **Why not `ConditionPathExists`?** A `ConditionPathExists=!/etc/iscsi/initiatorname.iscsi` guard would skip nodes that already have the file — which is exactly the shared-default case that must be fixed. Running the script every boot is idempotent: once the IQN is unique it is retained (the `else` branch).
 
-> **Register the IQNs** — after the nodes reboot in Step 9, collect each node's IQN and register it with the FlashArray before attempting connections. `New-Pfa2Host` and the FlashArray GUI both take the IQN list per host; pass every IQN a node reports.
+> **Register the IQNs** — after the rollout in Step 10, collect each node's IQN and register it with the FlashArray before attempting connections. `New-Pfa2Host` and the FlashArray GUI both take the IQN list per host; pass every IQN a node reports.
 > ```bash
 > oc debug node/<NODE_NAME> -- chroot /host cat /etc/iscsi/initiatorname.iscsi
 > ```
@@ -565,7 +587,7 @@ iface.max_burst_len = 0
 # END RECORD
 ```
 
-Repeat the file for `<NIC2>.<VLAN_ID>`, changing both `iface.iscsi_ifacename` and `iface.net_ifacename`. Create one file per storage NIC.
+Repeat the file for `<NIC2>.<VLAN_ID>`, changing both `iface.iscsi_ifacename` and `iface.net_ifacename`. Create one file per storage NIC. The node disruption policy in Step 9 covers the whole `/var/lib/iscsi/ifaces` directory, so the file names do not need to appear in it.
 
 **MachineConfig spec:**
 
@@ -595,7 +617,7 @@ spec:
             source: "data:text/plain;charset=utf-8;base64,<BASE64: NIC2 iface content above>"
 ```
 
-> **Why interface binding?** Without NIC binding, the iSCSI stack may route all sessions through a single interface, reducing path count and defeating multipath redundancy. Binding guarantees each session exits through the interface it is named for, creating true active-active multipath. The corresponding Portworx-side setting is `PURE_ISCSI_ALLOWED_IFACES` in Step 12 — the two must name the same interfaces.
+> **Why interface binding?** Without NIC binding, the iSCSI stack may route all sessions through a single interface, reducing path count and defeating multipath redundancy. Binding guarantees each session exits through the interface it is named for, creating true active-active multipath. The corresponding Portworx-side setting is `PURE_ISCSI_ALLOWED_IFACES` in Step 13 — the two must name the same interfaces.
 
 ---
 
@@ -655,10 +677,10 @@ spec:
             source: "data:text/plain;charset=utf-8;base64,<BASE64: 99-pure-storage.rules content above>"
 ```
 
-> **Applying without a reboot** — MachineConfig triggers a rolling reboot which reloads udev automatically. To apply on an already-running node for validation:
+> **How the rules take effect** — the node disruption policy in Step 9 reloads `systemd-udevd` when this file changes, so every FlashArray device discovered from then on gets the settings. A reload does not re-evaluate devices that already exist; if you change the rules on a node that already has FlashArray volumes attached, trigger them by hand:
 > ```bash
-> oc debug node/<NODE_NAME> -- chroot /host bash -c \
->   "udevadm control --reload-rules && udevadm trigger --subsystem-match=block --action=change"
+> oc debug node/<NODE_NAME> -- chroot /host \
+>   udevadm trigger --subsystem-match=block --action=change
 > ```
 
 > **Verify the settings took effect** (after Everpure volumes are attached):
@@ -728,10 +750,7 @@ spec:
             source: "data:text/plain;charset=utf-8;base64,<BASE64: 99-iscsi-arp.conf content above>"
 ```
 
-> **Applying without a reboot:**
-> ```bash
-> oc debug node/<NODE_NAME> -- chroot /host sysctl --system
-> ```
+> **How the settings take effect** — the node disruption policy in Step 9 restarts `systemd-sysctl.service`, a oneshot unit that re-reads every file under `/etc/sysctl.d`, so the values apply without a reboot. `sysctl --system` from a debug shell does the same thing by hand if you want to test a value before committing it to a MachineConfig.
 
 > **Verify the settings took effect:**
 > ```bash
@@ -742,12 +761,127 @@ spec:
 
 ---
 
-## Step 9: Apply the MachineConfigs and Verify the Rollout
+## Step 9: Create the Node Disruption Policy
+
+Without a policy, the MCO reboots every worker to apply the MachineConfigs from Steps 4–8. Nothing in them needs a reboot: `iscsid` and `multipathd` re-read their configuration on restart or reload, udev rules and sysctls reload in place, and iface records are read from disk whenever a session is created. This step tells the MCO exactly that.
+
+Create the policy **before** applying any MachineConfig in Step 10. The MCO evaluates it at rollout time, so a policy that lands after a rollout has started does nothing for that rollout.
+
+**Policy file `iscsi-node-disruption-policy.yaml`:**
+
+```yaml
+apiVersion: operator.openshift.io/v1
+kind: MachineConfiguration
+metadata:
+  name: cluster
+spec:
+  nodeDisruptionPolicy:
+    files:
+      # Step 4 - iscsid reads iscsid.conf only at start-up
+      - path: /etc/iscsi/iscsid.conf
+        actions:
+          - type: Drain
+          - type: Restart
+            restart:
+              serviceName: iscsid.service
+
+      # Step 4 - run the IQN generator, then restart iscsid so it picks up
+      # the (possibly new) initiator name
+      - path: /usr/local/bin/generate-iscsi-iqn.sh
+        actions:
+          - type: Drain
+          - type: Restart
+            restart:
+              serviceName: iscsi-initiator-name.service
+          - type: Restart
+            restart:
+              serviceName: iscsid.service
+
+      # Step 5 - "systemctl reload multipathd" is "multipathd reconfigure"
+      - path: /etc/multipath.conf
+        actions:
+          - type: Reload
+            reload:
+              serviceName: multipathd.service
+
+      # Step 6 - iface records are read from disk when a session is created;
+      # a directory path covers every per-NIC file under it
+      - path: /var/lib/iscsi/ifaces
+        actions:
+          - type: None
+
+      # Step 7 - reload the udev rules; new FlashArray devices pick them up
+      - path: /etc/udev/rules.d/99-pure-storage.rules
+        actions:
+          - type: Drain
+          - type: Reload
+            reload:
+              serviceName: systemd-udevd.service
+
+      # Step 8 - systemd-sysctl is a oneshot; restarting it re-applies /etc/sysctl.d
+      - path: /etc/sysctl.d/99-iscsi-arp.conf
+        actions:
+          - type: Restart
+            restart:
+              serviceName: systemd-sysctl.service
+
+    units:
+      - name: multipathd.service
+        actions:
+          - type: Restart
+            restart:
+              serviceName: multipathd.service
+
+      - name: iscsid.service
+        actions:
+          - type: Drain
+          - type: Restart
+            restart:
+              serviceName: iscsid.service
+
+      # New unit file: daemon-reload before systemd can start it, then
+      # restart iscsid so the (possibly new) IQN is in use
+      - name: iscsi-initiator-name.service
+        actions:
+          - type: Drain
+          - type: DaemonReload
+          - type: Restart
+            restart:
+              serviceName: iscsi-initiator-name.service
+          - type: Restart
+            restart:
+              serviceName: iscsid.service
+```
+
+Apply it and confirm the MCO has merged it into the effective cluster policy:
+
+```bash
+oc apply -f iscsi-node-disruption-policy.yaml
+
+# Every path and unit from the file above must be listed before you continue
+oc get machineconfiguration cluster -o jsonpath='{range .status.nodeDisruptionPolicyStatus.clusterPolicies.files[*]}{.path}{"\n"}{end}{range .status.nodeDisruptionPolicyStatus.clusterPolicies.units[*]}{.name}{"\n"}{end}'
+```
+
+The output also lists the cluster's built-in default policies (`/etc/containers/...`, `/var/lib/kubelet/config.json`, and so on); those are expected. If your entries are missing, the policy failed validation — `oc get machineconfiguration cluster -o yaml` shows why under `status.conditions`.
+
+> **Why `Drain` on iscsid and udev?** Restarting `iscsid` does not drop the kernel's iSCSI sessions, and reloading udev does not touch existing devices, so on a worker with no FlashArray volumes yet the drain changes nothing. On a worker that already serves Portworx volumes it is the conservative choice: workloads move before the storage stack is touched, exactly as they would for a reboot, but without the reboot. Drop the `Drain` entries if you would rather apply in place.
+
+> **Why every iscsid restart is paired with the IQN unit.** The MCO builds one action list from every changed file and unit, in an order you do not control, but the actions from a single policy entry stay together and run in the order written. Listing `iscsi-initiator-name.service` immediately before `iscsid.service` in each entry that can change the IQN guarantees `iscsid` restarts after the IQN is final, whichever entry the MCO processes first.
+
+> **⚠️ The policy is all-or-nothing per rollout.** If a MachineConfig update touches even one file or unit that no policy entry covers, the MCO reboots the node for the whole update. That is why Step 2 Option B (NetworkManager connection files) is not in this policy and still reboots the pool — applying network profiles by restarting NetworkManager has not been validated here — and why any file you add to the combined MachineConfig in [Additional Notes](#additional-notes) needs its own entry. The MCO also does not check that the actions you list are sufficient; the checks in Step 10 do.
+
+> **Older clusters.** Node disruption policies are GA in OpenShift 4.17 (Technology Preview in 4.16). On earlier releases the `nodeDisruptionPolicy` field is not recognised; skip this step and expect one rolling reboot in Step 10.
+
+---
+
+## Step 10: Apply the MachineConfigs and Verify the Rollout
+
+With the policy from Step 9 in place, the rollout drains each worker, writes the files, restarts or reloads the listed services, and uncordons the node. No worker reboots.
 
 ### Apply
 
 ```bash
-# Apply all at once - the MCO merges them and reboots each node only once
+# Apply all at once - the MCO merges them into one rendered config and rolls each node once
 oc apply -f 99-worker-iscsi-network.yaml    # Step 2 Option B only
 oc apply -f 99-worker-iscsi-initiator.yaml
 oc apply -f 99-worker-iscsi-multipath.yaml
@@ -783,6 +917,31 @@ Wait until `UPDATED=True` and `UPDATING=False` before continuing. Expected stead
 NAME     UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT
 worker   True      False      False      3              3                   3
 ```
+
+### Confirm No Node Rebooted
+
+The pool cycles through `UPDATING` exactly as it would for a reboot, so the pool status alone does not tell you which path the MCO took. Check the node events and boot times:
+
+```bash
+# One event per action the policy triggered; a node that rebooted shows none of these
+oc get events -n default --field-selector involvedObject.kind=Node \
+  | grep -E 'SkipReboot|ServiceRestart|ServiceReload'
+
+# The boot time should predate the rollout on every worker
+for node in $(oc get nodes -l node-role.kubernetes.io/worker \
+  -o jsonpath='{.items[*].metadata.name}'); do
+  echo -n "$node: "; oc debug node/$node -q -- chroot /host uptime -s
+done
+```
+
+Expected events:
+
+```
+Normal   ServiceRestart   node/worker-1   Config changes do not require reboot. Service iscsid.service was restarted.
+Normal   ServiceReload    node/worker-1   Config changes do not require reboot. Service multipathd.service was reloaded.
+```
+
+If a node rebooted instead, see [Nodes Rebooted Despite the Policy](#nodes-rebooted-despite-the-policy). The node is still correctly configured — a reboot applies everything — but fix the policy before the next change.
 
 ### Verify Configuration on Every Node
 
@@ -827,7 +986,7 @@ oc get mcp worker -o jsonpath='{.spec.configuration.source}' | jq .
 
 ---
 
-## Step 10: Install the Portworx Operator
+## Step 11: Install the Portworx Operator
 
 Portworx performs the iSCSI discovery and login and presents FlashArray volumes to pods. Install it after the nodes are prepared, not before.
 
@@ -884,7 +1043,7 @@ oc logs -n openshift-operators deploy/portworx-operator
 
 ---
 
-## Step 11: Integrate Portworx with FlashArray
+## Step 12: Integrate Portworx with FlashArray
 
 ### Create a FlashArray API User
 
@@ -924,7 +1083,7 @@ oc get secret px-pure-secret -n portworx
 
 ---
 
-## Step 12: Deploy the StorageCluster
+## Step 13: Deploy the StorageCluster
 
 Generate the spec from [Portworx Central](https://central.portworx.com/specGen/px-csi-specgen) — it produces correctly-annotated YAML for your environment and version, which is easier than hand-writing the annotation and image strings. The example below is for reference.
 
@@ -991,7 +1150,7 @@ oc logs -n portworx <PORTWORX_POD_NAME>
 
 ---
 
-## Step 13: Create a StorageClass and Validate with a PVC and Pod
+## Step 14: Create a StorageClass and Validate with a PVC and Pod
 
 Create a StorageClass that uses Portworx as the provisioner and identifies FlashArray as the backend:
 
@@ -1096,11 +1255,11 @@ The `3624a937...` device name confirms the volume is a FlashArray LUN reached th
 oc debug node/<NODE_NAME> -- chroot /host multipath -ll
 ```
 
-You should see one path per storage interface, all `active ready running`. A single path means `PURE_ISCSI_ALLOWED_IFACES` (Step 12) or the iface bindings (Step 6) are wrong.
+You should see one path per storage interface, all `active ready running`. A single path means `PURE_ISCSI_ALLOWED_IFACES` (Step 13) or the iface bindings (Step 6) are wrong.
 
 ---
 
-## Step 14: Create a Virtual Machine on FlashArray Storage (Optional)
+## Step 15: Create a Virtual Machine on FlashArray Storage (Optional)
 
 If the cluster runs OpenShift Virtualization, this validates the full stack the way a workload will actually use it.
 
@@ -1146,13 +1305,31 @@ oc get node -o custom-columns=NAME:.metadata.name,STATE:.metadata.annotations."m
 oc describe machineconfigpool worker | grep -A 10 Degraded
 ```
 
-### Service Not Starting After Reboot
+### Nodes Rebooted Despite the Policy
+
+The MCO falls back to a reboot when any changed file or unit in the rendered config has no policy entry. The machine-config-daemon on the node logs one `NodeDisruptionPolicy ... found for diff file` line per covered item; a changed item without one is the culprit.
+
+```bash
+# Pick the daemon pod running on the node that rebooted
+oc get pods -n openshift-machine-config-operator -l k8s-app=machine-config-daemon -o wide
+oc logs -n openshift-machine-config-operator <MCD_POD> -c machine-config-daemon \
+  | grep -E 'NodeDisruptionPolicy|post config change action'
+```
+
+Common causes:
+
+- The policy was applied after the MachineConfigs, or its entries had not yet appeared in `status.nodeDisruptionPolicyStatus` when the rollout started. Re-run the check in Step 9.
+- A file or unit with no entry: a Step 2 Option B `.nmconnection` file, an extra file added to the combined MachineConfig, or a renamed unit. Add an entry for it.
+- Another MachineConfig landed in the same rendered config with a change that always reboots (kernel arguments, extensions, OS image, FIPS).
+- The cluster is older than OpenShift 4.17, where the policy does not exist.
+
+### Service Not Starting After the Rollout
 
 ```bash
 oc debug node/<NODE_NAME> -- chroot /host journalctl -u iscsid -u multipathd --no-pager -n 50
 ```
 
-### Duplicate IQNs After Reboot
+### Duplicate IQNs After the Rollout
 
 Confirm the oneshot unit ran and what it decided:
 
@@ -1179,7 +1356,7 @@ Look for `Iface Name` in the output — it should name your storage interfaces, 
 
 Check, in order:
 
-1. `PURE_ISCSI_ALLOWED_IFACES` lists both interfaces (Step 12).
+1. `PURE_ISCSI_ALLOWED_IFACES` lists both interfaces (Step 13).
 2. Both iface files exist in `/var/lib/iscsi/ifaces/` (Step 6).
 3. Both storage IPs can reach TCP 3260 (Step 2).
 4. ARP sysctls are `= 2` if the NICs share a subnet (Step 8).
@@ -1224,7 +1401,7 @@ If duplicate connections exist, remove the old one via a MachineConfig oneshot u
 
 ### Full Combined MachineConfig Reference
 
-For environments applying everything at once, this single object produces one reboot per node instead of five. It assumes Step 2 Option A (NMState) handled networking.
+For environments applying everything at once, this single object produces one rollout per node instead of five — one drain and no reboot under the Step 9 policy. It assumes Step 2 Option A (NMState) handled networking. Every path and unit in it has a policy entry; if you add anything else, add a matching entry or the whole object reboots the node.
 
 ```yaml
 apiVersion: machineconfiguration.openshift.io/v1
@@ -1351,7 +1528,7 @@ This guide uses two standalone interfaces because `PURE_ISCSI_ALLOWED_IFACES` le
 
 - Register every worker node's IQN with the FlashArray and create a host group for the cluster.
 - Review [RHEL iSCSI Best Practices](../../rhel/iscsi/BEST-PRACTICES.md) for performance tuning, APD handling, and monitoring guidance that applies equally to RHCOS.
-- Configure Portworx monitoring and Prometheus metrics export if you did not enable them in Step 12.
+- Configure Portworx monitoring and Prometheus metrics export if you did not enable them in Step 13.
 - Set up a non-default StorageClass per workload tier if you need more than one QoS or reclaim policy.
 
 ---
@@ -1366,5 +1543,6 @@ This guide uses two standalone interfaces because `PURE_ISCSI_ALLOWED_IFACES` le
 - [Network Concepts]({{ site.baseurl }}/common/network-concepts.html) — ARP flux and same-subnet multipath
 - [Portworx CSI — Prepare FlashArray](https://docs.portworx.com/portworx-csi/install/prepare/flash-array) — Portworx's own host-prep guidance
 - [OpenShift MachineConfig documentation](https://docs.openshift.com/container-platform/latest/post_installation_configuration/machine-configuration-tasks.html)
+- [OpenShift node disruption policies](https://docs.redhat.com/en/documentation/openshift_container_platform/4.17/html/machine_configuration/machine-config-node-disruption_machine-configs-configure) — what the `MachineConfiguration` policy in Step 9 can and cannot make rebootless
 - [OpenShift Machine Config Operator](https://github.com/openshift/machine-config-operator)
 - [Kubernetes NMState Operator](https://docs.openshift.com/container-platform/latest/networking/k8s_nmstate/k8s-nmstate-about-the-k8s-nmstate-operator.html)
