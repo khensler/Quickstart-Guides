@@ -32,7 +32,7 @@ The procedure has four distinct phases. Read this section before starting so you
 
 **Who logs in to the array.** Steps 3–9 prepare the node. The actual iSCSI discovery and session login is performed by **Portworx** when it attaches a volume — you do not run `iscsiadm --login` as part of normal operation. The manual discovery commands in Step 1 exist only to prove connectivity before Portworx is installed.
 
-**Every MachineConfig change triggers a rolling node reboot.** Group related configuration into as few MachineConfig objects as practical. The Machine Config Operator (MCO) merges all MachineConfigs targeting a pool into a single rendered config before applying, so applying Steps 4–8 together costs one reboot per node rather than five. A combined single-object example is in [Additional Notes](#additional-notes). For day-2 changes, a node disruption policy can replace some of those reboots with a service reload. See [Avoiding Reboots for Later Changes](#avoiding-reboots-for-later-changes-node-disruption-policy).
+**Every MachineConfig change triggers a rolling node reboot.** Group related configuration into as few MachineConfig objects as practical. The Machine Config Operator (MCO) merges all MachineConfigs targeting a pool into a single rendered config before applying, so applying Steps 4–8 together costs one reboot per node rather than five. A combined single-object example is in [Additional Notes](#additional-notes). For day-2 changes, a node disruption policy can replace some of those reboots with a service reload. See "Avoiding Reboots for Later Changes" in Additional Notes.
 
 ---
 
@@ -437,7 +437,7 @@ spec:
             WantedBy=multi-user.target
 ```
 
-> **⚠️ OpenShift 4.19 and 4.20: `enabled: true` without `contents` can be skipped.** On affected z-streams, the Machine Config Daemon does not enable a unit that the MachineConfig lists with no `contents`, even though the unit already exists on the node. That is exactly how `iscsid.service` above and `multipathd.service` in Step 5 are declared. The rollout reports success, but the service is not enabled. Red Hat tracks the issue in [solution 7135683](https://access.redhat.com/solutions/7135683), which lists the fixed releases. On 4.19 or 4.20, check that the services are enabled after Step 9 (`systemctl is-enabled iscsid multipathd`) rather than assuming they are.
+> **⚠️ OpenShift 4.19 and 4.20: `enabled: true` without `contents` can be skipped.** On affected z-streams, the Machine Config Daemon does not enable a unit that the MachineConfig lists with no `contents`, even though the unit already exists on the node. That is exactly how `iscsid.service` above and `multipathd.service` in Step 5 are declared, and it applies equally to the combined MachineConfig in Additional Notes. The rollout reports success, but the service is not enabled, and the only sign is a line in the Machine Config Daemon log: `Could not enable unit "iscsid.service", because it has no contents, skipping`. Red Hat describes the issue in [solution 7135683](https://access.redhat.com/solutions/7135683). On 4.19 or 4.20, check that the services are enabled after Step 9 rather than assuming they are. See "Service Not Enabled After the Rollout" in Troubleshooting.
 
 > **Why not `ConditionPathExists`?** A `ConditionPathExists=!/etc/iscsi/initiatorname.iscsi` guard would skip nodes that already have the file — which is exactly the shared-default case that must be fixed. Running the script every boot is idempotent: once the IQN is unique it is retained (the `else` branch).
 
@@ -1185,6 +1185,19 @@ oc describe machineconfigpool worker | grep -A 10 Degraded
 ```bash
 oc debug node/<NODE_NAME> -- chroot /host journalctl -u iscsid -u multipathd --no-pager -n 50
 ```
+
+### Service Not Enabled After the Rollout (OpenShift 4.19 and 4.20)
+
+`systemctl is-enabled` reports `disabled` for `iscsid` or `multipathd`, even though the pool finished updating without errors. Look for the skip in the Machine Config Daemon log for that node:
+
+```bash
+oc logs -n openshift-machine-config-operator \
+  $(oc get pods -n openshift-machine-config-operator -l k8s-app=machine-config-daemon \
+    --field-selector spec.nodeName=<NODE_NAME> -o name) \
+  -c machine-config-daemon | grep "because it has no contents"
+```
+
+A line like `Could not enable unit "iscsid.service", because it has no contents, skipping` confirms the issue described in Step 4. Red Hat tracks it in [solution 7135683](https://access.redhat.com/solutions/7135683). Check that article for the current status and any fixed release before you upgrade to fix it.
 
 ### Duplicate IQNs After Reboot
 
