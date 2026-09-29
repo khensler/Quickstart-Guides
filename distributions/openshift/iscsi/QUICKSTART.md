@@ -32,7 +32,7 @@ The procedure has four distinct phases. Read this section before starting so you
 
 **Who logs in to the array.** Steps 3–9 prepare the node. The actual iSCSI discovery and session login is performed by **Portworx** when it attaches a volume — you do not run `iscsiadm --login` as part of normal operation. The manual discovery commands in Step 1 exist only to prove connectivity before Portworx is installed.
 
-**Every MachineConfig change triggers a rolling node reboot.** Group related configuration into as few MachineConfig objects as practical. The Machine Config Operator (MCO) merges all MachineConfigs targeting a pool into a single rendered config before applying, so applying Steps 4–8 together costs one reboot per node rather than five. A combined single-object example is in [Additional Notes](#additional-notes).
+**Every MachineConfig change triggers a rolling node reboot.** Group related configuration into as few MachineConfig objects as practical. The Machine Config Operator (MCO) merges all MachineConfigs targeting a pool into a single rendered config before applying, so applying Steps 4–8 together costs one reboot per node rather than five. A combined single-object example is in [Additional Notes](#additional-notes). For day-2 changes, a node disruption policy can replace some of those reboots with a service reload. See [Avoiding Reboots for Later Changes](#avoiding-reboots-for-later-changes-node-disruption-policy).
 
 ---
 
@@ -375,7 +375,11 @@ if [ -z "$current" ] \
    || [[ "$current" == iqn.1994-05.com.redhat:* ]]; then
     domain=$(hostname -d)
     [ -z "$domain" ] && domain=$(hostname -s)
-    new_iqn="iqn.$(date +%Y-%m).${domain}:$(cat /proc/sys/kernel/random/uuid)"
+    # RFC 3720 wants the naming authority as the DNS domain in reverse
+    # order: lab.example.com becomes com.example.lab. This is the same
+    # shape as the Red Hat default, iqn.1994-05.com.redhat:<id>.
+    authority=$(printf '%s' "$domain" | tr '.' '\n' | tac | paste -sd '.')
+    new_iqn="iqn.$(date +%Y-%m).${authority}:$(cat /proc/sys/kernel/random/uuid)"
     echo "InitiatorName=${new_iqn}" > "$IQN_FILE"
     echo "Generated unique iSCSI IQN: ${new_iqn}"
 else
@@ -433,7 +437,13 @@ spec:
             WantedBy=multi-user.target
 ```
 
+> **⚠️ OpenShift 4.19 and 4.20: `enabled: true` without `contents` can be skipped.** On affected z-streams, the Machine Config Daemon does not enable a unit that the MachineConfig lists with no `contents`, even though the unit already exists on the node. That is exactly how `iscsid.service` above and `multipathd.service` in Step 5 are declared. The rollout reports success, but the service is not enabled. Red Hat tracks the issue in [solution 7135683](https://access.redhat.com/solutions/7135683), which lists the fixed releases. On 4.19 or 4.20, check that the services are enabled after Step 9 (`systemctl is-enabled iscsid multipathd`) rather than assuming they are.
+
 > **Why not `ConditionPathExists`?** A `ConditionPathExists=!/etc/iscsi/initiatorname.iscsi` guard would skip nodes that already have the file — which is exactly the shared-default case that must be fixed. Running the script every boot is idempotent: once the IQN is unique it is retained (the `else` branch).
+
+> **Why the domain is reversed.** RFC 3720 defines an IQN as `iqn.<yyyy-mm>.<naming-authority>:<unique-string>`, where the naming authority is the DNS domain written in reverse. A node in `lab.example.com` gets `iqn.2026-09.com.example.lab:<uuid>` — the same shape as the Red Hat default the script replaces. The array accepts any unique string, so an unreversed domain still works, but registering non-conformant IQNs on the FlashArray makes host records harder to read and to script against.
+
+> **Keep the logic in the script file, not in `ExecStart`.** Inlining it as `ExecStart=/bin/bash -c '...'` looks tidier and breaks in two ways: systemd expands `$VAR` and `${VAR}` itself before bash sees them, so undefined shell variables become empty strings, and it parses `%` as a unit specifier, so `date +%Y-%m` fails to load the unit. A separate file avoids both.
 
 > **Register the IQNs** — after the nodes reboot in Step 9, collect each node's IQN and register it with the FlashArray before attempting connections. `New-Pfa2Host` and the FlashArray GUI both take the IQN list per host; pass every IQN a node reports.
 > ```bash
@@ -529,6 +539,14 @@ spec:
 > **Why `no_path_retry 0`?** Fails I/O immediately when all paths are down instead of queuing indefinitely. This prevents kernel hung-task warnings and lets pods receive I/O errors they can recover from. See [How long an outage the host survives](../../rhel/iscsi/BEST-PRACTICES.md#how-long-an-outage-the-host-survives).
 
 > **Why blacklist `pxd`?** Portworx presents its own `pxd*` block devices. Leaving them unblacklisted lets multipath attempt to claim them, which produces spurious paths and confusing `multipath -ll` output.
+
+> **Windows failover clustering in VMs: add `reservation_key file`.** A Windows Server Failover Cluster on OpenShift Virtualization uses SCSI-3 persistent reservations on its shared disks. For those reservations to pass through to the FlashArray volume, `multipathd` must register and hold a key on every path. To make it do that, add this line to the `defaults` section:
+>
+> ```
+>     reservation_key      file
+> ```
+>
+> With `file`, `mpathpersist` stores each map's key in `/etc/multipath/prkeys`, and `multipathd` re-registers the key on paths that come back after a failure. You only need it if the cluster hosts guest clusters that depend on persistent reservations. It does nothing on nodes that never take one.
 
 > **Never run `mpathconf --enable` on RHCOS.** It writes to `/etc`, which is reverted on reprovision. `multipathd.service` is enabled by the `systemd` stanza above.
 
@@ -791,11 +809,11 @@ for node in $(oc get nodes -l node-role.kubernetes.io/worker \
   -o jsonpath='{.items[*].metadata.name}'); do
   echo "=== $node ==="
   oc debug node/$node -- chroot /host bash -c \
-    "cat /etc/iscsi/initiatorname.iscsi && systemctl is-active iscsid multipathd"
+    "cat /etc/iscsi/initiatorname.iscsi && systemctl is-enabled iscsid multipathd && systemctl is-active iscsid multipathd"
 done
 ```
 
-**Every node must report a different IQN**, and both `iscsid` and `multipathd` must be `active`. If two nodes still match, the template IQN in Step 4 was wrong — correct it and re-apply.
+**Every node must report a different IQN**, and both `iscsid` and `multipathd` must be `enabled` and `active`. On OpenShift 4.19 and 4.20, a service that is `active` but `disabled` means you hit the unit-enable issue described in Step 4. If two nodes still match, the template IQN in Step 4 was wrong — correct it and re-apply.
 
 Further per-node checks:
 
@@ -838,9 +856,21 @@ oc create namespace portworx
 oc get namespace portworx
 ```
 
-Then install the **Portworx Certified** operator. From the web console: **Operators → OperatorHub**, search for Portworx, select **Portworx Certified** (published by Everpure, under the Red Hat Certified catalog), set **Installation Mode** to a specific namespace and **Installed Namespace** to `portworx`, then click **Install**.
+Then install the **Portworx Certified** operator by one of the two paths below. They differ in where the operator itself lands, which changes the namespace every later verification command has to target.
 
-Or install via OLM subscription into the cluster-wide `openshift-operators` namespace:
+### Option A: Web Console (OperatorHub)
+
+1. Go to: **Operators -> OperatorHub**.
+2. Search for Portworx and select **Portworx Certified** — published by Everpure, under the Red Hat Certified catalog. Take care not to select the community entry, which is a different package.
+3. Set **Installation Mode** to **A specific namespace on the cluster**, and **Installed Namespace** to `portworx`.
+4. Leave **Update approval** on **Automatic** unless you pin operator versions.
+5. Click **Install**, and wait for the status to read **Succeeded** before continuing.
+
+The operator runs in the `portworx` namespace.
+
+### Option B: OLM Subscription
+
+This installs into the cluster-wide `openshift-operators` namespace instead:
 
 ```yaml
 apiVersion: operators.coreos.com/v1alpha1
@@ -860,10 +890,14 @@ spec:
 oc apply -f portworx-operator-subscription.yaml
 ```
 
-Verify the operator pod is running and the CRDs registered:
+### Verify the Operator
+
+The namespace to check depends on which path you took: `portworx` for Option A, `openshift-operators` for Option B. Set it once and reuse it — later steps refer to it as well.
 
 ```bash
-oc get pods -n openshift-operators | grep portworx
+PX_NS=portworx          # or openshift-operators, if you used Option B
+
+oc get pods -n $PX_NS | grep portworx-operator
 oc get crd | grep storagecluster
 ```
 
@@ -876,11 +910,13 @@ purestorageclusters.core.libopenstorage.org   2026-03-22T12:58:39Z
 storageclusters.core.libopenstorage.org       2026-03-22T12:58:18Z
 ```
 
-If the pod is not `Running`, inspect the logs and resolve before continuing:
+**Do not continue until the operator pod is `Running` and the `StorageCluster` CRD exists.** If the pod is not `Running`, inspect the logs and resolve first:
 
 ```bash
-oc logs -n openshift-operators deploy/portworx-operator
+oc logs -n $PX_NS deploy/portworx-operator
 ```
+
+> **Note:** The operator's namespace and the StorageCluster's namespace are independent. Whichever path you took above, the `StorageCluster`, the `px-pure-secret`, and the Portworx pods themselves all live in `portworx` — Steps 11 and 12 assume that.
 
 ---
 
@@ -891,7 +927,10 @@ oc logs -n openshift-operators deploy/portworx-operator
 On the FlashArray, create a dedicated service account for Portworx with the **Storage Admin** role and generate an API token.
 
 1. Go to: **Settings -> Access -> Users**, create a user (for example `px-portworx`) and assign Storage Admin.
-2. Copy and store the API token.
+2. On that user's row, open the three-dot menu and select **Create API Token**. Set an expiration date if your policy requires one.
+3. Copy and store the API token.
+
+For the full walkthrough, including the Purity 4.x menu path, see [REST API Setup through the Graphic User Interface (GUI)](https://support.everpuredata.com/r/purityfa-rest-api/rest-api-setup-through-the-graphic-user-interface-gui).
 
 > **⚠️ The API token is shown once.** Store it in your secret manager before closing the dialog.
 
@@ -930,6 +969,8 @@ Generate the spec from [Portworx Central](https://central.portworx.com/specGen/p
 
 > **⚠️ `PURE_ISCSI_ALLOWED_IFACES` is what makes multipath work.** It tells Portworx to open iSCSI sessions across **both** storage interfaces simultaneously. Omit it and Portworx uses a single interface, silently giving you one path regardless of how carefully the node was configured in Steps 2 and 6. The interface names must match the iface binding filenames from Step 6 exactly.
 
+> **Note:** PX-CSI 25.8.0 and later ship as their own image, `portworx/px-pure-csi-driver`. Specs written for the older `portworx/oci-monitor` image carry `kvdb` and `cloudStorage` sections. PX-CSI has no KVDB and no cloud drives: it keeps its metadata as Kubernetes custom resources, so it ignores both sections. Leave them out.
+
 ```yaml
 kind: StorageCluster
 apiVersion: core.libopenstorage.org/v1
@@ -940,16 +981,8 @@ metadata:
     portworx.io/is-openshift: "true"
     portworx.io/misc-args: "--oem px-csi"
 spec:
-  image: portworx/oci-monitor:<PORTWORX_VERSION>
+  image: portworx/px-pure-csi-driver:<PX_CSI_VERSION>
   imagePullPolicy: Always
-  kvdb:
-    internal: true
-  cloudStorage:
-    provider: pure
-    deviceSpecs:
-      - size=150
-    kvdbDeviceSpec: size=32
-    systemMetadataDeviceSpec: size=64
   network:
     dataInterface: <NIC1>.<VLAN_ID>
     mgmtInterface: br-ex
@@ -963,8 +996,7 @@ spec:
     telemetry:
       enabled: true
     prometheus:
-      enabled: true
-      exportMetrics: true
+      enabled: false    # use OpenShift monitoring instead; see the note below
   env:
     - name: PURE_FLASHARRAY_SAN_TYPE
       value: "ISCSI"
@@ -980,10 +1012,12 @@ oc get storagecluster -n portworx
 oc get pods -n portworx -w
 ```
 
+> **Why is the integrated Prometheus disabled?** On OpenShift the operator does not deploy it even when `prometheus.enabled` is `true`, and it logs a warning instead. Collect Portworx metrics with OpenShift's own monitoring stack (user workload monitoring).
+
 If pods are not progressing to `Running`:
 
 ```bash
-oc logs -n openshift-operators deploy/portworx-operator
+oc logs -n $PX_NS deploy/portworx-operator      # PX_NS from Step 10
 oc logs -n portworx <PORTWORX_POD_NAME>
 ```
 
@@ -1313,6 +1347,71 @@ spec:
             WantedBy=multi-user.target
 ```
 
+### Avoiding Reboots for Later Changes: Node Disruption Policy
+
+By default, the MCO drains and reboots every node for any MachineConfig change. On OpenShift 4.17 and later, a **node disruption policy** on the cluster's `MachineConfiguration` object can swap that reboot for a lighter action on the paths and units you name. This is most useful for day-2 tuning. With a policy in place, a later edit to `multipath.conf` reloads `multipathd` instead of restarting the whole worker pool.
+
+```yaml
+apiVersion: operator.openshift.io/v1
+kind: MachineConfiguration
+metadata:
+  name: cluster
+spec:
+  nodeDisruptionPolicy:
+    files:
+      - path: /etc/multipath.conf
+        actions:
+          - type: Reload
+            reload:
+              serviceName: multipathd.service
+      # Drain first: reloading udev applies new rules to newly attached
+      # volumes only, so draining ensures every volume on the node picks
+      # up the changed rules once it is reattached.
+      - path: /etc/udev/rules.d/99-pure-storage.rules
+        actions:
+          - type: Drain
+          - type: Reload
+            reload:
+              serviceName: systemd-udevd.service
+    units:
+      # A MachineConfig can enable a unit but not start it; the restart
+      # makes sure a newly enabled service is actually running.
+      - name: multipathd.service
+        actions:
+          - type: Restart
+            restart:
+              serviceName: multipathd.service
+      - name: iscsid.service
+        actions:
+          - type: Drain
+          - type: Restart
+            restart:
+              serviceName: iscsid.service
+```
+
+Things to know before relying on it:
+
+- **`units` sits next to `files`, not inside a file entry.** If you indent it under a `files` item, the unit policy never takes effect.
+- **`cluster` already exists.** Merge these entries into it; do not replace the object. A merge patch (`oc patch machineconfiguration cluster --type=merge -p "$(cat ndp-patch.yaml)"`) replaces the whole `files` and `units` lists, so first check `oc get machineconfiguration cluster -o yaml` for policies you already have. With RHACM, a `musthave` configuration policy merges the entries for you.
+- **Anything the policy does not name still reboots the node.** That includes `iscsid.conf`, the iface files in `/var/lib/iscsi/ifaces/`, the ARP sysctl file, the IQN script, and the `iscsi-initiator-name.service` unit. The first rollout in Step 9 therefore still reboots each node, which is what you want: the IQN has to be generated at boot, before `iscsid` starts.
+- **Check that the cluster accepted the policy** before you depend on it. The cluster lists the policy it will actually apply under `status.nodeDisruptionPolicyStatus`:
+
+  ```bash
+  oc get machineconfiguration cluster -o jsonpath='{.status.nodeDisruptionPolicyStatus}' | jq .
+  ```
+
+### Device Discovery and Cleanup Are Handled by PX-CSI
+
+PX-CSI 25.8.0 and later rescan and clean up host devices themselves, so this guide adds no unit-attention udev rules and no Target-Driven Rescan setting (`purge_disconnected`):
+
+- **Attach.** PX-CSI issues a targeted SCSI scan for the volume's LUN on each session. First, it removes any leftover device at that LUN whose serial does not match the volume, which is a stale path from an earlier volume that used the same LUN number.
+- **Detach.** When a volume is unstaged, PX-CSI unmounts it, flushes the multipath map (with `dmsetup remove` as a fallback), and deletes each underlying `sd*` path before the volume is disconnected on the array.
+- **Expand.** PX-CSI rescans the paths and the multipath map itself.
+
+The iSCSI sessions stay logged in after the last volume detaches. That is expected, and it is what lets the next volume attach without a new login.
+
+Host-side cleanup only follows the Kubernetes detach flow. If a volume is disconnected from the host on the FlashArray directly, outside Kubernetes, its failed paths stay on the node until they are removed by hand.
+
 ### Manual Discovery and Login
 
 Portworx performs discovery and login per volume, so these commands are not part of normal operation. They are useful only to prove connectivity by hand before Portworx is installed, or when diagnosing a path problem:
@@ -1351,7 +1450,7 @@ This guide uses two standalone interfaces because `PURE_ISCSI_ALLOWED_IFACES` le
 
 - Register every worker node's IQN with the FlashArray and create a host group for the cluster.
 - Review [RHEL iSCSI Best Practices](../../rhel/iscsi/BEST-PRACTICES.md) for performance tuning, APD handling, and monitoring guidance that applies equally to RHCOS.
-- Configure Portworx monitoring and Prometheus metrics export if you did not enable them in Step 12.
+- Collect Portworx metrics through OpenShift user workload monitoring. The operator's integrated Prometheus is disabled in Step 12.
 - Set up a non-default StorageClass per workload tier if you need more than one QoS or reclaim policy.
 
 ---
