@@ -457,32 +457,22 @@ flowchart TB
 
 ### Configuring Shared LVM on iSCSI
 
-**Create shared volume group:**
+Use standard (thick) LVM for shared iSCSI storage. Proxmox coordinates access to a shared LVM volume group through its own cluster lock, so no `lvm.conf` changes, `lvmlockd` or DLM are required. Thin provisioning is handled by the FlashArray, so the volume group does not need a thin pool.
+
+> **⚠️ Warning:** Do not use LVM-thin on shared iSCSI storage. LVM-thin is not cluster-aware: Proxmox supports it only as local storage, and activating a thin pool from more than one node at a time corrupts its metadata.
+
+**Create the volume group:**
 ```bash
-# On first node only - create PV and VG
-pvcreate /dev/mapper/mpathX
-vgcreate vg_shared /dev/mapper/mpathX
-
-# Create thin pool for VM storage
-lvcreate -l 95%FREE -T vg_shared/thinpool
-```
-
-**Configure LVM for shared access:**
-```bash
-# Edit /etc/lvm/lvm.conf on ALL nodes
-# Set system_id_source to prevent conflicts
-sed -i 's/# system_id_source = "none"/system_id_source = "uname"/' /etc/lvm/lvm.conf
-
-# Or use LVM locking for active-active (requires dlm)
-# This is more complex - consult Proxmox documentation
+# On one node only - create PV and VG on the multipath device
+pvcreate /dev/mapper/<wwid>
+vgcreate vg_shared /dev/mapper/<wwid>
 ```
 
 **Add storage to Proxmox via GUI or CLI:**
 ```bash
-# Add LVM-thin storage
-pvesm add lvmthin iscsi-shared \
+# Add shared (thick) LVM storage
+pvesm add lvm iscsi-shared \
     --vgname vg_shared \
-    --thinpool thinpool \
     --content images,rootdir \
     --shared 1
 ```
@@ -809,9 +799,6 @@ done
 # Scan for volume groups
 vgscan
 vgchange -ay
-
-# Check LVM locks (if using lvmlockd)
-lvmlockctl -i
 
 # Force LVM rescan
 pvscan --cache
